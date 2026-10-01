@@ -23,8 +23,8 @@ npm run preview   # serve the production build locally
   - [x] Draw it every frame
 - [ ] **3. 3D camera**: perspective projection and a ground plane
   - [x] Matrix maths: a small `mat4` helper (multiply, perspective, look-at)
-  - [ ] Uniforms: send a matrix from TypeScript to the vertex shader
-  - [ ] 3D positions: corners get a z coordinate
+  - [x] Uniforms: send a matrix from TypeScript to the vertex shader
+  - [x] 3D positions: corners get a z coordinate
   - [ ] Perspective: far things get smaller, and the stretching on resize goes away
   - [ ] Camera: a view matrix that sets where we look from and where we look at
   - [ ] Ground plane: a large grid of tiles stretching to the horizon

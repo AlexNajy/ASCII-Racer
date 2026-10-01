@@ -1,6 +1,6 @@
 import './style.css';
 import { createProgram } from './gl/shader.ts';
-import { rotationZ } from './math/mat4.ts';
+import { multiply, perspective, rotationY, translation } from './math/mat4.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 
@@ -12,9 +12,9 @@ const program = createProgram(gl, vertexSource, fragmentSource);
 const matrixLocation = gl.getUniformLocation(program, 'u_matrix');
 
 const vertices = new Float32Array([
-   0.0,  0.5,
-  -0.5, -0.5,
-   0.5, -0.5,
+   0.0,  0.5, 0.0,
+  -0.5, -0.5, 0.0,
+   0.5, -0.5, 0.0,
 ]);
 
 const vao = gl.createVertexArray();
@@ -26,7 +26,7 @@ gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
 
 const positionLocation = gl.getAttribLocation(program, 'a_position');
 gl.enableVertexAttribArray(positionLocation);
-gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
 
 gl.bindVertexArray(null);
 
@@ -45,7 +45,10 @@ function frame(timeMs: number) {
   gl!.clear(gl!.COLOR_BUFFER_BIT);
 
   gl!.useProgram(program);
-  gl!.uniformMatrix4fv(matrixLocation, false, rotationZ(t));
+  const aspect = canvas.width / canvas.height;
+  const projection = perspective(Math.PI / 3, aspect, 0.1, 100);
+  const model = multiply(translation(0, 0, -2), rotationY(t));
+  gl!.uniformMatrix4fv(matrixLocation, false, multiply(projection, model));
   gl!.bindVertexArray(vao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
 
