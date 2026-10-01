@@ -60,6 +60,6 @@ src/
 This is a learning project, i want to understand how it works.
 
 - Work in small steps. One concept at a time, never a whole feature in one go.
-- Explain the why behind graphics and math concepts, not just the what.
+- Explain consisely and simply each new addition and the why
 - Tell me where code goes (which file, which part of the file).
 - I'm on macOS, using VS Code and Chrome for development.
