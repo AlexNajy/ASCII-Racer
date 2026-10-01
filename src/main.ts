@@ -27,7 +27,6 @@ gl.enableVertexAttribArray(positionLocation);
 gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
 gl.bindVertexArray(null);
-console.log('Triangle uploaded:', program, vao);
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -42,6 +41,11 @@ function frame(timeMs: number) {
   const t = timeMs / 1000;
   gl!.clearColor(0.1, 0.1 + 0.1 * Math.sin(t), 0.2, 1);
   gl!.clear(gl!.COLOR_BUFFER_BIT);
+
+  gl!.useProgram(program);
+  gl!.bindVertexArray(vao);
+  gl!.drawArrays(gl!.TRIANGLES, 0, 3);
+
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

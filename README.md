@@ -16,11 +16,11 @@ npm run preview   # serve the production build locally
 ## Roadmap
 
 - [x] **1. Game window**: full-screen WebGL2 canvas with a game loop that clears the screen every frame
-- [ ] **2. First triangle**: vertex and fragment shaders, vertex data, first draw call
+- [x] **2. First triangle**: vertex and fragment shaders, vertex data, first draw call
   - [x] Write the vertex and fragment shaders
-  - [ ] Compile and link the shaders from TypeScript
-  - [ ] Upload the triangle's vertices to the GPU
-  - [ ] Draw it every frame
+  - [x] Compile and link the shaders from TypeScript
+  - [x] Upload the triangle's vertices to the GPU
+  - [x] Draw it every frame
 - [ ] **3. 3D camera**: perspective projection and a ground plane
 - [ ] **4. ASCII pass**: render to an offscreen framebuffer, then convert it to glyphs with a font atlas
 - [ ] **5. Drivable car**: keyboard input, acceleration, steering
