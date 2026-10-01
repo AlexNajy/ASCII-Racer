@@ -27,6 +27,17 @@ export function multiply(a: Mat4, b: Mat4): Mat4 {
   return out;
 }
 
+export function rotationZ(angle: number): Mat4 {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const m = identity();
+  m[0] = c;
+  m[1] = s;
+  m[4] = -s;
+  m[5] = c;
+  return m;
+}
+
 // fovY in radians, aspect = width / height.
 export function perspective(fovY: number, aspect: number, near: number, far: number): Mat4 {
   const f = 1 / Math.tan(fovY / 2);

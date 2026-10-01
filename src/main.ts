@@ -1,5 +1,6 @@
 import './style.css';
 import { createProgram } from './gl/shader.ts';
+import { rotationZ } from './math/mat4.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 
@@ -8,6 +9,7 @@ const gl = canvas.getContext('webgl2');
 if (!gl) throw new Error('WebGL2 not supported');
 
 const program = createProgram(gl, vertexSource, fragmentSource);
+const matrixLocation = gl.getUniformLocation(program, 'u_matrix');
 
 const vertices = new Float32Array([
    0.0,  0.5,
@@ -43,6 +45,7 @@ function frame(timeMs: number) {
   gl!.clear(gl!.COLOR_BUFFER_BIT);
 
   gl!.useProgram(program);
+  gl!.uniformMatrix4fv(matrixLocation, false, rotationZ(t));
   gl!.bindVertexArray(vao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
 
