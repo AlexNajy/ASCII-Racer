@@ -22,7 +22,7 @@ npm run preview   # serve the production build locally
   - [x] Upload the triangle's vertices to the GPU
   - [x] Draw it every frame
 - [ ] **3. 3D camera**: perspective projection and a ground plane
-  - [ ] Matrix maths: a small `mat4` helper (multiply, perspective, look-at)
+  - [x] Matrix maths: a small `mat4` helper (multiply, perspective, look-at)
   - [ ] Uniforms: send a matrix from TypeScript to the vertex shader
   - [ ] 3D positions: corners get a z coordinate
   - [ ] Perspective: far things get smaller, and the stretching on resize goes away

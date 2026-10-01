@@ -58,6 +58,7 @@ src/
 - Simulation code must give identical results in every browser. `Math.sin`, `Math.cos` etc. can differ between browsers, so the simulation will need its own deterministic versions before multiplayer. Rendering can use `Math` freely.
 - The game client stays a static site (any static host works). Only multiplayer needs a server.
 - Shaders live in `.glsl` files and are imported with Vite's `?raw` suffix.
+- Only use comments neccesarily and professionally
 - Commit after each small working step.
 
 ## Working with me
