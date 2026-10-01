@@ -1,6 +1,6 @@
 # ASCII Racer
 
-A 3D racing game that runs in the browser and is drawn entirely in ASCII characters. The scene is rendered in 3D on the GPU with WebGL2, then a shader pass turns every frame into a grid of text glyphs.
+A 3D multiplayer driving game set in a city at night, running in the browser and drawn entirely in ASCII characters. The scene is rendered in 3D on the GPU with WebGL2, then a shader pass turns every frame into a grid of text glyphs. Darkness is empty space; headlights, street lamps and neon light up the city in characters.
 
 Built from scratch with TypeScript, WebGL2 and GLSL. No 3D libraries.
 
@@ -22,9 +22,16 @@ npm run preview   # serve the production build locally
   - [x] Upload the triangle's vertices to the GPU
   - [x] Draw it every frame
 - [ ] **3. 3D camera**: perspective projection and a ground plane
+  - [ ] Matrix maths: a small `mat4` helper (multiply, perspective, look-at)
+  - [ ] Uniforms: send a matrix from TypeScript to the vertex shader
+  - [ ] 3D positions: corners get a z coordinate
+  - [ ] Perspective: far things get smaller, and the stretching on resize goes away
+  - [ ] Camera: a view matrix that sets where we look from and where we look at
+  - [ ] Ground plane: a large grid of tiles stretching to the horizon
 - [ ] **4. ASCII pass**: render to an offscreen framebuffer, then convert it to glyphs with a font atlas
 - [ ] **5. Drivable car**: keyboard input, acceleration, steering
-- [ ] **6. Track**: road geometry, boundaries, laps and timing
-- [ ] **7. Car physics**: grip, drift, weight transfer
-- [ ] **8. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
-- [ ] **Later**: multiplayer with rollback netcode
+- [ ] **6. City**: street grid, buildings built from boxes, collisions with buildings
+- [ ] **7. Night lighting**: dark by default, headlights, street lamps, lit windows and neon
+- [ ] **8. Car physics**: grip, drift, weight transfer
+- [ ] **9. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
+- [ ] **10. Multiplayer**: a small server to connect players, other players' cars, rollback netcode
