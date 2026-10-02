@@ -21,7 +21,7 @@ npm run preview   # serve the production build locally
   - [x] Compile and link the shaders from TypeScript
   - [x] Upload the triangle's vertices to the GPU
   - [x] Draw it every frame
-- [ ] **3. 3D camera**: perspective projection and a ground plane
+- [x] **3. 3D camera**: perspective projection and a ground plane
   - [x] Matrix maths: a small `mat4` helper (multiply, perspective, look-at)
   - [x] Uniforms: send a matrix from TypeScript to the vertex shader
   - [x] 3D positions: corners get a z coordinate
@@ -29,6 +29,12 @@ npm run preview   # serve the production build locally
   - [x] Camera: a view matrix that sets where we look from and where we look at
   - [x] Ground plane: a large grid of lines stretching to the horizon
 - [ ] **4. ASCII pass**: render to an offscreen framebuffer, then convert it to glyphs with a font atlas
+  - [ ] Framebuffer: draw the scene into a small hidden image instead of the screen
+  - [ ] Full-screen pass: a second program that shows that image on screen (blocky at first)
+  - [ ] Character cells: one scene pixel per cell, sized to fit the screen in characters
+  - [ ] Brightness: turn each cell's colour into a brightness value and a position on the glyph ramp
+  - [ ] Font atlas: draw the ramp's characters into a texture once at startup
+  - [ ] Glyphs: each cell copies its character's shape from the atlas, coloured by the scene
 - [ ] **5. Drivable car**: keyboard input, acceleration, steering
 - [ ] **6. City**: street grid, buildings built from boxes, collisions with buildings
 - [ ] **7. Night lighting**: dark by default, headlights, street lamps, lit windows and neon
