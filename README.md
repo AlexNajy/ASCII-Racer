@@ -15,6 +15,9 @@ npm run preview   # serve the production build locally
 
 ## Controls
 
+- `W` / `S`: fly forward / back along the view direction
+- `A` / `D`: fly left / right
+- `Space` / `Shift`: fly up / down
 - `` ` `` (backtick): toggle the dev menu (FOV, cell size, view distance, render mode)
 
 ## Roadmap
@@ -41,9 +44,9 @@ npm run preview   # serve the production build locally
   - [x] Glyphs: each cell copies its character's shape from the atlas, coloured by the scene
 - [ ] **5. Fly camera**: move freely through the scene with the keyboard and look around with the mouse
   - [x] Dev menu: a panel toggled with the backtick key to change FOV, cell size, view distance and render mode (glyphs, grey levels, blocky scene)
-  - [ ] Keyboard input: keep track of which keys are held down
-  - [ ] Camera state: a position plus yaw (left/right) and pitch (up/down) angles, replacing the fixed look-at
-  - [ ] Movement: WASD moves along the view direction, Space/Shift up and down, at the same speed at any frame rate
+  - [x] Keyboard input: keep track of which keys are held down
+  - [x] Camera state: a position plus yaw (left/right) and pitch (up/down) angles, replacing the fixed look-at
+  - [x] Movement: WASD moves along the view direction, Space/Shift up and down, at the same speed at any frame rate
   - [ ] Mouse look: lock the pointer on click, mouse movement turns the camera, pitch limited so it can't flip over
   - [ ] Speed boost and camera info: a key to fly faster, and the camera's position shown in the dev menu
 - [ ] **6. City**: street grid, buildings built from boxes, collisions with buildings
