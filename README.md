@@ -32,7 +32,7 @@ npm run preview   # serve the production build locally
   - [x] Framebuffer: draw the scene into a small hidden image instead of the screen
   - [x] Full-screen pass: a second program that shows that image on screen (blocky at first)
   - [x] Character cells: one scene pixel per cell, sized to fit the screen in characters
-  - [ ] Brightness: turn each cell's colour into a brightness value and a position on the glyph ramp
+  - [x] Brightness: turn each cell's colour into a brightness value and a position on the glyph ramp
   - [ ] Font atlas: draw the ramp's characters into a texture once at startup
   - [ ] Glyphs: each cell copies its character's shape from the atlas, coloured by the scene
 - [ ] **5. Drivable car**: keyboard input, acceleration, steering
