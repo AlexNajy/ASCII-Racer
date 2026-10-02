@@ -81,6 +81,7 @@ const CELL_HEIGHT = Math.round(14 * dpr);
 const GLYPH_RAMPS = [' .:-=+*#%@'];
 const glyphAtlas = createGlyphAtlas(gl, GLYPH_RAMPS, CELL_WIDTH, CELL_HEIGHT);
 const VIEW_DISTANCE = 15;
+const FOV_DEGREES = 60;
 const scene = createRenderTarget(gl);
 
 function resize() {
@@ -116,7 +117,7 @@ function frame(timeMs: number) {
   gl!.uniform3fv(fogColorLocation, background);
   gl!.uniform1f(fogDistanceLocation, VIEW_DISTANCE);
   const aspect = canvas.width / canvas.height;
-  const projection = perspective(Math.PI / 3, aspect, 0.1, VIEW_DISTANCE);
+  const projection = perspective((FOV_DEGREES * Math.PI) / 180, aspect, 0.1, VIEW_DISTANCE);
   const view = lookAt([0, 1.5, 4], [0, 0.4, -1], [0, 1, 0]);
   const camera = multiply(projection, view);
 
