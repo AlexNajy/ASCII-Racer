@@ -1,7 +1,7 @@
 import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
-import { trackKeyboard } from './game/input.ts';
+import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
 import { multiply, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
@@ -125,6 +125,7 @@ createDevMenu(settings, (setting) => {
 });
 
 trackKeyboard();
+trackMouse(canvas);
 
 const camera: Camera = {
   position: [0, 1.5, 4],
