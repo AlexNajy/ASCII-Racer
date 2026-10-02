@@ -1,5 +1,6 @@
 import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
+import { trackKeyboard } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
 import { lookAt, multiply, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
@@ -120,6 +121,8 @@ createDevMenu(settings, (setting) => {
     resize();
   }
 });
+
+trackKeyboard();
 
 function draw(mesh: Mesh, mode: GLenum, matrix: Mat4, color: Vec3) {
   gl!.uniformMatrix4fv(matrixLocation, false, matrix);

@@ -13,6 +13,10 @@ npm run build     # production build into dist/
 npm run preview   # serve the production build locally
 ```
 
+## Controls
+
+- `` ` `` (backtick): toggle the dev menu (FOV, cell size, view distance, render mode)
+
 ## Roadmap
 
 - [x] **1. Game window**: full-screen WebGL2 canvas with a game loop that clears the screen every frame
@@ -36,7 +40,7 @@ npm run preview   # serve the production build locally
   - [x] Font atlas: draw the ramp's characters into a texture once at startup
   - [x] Glyphs: each cell copies its character's shape from the atlas, coloured by the scene
 - [ ] **5. Fly camera**: move freely through the scene with the keyboard and look around with the mouse
-  - [ ] Dev menu: a panel toggled with the backtick key to change FOV, cell size, view distance and render mode (glyphs, grey levels, blocky scene)
+  - [x] Dev menu: a panel toggled with the backtick key to change FOV, cell size, view distance and render mode (glyphs, grey levels, blocky scene)
   - [ ] Keyboard input: keep track of which keys are held down
   - [ ] Camera state: a position plus yaw (left/right) and pitch (up/down) angles, replacing the fixed look-at
   - [ ] Movement: WASD moves along the view direction, Space/Shift up and down, at the same speed at any frame rate
