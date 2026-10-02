@@ -2,11 +2,11 @@
 precision highp float;
 
 uniform sampler2D u_scene;
-uniform int u_scenePixelSize;
+uniform ivec2 u_cellSize;
 
 out vec4 outColor;
 
 void main() {
-  ivec2 scenePixel = ivec2(gl_FragCoord.xy) / u_scenePixelSize;
-  outColor = texelFetch(u_scene, scenePixel, 0);
+  ivec2 cell = ivec2(gl_FragCoord.xy) / u_cellSize;
+  outColor = texelFetch(u_scene, cell, 0);
 }

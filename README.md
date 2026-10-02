@@ -31,7 +31,7 @@ npm run preview   # serve the production build locally
 - [ ] **4. ASCII pass**: render to an offscreen framebuffer, then convert it to glyphs with a font atlas
   - [x] Framebuffer: draw the scene into a small hidden image instead of the screen
   - [x] Full-screen pass: a second program that shows that image on screen (blocky at first)
-  - [ ] Character cells: one scene pixel per cell, sized to fit the screen in characters
+  - [x] Character cells: one scene pixel per cell, sized to fit the screen in characters
   - [ ] Brightness: turn each cell's colour into a brightness value and a position on the glyph ramp
   - [ ] Font atlas: draw the ramp's characters into a texture once at startup
   - [ ] Glyphs: each cell copies its character's shape from the atlas, coloured by the scene

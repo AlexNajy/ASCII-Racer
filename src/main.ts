@@ -67,22 +67,23 @@ const lampHead = uploadMesh(box([-0.7, 1.95, -0.12], [-0.4, 2.1, 0.12]));
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
 const sceneTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scene');
-const scenePixelSizeLocation = gl.getUniformLocation(asciiProgram, 'u_scenePixelSize');
+const cellSizeLocation = gl.getUniformLocation(asciiProgram, 'u_cellSize');
 const fullscreenVao = gl.createVertexArray();
 
-const SCENE_PIXEL_SIZE = 8;
+const dpr = window.devicePixelRatio || 1;
+const CELL_WIDTH = Math.round(8 * dpr);
+const CELL_HEIGHT = Math.round(14 * dpr);
 const VIEW_DISTANCE = 15;
 const scene = createRenderTarget(gl);
 
 function resize() {
-  const dpr = window.devicePixelRatio || 1;
   canvas.width = Math.floor(canvas.clientWidth * dpr);
   canvas.height = Math.floor(canvas.clientHeight * dpr);
   resizeRenderTarget(
     gl!,
     scene,
-    Math.ceil(canvas.width / SCENE_PIXEL_SIZE),
-    Math.ceil(canvas.height / SCENE_PIXEL_SIZE),
+    Math.ceil(canvas.width / CELL_WIDTH),
+    Math.ceil(canvas.height / CELL_HEIGHT),
   );
 }
 window.addEventListener('resize', resize);
@@ -107,7 +108,7 @@ function frame(timeMs: number) {
   gl!.useProgram(program);
   gl!.uniform3fv(fogColorLocation, background);
   gl!.uniform1f(fogDistanceLocation, VIEW_DISTANCE);
-  const aspect = scene.width / scene.height;
+  const aspect = canvas.width / canvas.height;
   const projection = perspective(Math.PI / 3, aspect, 0.1, VIEW_DISTANCE);
   const view = lookAt([0, 1.5, 4], [0, 0.4, -1], [0, 1, 0]);
   const camera = multiply(projection, view);
@@ -128,7 +129,7 @@ function frame(timeMs: number) {
   gl!.activeTexture(gl!.TEXTURE0);
   gl!.bindTexture(gl!.TEXTURE_2D, scene.colorTexture);
   gl!.uniform1i(sceneTextureLocation, 0);
-  gl!.uniform1i(scenePixelSizeLocation, SCENE_PIXEL_SIZE);
+  gl!.uniform2i(cellSizeLocation, CELL_WIDTH, CELL_HEIGHT);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
 
