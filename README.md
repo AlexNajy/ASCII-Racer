@@ -28,13 +28,13 @@ npm run preview   # serve the production build locally
   - [x] Perspective: far things get smaller, and the stretching on resize goes away
   - [x] Camera: a view matrix that sets where we look from and where we look at
   - [x] Ground plane: a large grid of lines stretching to the horizon
-- [ ] **4. ASCII pass**: render to an offscreen framebuffer, then convert it to glyphs with a font atlas
+- [x] **4. ASCII pass**: render to an offscreen framebuffer, then convert it to glyphs with a font atlas
   - [x] Framebuffer: draw the scene into a small hidden image instead of the screen
   - [x] Full-screen pass: a second program that shows that image on screen (blocky at first)
   - [x] Character cells: one scene pixel per cell, sized to fit the screen in characters
   - [x] Brightness: turn each cell's colour into a brightness value and a position on the glyph ramp
-  - [ ] Font atlas: draw the ramp's characters into a texture once at startup
-  - [ ] Glyphs: each cell copies its character's shape from the atlas, coloured by the scene
+  - [x] Font atlas: draw the ramp's characters into a texture once at startup
+  - [x] Glyphs: each cell copies its character's shape from the atlas, coloured by the scene
 - [ ] **5. Drivable car**: keyboard input, acceleration, steering
 - [ ] **6. City**: street grid, buildings built from boxes, collisions with buildings
 - [ ] **7. Night lighting**: dark by default, headlights, street lamps, lit windows and neon

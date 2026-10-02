@@ -2,6 +2,7 @@ import './style.css';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
 import { lookAt, multiply, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
+import { createGlyphAtlas } from './render/glyphs.ts';
 import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
@@ -68,11 +69,17 @@ const lampHead = uploadMesh(box([-0.7, 1.95, -0.12], [-0.4, 2.1, 0.12]));
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
 const sceneTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scene');
 const cellSizeLocation = gl.getUniformLocation(asciiProgram, 'u_cellSize');
+const glyphsLocation = gl.getUniformLocation(asciiProgram, 'u_glyphs');
+const rampLengthLocation = gl.getUniformLocation(asciiProgram, 'u_rampLength');
+const backgroundLocation = gl.getUniformLocation(asciiProgram, 'u_background');
 const fullscreenVao = gl.createVertexArray();
 
 const dpr = window.devicePixelRatio || 1;
 const CELL_WIDTH = Math.round(8 * dpr);
 const CELL_HEIGHT = Math.round(14 * dpr);
+
+const GLYPH_RAMPS = [' .:-=+*#%@'];
+const glyphAtlas = createGlyphAtlas(gl, GLYPH_RAMPS, CELL_WIDTH, CELL_HEIGHT);
 const VIEW_DISTANCE = 15;
 const scene = createRenderTarget(gl);
 
@@ -101,8 +108,8 @@ function frame(timeMs: number) {
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, scene.framebuffer);
   gl!.viewport(0, 0, scene.width, scene.height);
   gl!.enable(gl!.DEPTH_TEST);
-  const background: Vec3 = [0.1, 0.1 + 0.1 * Math.sin(t), 0.2];
-  gl!.clearColor(background[0], background[1], background[2], 1);
+  const background: Vec3 = [0, 0, 0];
+  gl!.clearColor(background[0], background[1], background[2], 0);
   gl!.clear(gl!.COLOR_BUFFER_BIT | gl!.DEPTH_BUFFER_BIT);
 
   gl!.useProgram(program);
@@ -130,6 +137,11 @@ function frame(timeMs: number) {
   gl!.bindTexture(gl!.TEXTURE_2D, scene.colorTexture);
   gl!.uniform1i(sceneTextureLocation, 0);
   gl!.uniform2i(cellSizeLocation, CELL_WIDTH, CELL_HEIGHT);
+  gl!.activeTexture(gl!.TEXTURE1);
+  gl!.bindTexture(gl!.TEXTURE_2D, glyphAtlas);
+  gl!.uniform1i(glyphsLocation, 1);
+  gl!.uniform1i(rampLengthLocation, [...GLYPH_RAMPS[0]].length);
+  gl!.uniform3fv(backgroundLocation, background);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
 
