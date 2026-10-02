@@ -13,6 +13,8 @@ if (!gl) throw new Error('WebGL2 not supported');
 const program = createProgram(gl, vertexSource, fragmentSource);
 const matrixLocation = gl.getUniformLocation(program, 'u_matrix');
 const colorLocation = gl.getUniformLocation(program, 'u_color');
+const fogColorLocation = gl.getUniformLocation(program, 'u_fogColor');
+const fogDistanceLocation = gl.getUniformLocation(program, 'u_fogDistance');
 const positionLocation = gl.getAttribLocation(program, 'a_position');
 const shadeLocation = gl.getAttribLocation(program, 'a_shade');
 
@@ -64,6 +66,7 @@ const lampHead = uploadMesh(box([-0.7, 1.95, -0.12], [-0.4, 2.1, 0.12]));
 gl.enable(gl.DEPTH_TEST);
 
 const SCENE_PIXEL_SIZE = 8;
+const VIEW_DISTANCE = 15;
 const scene = createRenderTarget(gl);
 
 function resize() {
@@ -91,12 +94,15 @@ function frame(timeMs: number) {
   const t = timeMs / 1000;
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, scene.framebuffer);
   gl!.viewport(0, 0, scene.width, scene.height);
-  gl!.clearColor(0.1, 0.1 + 0.1 * Math.sin(t), 0.2, 1);
+  const background: Vec3 = [0.1, 0.1 + 0.1 * Math.sin(t), 0.2];
+  gl!.clearColor(background[0], background[1], background[2], 1);
   gl!.clear(gl!.COLOR_BUFFER_BIT | gl!.DEPTH_BUFFER_BIT);
 
   gl!.useProgram(program);
+  gl!.uniform3fv(fogColorLocation, background);
+  gl!.uniform1f(fogDistanceLocation, VIEW_DISTANCE);
   const aspect = scene.width / scene.height;
-  const projection = perspective(Math.PI / 3, aspect, 0.1, 100);
+  const projection = perspective(Math.PI / 3, aspect, 0.1, VIEW_DISTANCE);
   const view = lookAt([0, 1.5, 4], [0, 0.4, -1], [0, 1, 0]);
   const camera = multiply(projection, view);
 
