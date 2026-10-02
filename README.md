@@ -25,9 +25,9 @@ npm run preview   # serve the production build locally
   - [x] Matrix maths: a small `mat4` helper (multiply, perspective, look-at)
   - [x] Uniforms: send a matrix from TypeScript to the vertex shader
   - [x] 3D positions: corners get a z coordinate
-  - [ ] Perspective: far things get smaller, and the stretching on resize goes away
-  - [ ] Camera: a view matrix that sets where we look from and where we look at
-  - [ ] Ground plane: a large grid of tiles stretching to the horizon
+  - [x] Perspective: far things get smaller, and the stretching on resize goes away
+  - [x] Camera: a view matrix that sets where we look from and where we look at
+  - [x] Ground plane: a large grid of lines stretching to the horizon
 - [ ] **4. ASCII pass**: render to an offscreen framebuffer, then convert it to glyphs with a font atlas
 - [ ] **5. Drivable car**: keyboard input, acceleration, steering
 - [ ] **6. City**: street grid, buildings built from boxes, collisions with buildings
