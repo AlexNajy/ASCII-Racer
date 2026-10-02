@@ -5,6 +5,8 @@ import { lookAt, multiply, perspective, rotationY, translation, type Mat4, type 
 import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
+import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
+import asciiFragmentSource from './shaders/ascii.frag.glsl?raw';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const gl = canvas.getContext('webgl2', { antialias: false });
@@ -63,7 +65,10 @@ const lampPost = uploadMesh([
 ]);
 const lampHead = uploadMesh(box([-0.7, 1.95, -0.12], [-0.4, 2.1, 0.12]));
 
-gl.enable(gl.DEPTH_TEST);
+const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
+const sceneTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scene');
+const scenePixelSizeLocation = gl.getUniformLocation(asciiProgram, 'u_scenePixelSize');
+const fullscreenVao = gl.createVertexArray();
 
 const SCENE_PIXEL_SIZE = 8;
 const VIEW_DISTANCE = 15;
@@ -94,6 +99,7 @@ function frame(timeMs: number) {
   const t = timeMs / 1000;
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, scene.framebuffer);
   gl!.viewport(0, 0, scene.width, scene.height);
+  gl!.enable(gl!.DEPTH_TEST);
   const background: Vec3 = [0.1, 0.1 + 0.1 * Math.sin(t), 0.2];
   gl!.clearColor(background[0], background[1], background[2], 1);
   gl!.clear(gl!.COLOR_BUFFER_BIT | gl!.DEPTH_BUFFER_BIT);
@@ -114,14 +120,17 @@ function frame(timeMs: number) {
   draw(lampPost, gl!.TRIANGLES, lamp, [0.6, 0.6, 0.65]);
   draw(lampHead, gl!.TRIANGLES, lamp, [1.0, 0.9, 0.4]);
 
-  // Temporary: copy the hidden image to the screen until the full-screen pass exists.
-  gl!.bindFramebuffer(gl!.READ_FRAMEBUFFER, scene.framebuffer);
-  gl!.bindFramebuffer(gl!.DRAW_FRAMEBUFFER, null);
-  gl!.blitFramebuffer(
-    0, 0, scene.width, scene.height,
-    0, 0, canvas.width, canvas.height,
-    gl!.COLOR_BUFFER_BIT, gl!.NEAREST,
-  );
+  gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
+  gl!.viewport(0, 0, canvas.width, canvas.height);
+  gl!.disable(gl!.DEPTH_TEST);
+
+  gl!.useProgram(asciiProgram);
+  gl!.activeTexture(gl!.TEXTURE0);
+  gl!.bindTexture(gl!.TEXTURE_2D, scene.colorTexture);
+  gl!.uniform1i(sceneTextureLocation, 0);
+  gl!.uniform1i(scenePixelSizeLocation, SCENE_PIXEL_SIZE);
+  gl!.bindVertexArray(fullscreenVao);
+  gl!.drawArrays(gl!.TRIANGLES, 0, 3);
 
   requestAnimationFrame(frame);
 }
