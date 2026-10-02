@@ -36,7 +36,24 @@ src/
   shaders/         .glsl files
   game/            car physics, city layout, input
   math/            vec3, mat4 and other math helpers
+  dev/             developer tools (dev menu)
 ```
+
+### How it works today
+
+- `main.ts` holds setup and the frame loop: pass 1 draws into the `scene` render target, pass 2 draws the full-screen triangle with `ascii.frag.glsl`.
+- The scene shaders are still named `triangle.vert.glsl` / `triangle.frag.glsl`. Each vertex is `x, y, z, shade` (`render/shapes.ts`, `box()`); colour, matrix and fog are uniforms set per draw.
+- The scene pass clears with alpha 0 and objects write alpha 1, so the ASCII pass can tell empty cells (drawn as solid background, no glyph) from objects. Material IDs for per-material glyph sets will use this channel later.
+- Fog uses `gl_Position.w` (distance in front of the camera) and fades to the background colour, which is black for now.
+- Cells are `settings.cellWidth` CSS px wide and 1.75× as tall, times `devicePixelRatio`. The scene render target has one pixel per cell, and the glyph atlas cells are exactly the cell size, so changing the cell size rebuilds the atlas.
+- `GLYPH_RAMPS` is a list: one atlas row per ramp, all the same length, so more character sets can be added later.
+- The camera is a position plus yaw and pitch (`render/camera.ts`). `game/input.ts` tracks held keys (by `event.code`) and pointer-locked mouse movement; `game/flyCamera.ts` moves the camera each frame using the frame time `dt`. The fly camera is a dev tool, not simulation, so it does not use the fixed timestep.
+- Runtime settings (FOV, cell width, view distance, render mode) live in a `DevSettings` object edited by the dev menu (`dev/menu.ts`, backtick key). The dev menu is plain HTML on top of the canvas; that is fine because it is developer UI, not the game picture.
+
+### Known limits
+
+- Anything thinner than a cell (lines, thin poles) can vanish or flicker. Prefer filled surfaces over `gl.LINES`; the line grid is a temporary test floor.
+- Headless Chrome (SwiftShader) drops lines that cross behind the camera; real GPUs draw them. Only matters for headless screenshots.
 
 ## Roadmap
 
@@ -60,6 +77,7 @@ src/
 - Shaders live in `.glsl` files and are imported with Vite's `?raw` suffix.
 - Only use comments neccesarily and professionally
 - Commit after each small working step.
+- One branch per roadmap step, merged into `main` with a pull request. Tick sub-steps in `README.md` as they are done.
 
 ## Working with me
 
@@ -68,4 +86,5 @@ This is a learning project, i want to understand how it works.
 - Work in small steps. One concept at a time, never a whole feature in one go.
 - Explain consisely and simply each new addition and the why
 - Tell me where code goes (which file, which part of the file).
+- You can write the code yourself; explain what it does and why. Ask before committing or changing things outside the current step.
 - I'm on macOS, using VS Code and Chrome for development.

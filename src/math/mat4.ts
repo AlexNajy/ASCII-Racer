@@ -35,6 +35,17 @@ export function translation(x: number, y: number, z: number): Mat4 {
   return m;
 }
 
+export function rotationX(angle: number): Mat4 {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const m = identity();
+  m[5] = c;
+  m[6] = s;
+  m[9] = -s;
+  m[10] = c;
+  return m;
+}
+
 export function rotationZ(angle: number): Mat4 {
   const c = Math.cos(angle);
   const s = Math.sin(angle);

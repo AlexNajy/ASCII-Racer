@@ -2,6 +2,7 @@ export const RenderMode = {
   Glyphs: 0,
   Brightness: 1,
   Scene: 2,
+  FullResolution: 3,
 } as const;
 export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 
@@ -14,10 +15,14 @@ export interface DevSettings {
 
 type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance';
 
+export interface DevMenu {
+  setInfo(text: string): void;
+}
+
 export function createDevMenu(
   settings: DevSettings,
   onChange: (setting: keyof DevSettings) => void,
-): void {
+): DevMenu {
   const panel = document.createElement('div');
   panel.id = 'dev-menu';
   panel.hidden = true;
@@ -26,6 +31,9 @@ export function createDevMenu(
   const title = document.createElement('div');
   title.textContent = 'dev menu  ( ` to close )';
   panel.append(title);
+
+  const info = document.createElement('div');
+  panel.append(info);
 
   function slider(label: string, key: NumberSetting, min: number, max: number, step: number) {
     const row = document.createElement('label');
@@ -64,6 +72,8 @@ export function createDevMenu(
   select.addEventListener('change', () => {
     settings.renderMode = Number(select.value) as RenderMode;
     onChange('renderMode');
+    // Release keyboard focus so flying keys don't pick options by their first letter.
+    select.blur();
   });
   modeRow.append(modeText, select);
   panel.append(modeRow);
@@ -73,4 +83,10 @@ export function createDevMenu(
     panel.hidden = !panel.hidden;
     event.preventDefault();
   });
+
+  return {
+    setInfo(text) {
+      if (!panel.hidden) info.textContent = text;
+    },
+  };
 }

@@ -1,8 +1,11 @@
 import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
+import { updateFlyCamera } from './game/flyCamera.ts';
+import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
-import { lookAt, multiply, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
+import { multiply, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
+import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
@@ -114,12 +117,21 @@ buildCells();
 resize();
 window.addEventListener('resize', resize);
 
-createDevMenu(settings, (setting) => {
+const devMenu = createDevMenu(settings, (setting) => {
   if (setting === 'cellWidth') {
     buildCells();
     resize();
   }
 });
+
+trackKeyboard();
+trackMouse(canvas);
+
+const camera: Camera = {
+  position: [0, 1.5, 4],
+  yaw: 0,
+  pitch: -0.2,
+};
 
 function draw(mesh: Mesh, mode: GLenum, matrix: Mat4, color: Vec3) {
   gl!.uniformMatrix4fv(matrixLocation, false, matrix);
@@ -128,10 +140,28 @@ function draw(mesh: Mesh, mode: GLenum, matrix: Mat4, color: Vec3) {
   gl!.drawArrays(mode, 0, mesh.vertexCount);
 }
 
+// Longest step allowed, so returning to a background tab doesn't teleport the camera.
+const MAX_FRAME_SECONDS = 0.1;
+let previousTimeMs = 0;
+
 function frame(timeMs: number) {
+  requestAnimationFrame(frame);
   const t = timeMs / 1000;
-  gl!.bindFramebuffer(gl!.FRAMEBUFFER, scene.framebuffer);
-  gl!.viewport(0, 0, scene.width, scene.height);
+  const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
+  previousTimeMs = timeMs;
+  updateFlyCamera(camera, dt);
+  const [cameraX, cameraY, cameraZ] = camera.position;
+  const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
+  devMenu.setInfo(
+    `camera ${cameraX.toFixed(1)}, ${cameraY.toFixed(1)}, ${cameraZ.toFixed(1)}` +
+      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°`,
+  );
+
+  // Full resolution skips the ASCII pass and draws the scene straight to the screen.
+  const fullResolution = settings.renderMode === RenderMode.FullResolution;
+  const target = fullResolution ? { framebuffer: null, width: canvas.width, height: canvas.height } : scene;
+  gl!.bindFramebuffer(gl!.FRAMEBUFFER, target.framebuffer);
+  gl!.viewport(0, 0, target.width, target.height);
   gl!.enable(gl!.DEPTH_TEST);
   const background: Vec3 = [0, 0, 0];
   gl!.clearColor(background[0], background[1], background[2], 0);
@@ -142,16 +172,16 @@ function frame(timeMs: number) {
   gl!.uniform1f(fogDistanceLocation, settings.viewDistance);
   const aspect = canvas.width / canvas.height;
   const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, 0.1, settings.viewDistance);
-  const view = lookAt([0, 1.5, 4], [0, 0.4, -1], [0, 1, 0]);
-  const camera = multiply(projection, view);
+  const viewProjection = multiply(projection, viewMatrix(camera));
 
-  draw(grid, gl!.LINES, multiply(camera, translation(0, -0.5, 0)), [0.4, 0.45, 0.55]);
-  draw(triangle, gl!.TRIANGLES, multiply(camera, rotationY(t)), [1.0, 0.5, 0.0]);
-  draw(cube, gl!.TRIANGLES, multiply(camera, translation(-2.5, -0.5, -2.5)), [0.3, 0.7, 1.0]);
+  draw(grid, gl!.LINES, multiply(viewProjection, translation(0, -0.5, 0)), [0.4, 0.45, 0.55]);
+  draw(triangle, gl!.TRIANGLES, multiply(viewProjection, rotationY(t)), [1.0, 0.5, 0.0]);
+  draw(cube, gl!.TRIANGLES, multiply(viewProjection, translation(-2.5, -0.5, -2.5)), [0.3, 0.7, 1.0]);
 
-  const lamp = multiply(camera, translation(2.5, -0.5, -2.5));
+  const lamp = multiply(viewProjection, translation(2.5, -0.5, -2.5));
   draw(lampPost, gl!.TRIANGLES, lamp, [0.6, 0.6, 0.65]);
   draw(lampHead, gl!.TRIANGLES, lamp, [1.0, 0.9, 0.4]);
+  if (fullResolution) return;
 
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
   gl!.viewport(0, 0, canvas.width, canvas.height);
@@ -170,7 +200,5 @@ function frame(timeMs: number) {
   gl!.uniform1i(renderModeLocation, settings.renderMode);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
-
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
