@@ -2,6 +2,7 @@ export const RenderMode = {
   Glyphs: 0,
   Brightness: 1,
   Scene: 2,
+  FullResolution: 3,
 } as const;
 export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 

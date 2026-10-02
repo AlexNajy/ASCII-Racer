@@ -45,7 +45,7 @@ npm run preview   # serve the production build locally
   - [x] Font atlas: draw the ramp's characters into a texture once at startup
   - [x] Glyphs: each cell copies its character's shape from the atlas, coloured by the scene
 - [x] **5. Fly camera**: move freely through the scene with the keyboard and look around with the mouse
-  - [x] Dev menu: a panel toggled with the backtick key to change FOV, cell size, view distance and render mode (glyphs, grey levels, blocky scene)
+  - [x] Dev menu: a panel toggled with the backtick key to change FOV, cell size, view distance and render mode (glyphs, grey levels, blocky scene, full resolution)
   - [x] Keyboard input: keep track of which keys are held down
   - [x] Camera state: a position plus yaw (left/right) and pitch (up/down) angles, replacing the fixed look-at
   - [x] Movement: WASD moves along the view direction, Space/Shift up and down, at the same speed at any frame rate

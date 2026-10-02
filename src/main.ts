@@ -145,6 +145,7 @@ const MAX_FRAME_SECONDS = 0.1;
 let previousTimeMs = 0;
 
 function frame(timeMs: number) {
+  requestAnimationFrame(frame);
   const t = timeMs / 1000;
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
@@ -156,8 +157,11 @@ function frame(timeMs: number) {
       `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°`,
   );
 
-  gl!.bindFramebuffer(gl!.FRAMEBUFFER, scene.framebuffer);
-  gl!.viewport(0, 0, scene.width, scene.height);
+  // Full resolution skips the ASCII pass and draws the scene straight to the screen.
+  const fullResolution = settings.renderMode === RenderMode.FullResolution;
+  const target = fullResolution ? { framebuffer: null, width: canvas.width, height: canvas.height } : scene;
+  gl!.bindFramebuffer(gl!.FRAMEBUFFER, target.framebuffer);
+  gl!.viewport(0, 0, target.width, target.height);
   gl!.enable(gl!.DEPTH_TEST);
   const background: Vec3 = [0, 0, 0];
   gl!.clearColor(background[0], background[1], background[2], 0);
@@ -177,6 +181,7 @@ function frame(timeMs: number) {
   const lamp = multiply(viewProjection, translation(2.5, -0.5, -2.5));
   draw(lampPost, gl!.TRIANGLES, lamp, [0.6, 0.6, 0.65]);
   draw(lampHead, gl!.TRIANGLES, lamp, [1.0, 0.9, 0.4]);
+  if (fullResolution) return;
 
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
   gl!.viewport(0, 0, canvas.width, canvas.height);
@@ -195,7 +200,5 @@ function frame(timeMs: number) {
   gl!.uniform1i(renderModeLocation, settings.renderMode);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
-
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
