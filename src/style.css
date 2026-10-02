@@ -1,2 +1,18 @@
 html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
 canvas { display: block; width: 100vw; height: 100vh; }
+
+#dev-menu {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid #444;
+  color: #ddd;
+  font: 12px Menlo, Monaco, monospace;
+}
+#dev-menu[hidden] { display: none; }
+#dev-menu label { display: flex; flex-direction: column; gap: 2px; }

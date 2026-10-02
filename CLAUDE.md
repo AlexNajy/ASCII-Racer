@@ -44,10 +44,10 @@ src/
 2. Draw a triangle (first vertex and fragment shaders)
 3. 3D camera and a simple ground plane with perspective
 4. Render to an offscreen framebuffer, then the ASCII pass with a glyph atlas
-5. A drivable car: keyboard input, acceleration, steering
+5. Fly camera: move freely through the scene with the keyboard and look around with the mouse
 6. A city: street grid, buildings built from boxes, collisions with buildings
 7. Night lighting: dark by default, headlights, street lamps, lit windows and neon
-8. Car physics: grip, drift, weight transfer
+8. A drivable car: keyboard input, acceleration, steering, grip, drift, weight transfer
 9. Visual identity: per-material glyph sets, temporally stable glyphs (no flicker at speed), speed streaks
 10. Multiplayer: a small server to connect players, other players' cars, rollback netcode
 

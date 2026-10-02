@@ -6,6 +6,7 @@ uniform sampler2D u_glyphs;
 uniform ivec2 u_cellSize;
 uniform int u_rampLength;
 uniform vec3 u_background;
+uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene
 
 out vec4 outColor;
 
@@ -20,9 +21,19 @@ void main() {
     return;
   }
 
+  if (u_renderMode == 2) {
+    outColor = vec4(color, 1.0);
+    return;
+  }
+
   // Perceived brightness: the eye is most sensitive to green, least to blue.
   float brightness = dot(color, vec3(0.299, 0.587, 0.114));
   int level = min(int(brightness * float(u_rampLength)), u_rampLength - 1);
+
+  if (u_renderMode == 1) {
+    outColor = vec4(vec3(float(level) / float(u_rampLength - 1)), 1.0);
+    return;
+  }
 
   // Atlas rows run top-down, screen rows bottom-up, hence the flipped y.
   ivec2 inCell = ivec2(gl_FragCoord.xy) - cell * u_cellSize;

@@ -1,4 +1,5 @@
 import './style.css';
+import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
 import { lookAt, multiply, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
@@ -72,17 +73,31 @@ const cellSizeLocation = gl.getUniformLocation(asciiProgram, 'u_cellSize');
 const glyphsLocation = gl.getUniformLocation(asciiProgram, 'u_glyphs');
 const rampLengthLocation = gl.getUniformLocation(asciiProgram, 'u_rampLength');
 const backgroundLocation = gl.getUniformLocation(asciiProgram, 'u_background');
+const renderModeLocation = gl.getUniformLocation(asciiProgram, 'u_renderMode');
 const fullscreenVao = gl.createVertexArray();
 
-const dpr = window.devicePixelRatio || 1;
-const CELL_WIDTH = Math.round(8 * dpr);
-const CELL_HEIGHT = Math.round(14 * dpr);
+const settings: DevSettings = {
+  fovDegrees: 60,
+  cellWidth: 8,
+  viewDistance: 15,
+  renderMode: RenderMode.Glyphs,
+};
 
+const dpr = window.devicePixelRatio || 1;
+const CELL_ASPECT = 1.75;
 const GLYPH_RAMPS = [' .:-=+*#%@'];
-const glyphAtlas = createGlyphAtlas(gl, GLYPH_RAMPS, CELL_WIDTH, CELL_HEIGHT);
-const VIEW_DISTANCE = 15;
-const FOV_DEGREES = 60;
 const scene = createRenderTarget(gl);
+
+let cellWidth = 0;
+let cellHeight = 0;
+let glyphAtlas: WebGLTexture | null = null;
+
+function buildCells() {
+  cellWidth = Math.round(settings.cellWidth * dpr);
+  cellHeight = Math.round(settings.cellWidth * CELL_ASPECT * dpr);
+  gl!.deleteTexture(glyphAtlas);
+  glyphAtlas = createGlyphAtlas(gl!, GLYPH_RAMPS, cellWidth, cellHeight);
+}
 
 function resize() {
   canvas.width = Math.floor(canvas.clientWidth * dpr);
@@ -90,12 +105,21 @@ function resize() {
   resizeRenderTarget(
     gl!,
     scene,
-    Math.ceil(canvas.width / CELL_WIDTH),
-    Math.ceil(canvas.height / CELL_HEIGHT),
+    Math.ceil(canvas.width / cellWidth),
+    Math.ceil(canvas.height / cellHeight),
   );
 }
-window.addEventListener('resize', resize);
+
+buildCells();
 resize();
+window.addEventListener('resize', resize);
+
+createDevMenu(settings, (setting) => {
+  if (setting === 'cellWidth') {
+    buildCells();
+    resize();
+  }
+});
 
 function draw(mesh: Mesh, mode: GLenum, matrix: Mat4, color: Vec3) {
   gl!.uniformMatrix4fv(matrixLocation, false, matrix);
@@ -115,9 +139,9 @@ function frame(timeMs: number) {
 
   gl!.useProgram(program);
   gl!.uniform3fv(fogColorLocation, background);
-  gl!.uniform1f(fogDistanceLocation, VIEW_DISTANCE);
+  gl!.uniform1f(fogDistanceLocation, settings.viewDistance);
   const aspect = canvas.width / canvas.height;
-  const projection = perspective((FOV_DEGREES * Math.PI) / 180, aspect, 0.1, VIEW_DISTANCE);
+  const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, 0.1, settings.viewDistance);
   const view = lookAt([0, 1.5, 4], [0, 0.4, -1], [0, 1, 0]);
   const camera = multiply(projection, view);
 
@@ -137,12 +161,13 @@ function frame(timeMs: number) {
   gl!.activeTexture(gl!.TEXTURE0);
   gl!.bindTexture(gl!.TEXTURE_2D, scene.colorTexture);
   gl!.uniform1i(sceneTextureLocation, 0);
-  gl!.uniform2i(cellSizeLocation, CELL_WIDTH, CELL_HEIGHT);
+  gl!.uniform2i(cellSizeLocation, cellWidth, cellHeight);
   gl!.activeTexture(gl!.TEXTURE1);
   gl!.bindTexture(gl!.TEXTURE_2D, glyphAtlas);
   gl!.uniform1i(glyphsLocation, 1);
   gl!.uniform1i(rampLengthLocation, [...GLYPH_RAMPS[0]].length);
   gl!.uniform3fv(backgroundLocation, background);
+  gl!.uniform1i(renderModeLocation, settings.renderMode);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
 
