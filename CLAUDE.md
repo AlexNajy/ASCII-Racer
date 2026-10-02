@@ -47,6 +47,7 @@ src/
 - Fog uses `gl_Position.w` (distance in front of the camera) and fades to the background colour, which is black for now.
 - Cells are `settings.cellWidth` CSS px wide and 1.75× as tall, times `devicePixelRatio`. The scene render target has one pixel per cell, and the glyph atlas cells are exactly the cell size, so changing the cell size rebuilds the atlas.
 - `GLYPH_RAMPS` is a list: one atlas row per ramp, all the same length, so more character sets can be added later.
+- The camera is a position plus yaw and pitch (`render/camera.ts`). `game/input.ts` tracks held keys (by `event.code`) and pointer-locked mouse movement; `game/flyCamera.ts` moves the camera each frame using the frame time `dt`. The fly camera is a dev tool, not simulation, so it does not use the fixed timestep.
 - Runtime settings (FOV, cell width, view distance, render mode) live in a `DevSettings` object edited by the dev menu (`dev/menu.ts`, backtick key). The dev menu is plain HTML on top of the canvas; that is fine because it is developer UI, not the game picture.
 
 ### Known limits

@@ -117,7 +117,7 @@ buildCells();
 resize();
 window.addEventListener('resize', resize);
 
-createDevMenu(settings, (setting) => {
+const devMenu = createDevMenu(settings, (setting) => {
   if (setting === 'cellWidth') {
     buildCells();
     resize();
@@ -149,6 +149,12 @@ function frame(timeMs: number) {
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
   updateFlyCamera(camera, dt);
+  const [cameraX, cameraY, cameraZ] = camera.position;
+  const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
+  devMenu.setInfo(
+    `camera ${cameraX.toFixed(1)}, ${cameraY.toFixed(1)}, ${cameraZ.toFixed(1)}` +
+      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°`,
+  );
 
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, scene.framebuffer);
   gl!.viewport(0, 0, scene.width, scene.height);

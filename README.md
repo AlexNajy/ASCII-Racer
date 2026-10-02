@@ -19,7 +19,8 @@ npm run preview   # serve the production build locally
 - `W` / `S`: fly forward / back along the view direction
 - `A` / `D`: fly left / right
 - `Space` / `Shift`: fly up / down
-- `` ` `` (backtick): toggle the dev menu (FOV, cell size, view distance, render mode)
+- `Q` (hold): fly 4× faster
+- `` ` `` (backtick): toggle the dev menu (camera position, FOV, cell size, view distance, render mode)
 
 ## Roadmap
 
@@ -43,13 +44,13 @@ npm run preview   # serve the production build locally
   - [x] Brightness: turn each cell's colour into a brightness value and a position on the glyph ramp
   - [x] Font atlas: draw the ramp's characters into a texture once at startup
   - [x] Glyphs: each cell copies its character's shape from the atlas, coloured by the scene
-- [ ] **5. Fly camera**: move freely through the scene with the keyboard and look around with the mouse
+- [x] **5. Fly camera**: move freely through the scene with the keyboard and look around with the mouse
   - [x] Dev menu: a panel toggled with the backtick key to change FOV, cell size, view distance and render mode (glyphs, grey levels, blocky scene)
   - [x] Keyboard input: keep track of which keys are held down
   - [x] Camera state: a position plus yaw (left/right) and pitch (up/down) angles, replacing the fixed look-at
   - [x] Movement: WASD moves along the view direction, Space/Shift up and down, at the same speed at any frame rate
   - [x] Mouse look: lock the pointer on click, mouse movement turns the camera, pitch limited so it can't flip over
-  - [ ] Speed boost and camera info: a key to fly faster, and the camera's position shown in the dev menu
+  - [x] Speed boost and camera info: a key to fly faster, and the camera's position shown in the dev menu
 - [ ] **6. City**: street grid, buildings built from boxes, collisions with buildings
 - [ ] **7. Night lighting**: dark by default, headlights, street lamps, lit windows and neon
 - [ ] **8. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer

@@ -3,6 +3,7 @@ import type { Camera } from '../render/camera.ts';
 import { isKeyDown, takeMouseMovement } from './input.ts';
 
 const FLY_SPEED = 4; // world units per second
+const BOOST_MULTIPLIER = 4;
 const MOUSE_SENSITIVITY = 0.0025; // radians per pixel
 const MAX_PITCH = Math.PI / 2 - 0.01;
 
@@ -34,6 +35,7 @@ export function updateFlyCamera(camera: Camera, dt: number): void {
   // Normalized so diagonals are not faster than straight lines.
   const length = Math.hypot(move[0], move[1], move[2]);
   if (length === 0) return;
-  const step = (FLY_SPEED * dt) / length;
+  const speed = isKeyDown('KeyQ') ? FLY_SPEED * BOOST_MULTIPLIER : FLY_SPEED;
+  const step = (speed * dt) / length;
   for (let i = 0; i < 3; i++) camera.position[i] += move[i] * step;
 }
