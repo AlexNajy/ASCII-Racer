@@ -1,6 +1,7 @@
 import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
+import { DEFAULT_CITY_SETTINGS, generateCity, type Rect } from './game/city.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
@@ -54,13 +55,17 @@ const triangle = uploadMesh([
    0.5, -0.5, 0.0, 1.0,
 ]);
 
-const GRID_HALF_SIZE = 50;
-const gridVertices: number[] = [];
-for (let i = -GRID_HALF_SIZE; i <= GRID_HALF_SIZE; i++) {
-  gridVertices.push(i, 0, -GRID_HALF_SIZE, 1, i, 0, GRID_HALF_SIZE, 1);
-  gridVertices.push(-GRID_HALF_SIZE, 0, i, 1, GRID_HALF_SIZE, 0, i, 1);
+const city = generateCity(DEFAULT_CITY_SETTINGS);
+const KERB_HEIGHT = 0.15;
+
+function slab(rect: Rect, bottom: number, top: number): number[] {
+  return box([rect.minX, bottom, rect.minZ], [rect.maxX, top, rect.maxZ]);
 }
-const grid = uploadMesh(gridVertices);
+
+const road = uploadMesh(slab(city.bounds, -0.1, 0));
+const pavements = uploadMesh(city.blocks.flatMap((block) => slab(block, 0, KERB_HEIGHT)));
+// Raised slightly so the paint doesn't fight the road surface for depth.
+const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02)));
 
 const cube = uploadMesh(box([-0.5, 0, -0.5], [0.5, 1, 0.5]));
 
@@ -174,11 +179,13 @@ function frame(timeMs: number) {
   const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, 0.1, settings.viewDistance);
   const viewProjection = multiply(projection, viewMatrix(camera));
 
-  draw(grid, gl!.LINES, multiply(viewProjection, translation(0, -0.5, 0)), [0.4, 0.45, 0.55]);
+  draw(road, gl!.TRIANGLES, viewProjection, [0, 0, 0]);
+  draw(markings, gl!.TRIANGLES, viewProjection, [1, 1, 1]);
+  draw(pavements, gl!.TRIANGLES, viewProjection, [0.4, 0.4, 0.42]);
   draw(triangle, gl!.TRIANGLES, multiply(viewProjection, rotationY(t)), [1.0, 0.5, 0.0]);
-  draw(cube, gl!.TRIANGLES, multiply(viewProjection, translation(-2.5, -0.5, -2.5)), [0.3, 0.7, 1.0]);
+  draw(cube, gl!.TRIANGLES, multiply(viewProjection, translation(-2.5, 0, -2.5)), [0.3, 0.7, 1.0]);
 
-  const lamp = multiply(viewProjection, translation(2.5, -0.5, -2.5));
+  const lamp = multiply(viewProjection, translation(2.5, 0, -2.5));
   draw(lampPost, gl!.TRIANGLES, lamp, [0.6, 0.6, 0.65]);
   draw(lampHead, gl!.TRIANGLES, lamp, [1.0, 0.9, 0.4]);
   if (fullResolution) return;
