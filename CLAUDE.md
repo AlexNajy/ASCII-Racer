@@ -63,7 +63,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
   4. Specials: 1 park and the supermarket replace random low density blocks, the parking lot a random high density block. Skipped if no candidate exists.
 - **What zones mean**: low density = shops and low-rise, high density = mid-rise, high-rise = towers, houses = fenced houses (darkest area at night). Park, plaza and parking lot are open ground.
 - **Outer wall**: a continuous ring of buildings one block deep around the outer road, so every street dead-ends at a building and the city seems to carry on. It is the boundary; `bounds` is the drivable area inside it. Currently four plain strips. Planned: cut into pieces matching what they face (60 m opposite blocks, 12 m plugs opposite streets, 60 m corners), zoned from the downtown gradient using only the plain density zones.
-- **Buildings**: placeholder boxes per zone for now. Judge proportions (height, width, spacing), not looks; detail comes in a later graphics revision by changing the per-zone shape functions. The boxes double as collision shapes. Later, the seed also picks a style per building (e.g. one of several high-rise designs) and colour.
+- **Buildings** (roadmap step 7, not built yet): placeholder boxes per zone, in a new `game/buildings.ts` that turns a block into a list of boxes. Heights are seeded random within a per-zone range (the constants are the ranges). Buildings are set back a few metres from the kerb. Park, plaza and parking lot get none. Judge proportions (height, width, spacing), not looks; detail comes in a later graphics revision by changing the per-zone shape functions. The boxes double as collision shapes. Later designs are either parametric (a function of footprint and height, e.g. several high-rise styles) or fixed-size prefabs (houses, kiosks) placed and rotated by the seed. The seed also picks a colour per building from a hand-picked palette per style; keep brightness similar within a palette so the glyphs stay the same. Per-building colour needs colour in the vertex data (the batching sub-step).
 - Zone tints on the pavements in `main.ts` are temporary, for seeing the zoning.
 
 ### Known limits
@@ -78,11 +78,12 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 3. 3D camera and a simple ground plane with perspective
 4. Render to an offscreen framebuffer, then the ASCII pass with a glyph atlas
 5. Fly camera: move freely through the scene with the keyboard and look around with the mouse
-6. A city: street grid, buildings built from boxes, collisions with buildings
-7. Night lighting: dark by default, headlights, street lamps, lit windows and neon
-8. A drivable car: keyboard input, acceleration, steering, grip, drift, weight transfer
-9. Visual identity: per-material glyph sets, temporally stable glyphs (no flicker at speed), speed streaks
-10. Multiplayer: a small server to connect players, other players' cars, rollback netcode
+6. A city: street grid, zoning and an outer wall, as plain seeded data
+7. Buildings: placeholder boxes on every block, batched into one mesh, collisions with buildings
+8. Night lighting: dark by default, headlights, street lamps, lit windows and neon
+9. A drivable car: keyboard input, acceleration, steering, grip, drift, weight transfer
+10. Visual identity: per-material glyph sets, temporally stable glyphs (no flicker at speed), speed streaks
+11. Multiplayer: a small server to connect players, other players' cars, rollback netcode
 
 ## Conventions
 
@@ -90,7 +91,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 - Keep the simulation deterministic: fixed timestep for physics, separate from the render frame rate. Game state must be reproducible from inputs alone (needed for ghosts and rollback).
 - Simulation code must give identical results in every browser. `Math.sin`, `Math.cos` etc. can differ between browsers, so the simulation will need its own deterministic versions before multiplayer. Rendering can use `Math` freely.
 - The game client stays a static site (any static host works). Only multiplayer needs a server.
-- Generation is seeded (`math/random.ts`, Mulberry32), never `Math.random()`. A seed is the city's ID: same seed, same city for every player. Results depend on the order of `random()` calls, so from the buildings step on each block gets its own generator from the city seed and the block index (zoning uses one city-wide generator); adding a random call in one place then doesn't reshuffle the rest of the city.
+- Generation is seeded (`math/random.ts`, Mulberry32), never `Math.random()`. A seed is the city's ID: same seed, same city for every player. Results depend on the order of `random()` calls, so from roadmap step 7 on each block gets its own generator from the city seed and the block index (zoning uses one city-wide generator); adding a random call in one place then doesn't reshuffle the rest of the city.
 - Open numbers (thresholds, sizes, counts) are named constants with a sensible default, tuned as we go; later exposed as dev menu sliders. Don't block on choosing them.
 - Judge the look in glyph mode (and grey levels for whether shapes read), from driving height (~1.2 m). Full resolution mode is only for debugging geometry. Glyph choice follows brightness only; hue just tints the glyph, so brightness separates shapes.
 - Detail smaller than ~1 m disappears beyond ~40 m (about 8 cells per metre at 20 m, 2 at 80 m). Buildings read by silhouette and height.
