@@ -52,8 +52,8 @@ npm run preview   # serve the production build locally
   - [x] Mouse look: lock the pointer on click, mouse movement turns the camera, pitch limited so it can't flip over
   - [x] Speed boost and camera info: a key to fly faster, and the camera's position shown in the dev menu
 - [ ] **6. City**: street grid, buildings built from boxes, collisions with buildings
-  - [ ] Seeded random: a small number generator that gives the same "random" numbers for the same seed
-  - [ ] City layout: block and road rectangles as plain data, separate from rendering
+  - [x] Seeded random: a small number generator that gives the same "random" numbers for the same seed
+  - [x] City layout: block and road rectangles as plain data, separate from rendering
   - [ ] Ground: filled road and pavement surfaces instead of the line grid
   - [ ] Buildings: one box per lot with a random height, one draw call each
   - [ ] Batching: all buildings merged into one mesh, with colour stored per vertex
