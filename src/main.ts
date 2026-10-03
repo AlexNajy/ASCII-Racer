@@ -63,6 +63,8 @@ function slab(rect: Rect, bottom: number, top: number): number[] {
 }
 
 const road = uploadMesh(slab(city.bounds, -0.1, 0));
+const wall = uploadMesh(city.wall.flatMap((strip) => slab(strip, 0, KERB_HEIGHT)));
+
 // Temporary zone tints, one mesh per zone until colour moves into the vertex data.
 const ZONE_COLORS: Record<Zone, Vec3> = {
   [Zone.LowDensity]: [0.2, 0.35, 0.2],
@@ -198,6 +200,7 @@ function frame(timeMs: number) {
   draw(road, gl!.TRIANGLES, viewProjection, [0, 0, 0]);
   draw(markings, gl!.TRIANGLES, viewProjection, [1, 1, 1]);
   for (const { mesh, color } of pavements) draw(mesh, gl!.TRIANGLES, viewProjection, color);
+  draw(wall, gl!.TRIANGLES, viewProjection, [0.3, 0.3, 0.32]);
   draw(triangle, gl!.TRIANGLES, multiply(viewProjection, rotationY(t)), [1.0, 0.5, 0.0]);
   draw(cube, gl!.TRIANGLES, multiply(viewProjection, translation(-2.5, 0, -2.5)), [0.3, 0.7, 1.0]);
 

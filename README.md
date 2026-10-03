@@ -55,9 +55,10 @@ npm run preview   # serve the production build locally
   - [x] Seeded random: a small number generator that gives the same "random" numbers for the same seed
   - [x] City layout: block and road rectangles as plain data, separate from rendering
   - [x] Ground: black roads with dashed centre lines, raised pavement blocks
-  - [ ] Zoning: each block is randomly high or low density, shown as a pavement tint
-  - [ ] Neighbour rules: high density blocks with enough high density neighbours become high-rise, low density blocks surrounded by low density become houses
-  - [ ] Special blocks: a park and a supermarket replace low density blocks, a parking lot replaces a high density block
+  - [x] Zoning: each block is randomly high or low density, shown as a pavement tint
+  - [x] Neighbour rules: high density blocks with enough high density neighbours become high-rise, low density blocks surrounded by low density become houses
+  - [x] Special blocks: a park and a supermarket replace low density blocks, a parking lot replaces a high density block
+  - [ ] Outer wall: a continuous ring of blocks around the city that streets dead-end into
   - [ ] Buildings per zone: a simple shape for each zone type, one draw call each
   - [ ] Batching: all buildings merged into one mesh, with colour stored per vertex
   - [ ] City sliders: seed, block size, road width, density and building heights in the dev menu, regenerated live

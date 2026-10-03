@@ -47,9 +47,10 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
 };
 
 export interface City {
-  bounds: Rect;
+  bounds: Rect; // the drivable area: blocks and roads, inside the wall
   blocks: Block[];
   markings: Rect[];
+  wall: Rect[];
 }
 
 const MARKING_WIDTH = 0.4;
@@ -160,6 +161,15 @@ export function generateCity(settings: CitySettings): City {
     }
   }
 
+  // One block deep and unbroken, so every street ends at a building. North and south strips cover the corners.
   const half = size / 2;
-  return { bounds: { minX: -half, minZ: -half, maxX: half, maxZ: half }, blocks, markings };
+  const outer = half + blockSize;
+  const wall: Rect[] = [
+    { minX: -outer, minZ: -outer, maxX: outer, maxZ: -half },
+    { minX: -outer, minZ: half, maxX: outer, maxZ: outer },
+    { minX: -outer, minZ: -half, maxX: -half, maxZ: half },
+    { minX: half, minZ: -half, maxX: outer, maxZ: half },
+  ];
+
+  return { bounds: { minX: -half, minZ: -half, maxX: half, maxZ: half }, blocks, markings, wall };
 }
