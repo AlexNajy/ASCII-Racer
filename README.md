@@ -54,13 +54,18 @@ npm run preview   # serve the production build locally
 - [ ] **6. City**: street grid, buildings built from boxes, collisions with buildings
   - [x] Seeded random: a small number generator that gives the same "random" numbers for the same seed
   - [x] City layout: block and road rectangles as plain data, separate from rendering
-  - [ ] Ground: filled road and pavement surfaces instead of the line grid
-  - [ ] Buildings: one box per lot with a random height, one draw call each
+  - [x] Ground: black roads with dashed centre lines, raised pavement blocks
+  - [ ] Zoning: each block is randomly high or low density, shown as a pavement tint
+  - [ ] Neighbour rules: high density blocks with enough high density neighbours become high-rise, low density clusters become their own zone
+  - [ ] Special blocks: a supermarket and two parks replace low density blocks
+  - [ ] Buildings per zone: a simple shape for each zone type, one draw call each
   - [ ] Batching: all buildings merged into one mesh, with colour stored per vertex
-  - [ ] City sliders: seed, block size, road width and building heights in the dev menu, regenerated live
+  - [ ] City sliders: seed, block size, road width, density and building heights in the dev menu, regenerated live
   - [ ] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
   - [ ] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
 - [ ] **7. Night lighting**: dark by default, headlights, street lamps, lit windows and neon
+  - [ ] Street lights on high density pavements
+  - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are high density
 - [ ] **8. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer
 - [ ] **9. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
 - [ ] **10. Multiplayer**: a small server to connect players, other players' cars, rollback netcode
