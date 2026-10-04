@@ -1,6 +1,7 @@
 import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
+import { DEFAULT_CITY_SETTINGS, generateCity, Zone, type Rect } from './game/city.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
@@ -54,13 +55,35 @@ const triangle = uploadMesh([
    0.5, -0.5, 0.0, 1.0,
 ]);
 
-const GRID_HALF_SIZE = 50;
-const gridVertices: number[] = [];
-for (let i = -GRID_HALF_SIZE; i <= GRID_HALF_SIZE; i++) {
-  gridVertices.push(i, 0, -GRID_HALF_SIZE, 1, i, 0, GRID_HALF_SIZE, 1);
-  gridVertices.push(-GRID_HALF_SIZE, 0, i, 1, GRID_HALF_SIZE, 0, i, 1);
+const city = generateCity(DEFAULT_CITY_SETTINGS);
+const KERB_HEIGHT = 0.15;
+
+function slab(rect: Rect, bottom: number, top: number): number[] {
+  return box([rect.minX, bottom, rect.minZ], [rect.maxX, top, rect.maxZ]);
 }
-const grid = uploadMesh(gridVertices);
+
+const road = uploadMesh(slab(city.bounds, -0.1, 0));
+const wall = uploadMesh(city.wall.flatMap((strip) => slab(strip, 0, KERB_HEIGHT)));
+
+// Temporary zone tints, one mesh per zone until colour moves into the vertex data.
+const ZONE_COLORS: Record<Zone, Vec3> = {
+  [Zone.LowDensity]: [0.2, 0.35, 0.2],
+  [Zone.HighDensity]: [0.5, 0.45, 0.4],
+  [Zone.HighRise]: [0.9, 0.85, 0.75],
+  [Zone.Houses]: [0.15, 0.25, 0.4],
+  [Zone.Park]: [0.1, 0.7, 0.1],
+  [Zone.Supermarket]: [0.9, 0.2, 0.2],
+  [Zone.ParkingLot]: [0.6, 0.6, 0.1],
+  [Zone.Plaza]: [0.6, 0.3, 0.9],
+};
+const pavements = Object.values(Zone).map((zone) => ({
+  color: ZONE_COLORS[zone],
+  mesh: uploadMesh(
+    city.blocks.filter((block) => block.zone === zone).flatMap((block) => slab(block.rect, 0, KERB_HEIGHT)),
+  ),
+}));
+// Raised slightly so the paint doesn't fight the road surface for depth.
+const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02)));
 
 const cube = uploadMesh(box([-0.5, 0, -0.5], [0.5, 1, 0.5]));
 
@@ -81,8 +104,8 @@ const fullscreenVao = gl.createVertexArray();
 
 const settings: DevSettings = {
   fovDegrees: 60,
-  cellWidth: 8,
-  viewDistance: 15,
+  cellWidth: 6,
+  viewDistance: 50,
   renderMode: RenderMode.Glyphs,
 };
 
@@ -174,11 +197,14 @@ function frame(timeMs: number) {
   const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, 0.1, settings.viewDistance);
   const viewProjection = multiply(projection, viewMatrix(camera));
 
-  draw(grid, gl!.LINES, multiply(viewProjection, translation(0, -0.5, 0)), [0.4, 0.45, 0.55]);
+  draw(road, gl!.TRIANGLES, viewProjection, [0, 0, 0]);
+  draw(markings, gl!.TRIANGLES, viewProjection, [1, 1, 1]);
+  for (const { mesh, color } of pavements) draw(mesh, gl!.TRIANGLES, viewProjection, color);
+  draw(wall, gl!.TRIANGLES, viewProjection, [0.3, 0.3, 0.32]);
   draw(triangle, gl!.TRIANGLES, multiply(viewProjection, rotationY(t)), [1.0, 0.5, 0.0]);
-  draw(cube, gl!.TRIANGLES, multiply(viewProjection, translation(-2.5, -0.5, -2.5)), [0.3, 0.7, 1.0]);
+  draw(cube, gl!.TRIANGLES, multiply(viewProjection, translation(-2.5, 0, -2.5)), [0.3, 0.7, 1.0]);
 
-  const lamp = multiply(viewProjection, translation(2.5, -0.5, -2.5));
+  const lamp = multiply(viewProjection, translation(2.5, 0, -2.5));
   draw(lampPost, gl!.TRIANGLES, lamp, [0.6, 0.6, 0.65]);
   draw(lampHead, gl!.TRIANGLES, lamp, [1.0, 0.9, 0.4]);
   if (fullResolution) return;

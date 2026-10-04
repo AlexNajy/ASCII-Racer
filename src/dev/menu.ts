@@ -56,7 +56,7 @@ export function createDevMenu(
 
   slider('FOV', 'fovDegrees', 30, 120, 1);
   slider('Cell width', 'cellWidth', 4, 16, 1);
-  slider('View distance', 'viewDistance', 5, 100, 1);
+  slider('View distance', 'viewDistance', 5, 500, 1);
 
   const modeRow = document.createElement('label');
   const modeText = document.createElement('span');
