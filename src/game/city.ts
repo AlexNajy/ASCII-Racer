@@ -10,7 +10,7 @@ export interface Rect {
 
 export const Zone = {
   LowDensity: 0,
-  HighDensity: 1,
+  MidDensity: 1,
   HighRise: 2,
   Houses: 3,
   Park: 4,
@@ -32,7 +32,7 @@ export interface CitySettings {
   blockSize: number;
   roadWidth: number;
   blocksPerSide: number;
-  // Chance of high density at the downtown centre and at the downtown radius and beyond, 0 to 1.
+  // Chance of mid density at the downtown centre and at the downtown radius and beyond, 0 to 1.
   centreDensityChance: number;
   edgeDensityChance: number;
 }
@@ -110,23 +110,33 @@ export function generateCity(settings: CitySettings): City {
       const minZ = start + row * spacing;
       const distance = Math.hypot(column - downtownColumn, row - downtownRow) / blocksPerSide;
       const t = Math.min(distance / DOWNTOWN_RADIUS, 1);
-      const highDensityChance = centreDensityChance + (edgeDensityChance - centreDensityChance) * t;
+      const midDensityChance = centreDensityChance + (edgeDensityChance - centreDensityChance) * t;
       blocks.push({
         rect: { minX, minZ, maxX: minX + blockSize, maxZ: minZ + blockSize },
         column,
         row,
-        zone: random() < highDensityChance ? Zone.HighDensity : Zone.LowDensity,
+        zone: random() < midDensityChance ? Zone.MidDensity : Zone.LowDensity,
       });
     }
   }
 
-  // Upgrades only read the original zones, so the result doesn't depend on the order blocks are checked in.
+  // Neighbour counts read the original zones, so the result doesn't depend on the order blocks are checked in.
   const originalZones = blocks.map((block) => block.zone);
+  const matchingNeighbours = (block: Block, index: number) =>
+    sideNeighbours(block, blocksPerSide).filter((i) => originalZones[i] === originalZones[index]).length;
+
   blocks.forEach((block, index) => {
-    const zone = originalZones[index];
-    const matching = sideNeighbours(block, blocksPerSide).filter((i) => originalZones[i] === zone).length;
-    if (zone === Zone.HighDensity && matching >= HIGH_RISE_NEIGHBOURS) block.zone = Zone.HighRise;
-    if (zone === Zone.LowDensity && matching >= HOUSES_NEIGHBOURS) block.zone = Zone.Houses;
+    if (originalZones[index] === Zone.MidDensity && matchingNeighbours(block, index) >= HIGH_RISE_NEIGHBOURS) {
+      block.zone = Zone.HighRise;
+    }
+  });
+
+  // Houses never share a side with a high-rise; those blocks stay shops as a buffer.
+  blocks.forEach((block, index) => {
+    const besideHighRise = sideNeighbours(block, blocksPerSide).some((i) => blocks[i].zone === Zone.HighRise);
+    if (originalZones[index] === Zone.LowDensity && matchingNeighbours(block, index) >= HOUSES_NEIGHBOURS && !besideHighRise) {
+      block.zone = Zone.Houses;
+    }
   });
 
   // Breaks up walls of high-rises. Candidates are recounted after each pick, so plazas never touch.
@@ -142,7 +152,7 @@ export function generateCity(settings: CitySettings): City {
 
   for (let i = 0; i < PARK_COUNT; i++) placeSpecial(blocks, Zone.LowDensity, Zone.Park, random);
   placeSpecial(blocks, Zone.LowDensity, Zone.Supermarket, random);
-  placeSpecial(blocks, Zone.HighDensity, Zone.ParkingLot, random);
+  placeSpecial(blocks, Zone.MidDensity, Zone.ParkingLot, random);
 
   // Centre lines run along each road segment between two intersections, so dashes don't cross junctions.
   const markings: Rect[] = [];

@@ -20,7 +20,7 @@ npm run preview   # serve the production build locally
 - `A` / `D`: fly left / right
 - `Space` / `Shift`: fly up / down
 - `Q` (hold): fly 4× faster
-- `` ` `` (backtick): toggle the dev menu (camera position, FOV, cell size, view distance, render mode)
+- `` ` `` (backtick): toggle the dev menu (camera position, FOV, cell size, view distance, render mode, lock height at 1.2 m)
 
 ## Roadmap
 
@@ -56,8 +56,8 @@ npm run preview   # serve the production build locally
   - [x] City layout: block and road rectangles as plain data, separate from rendering
   - [x] Ground: black roads with dashed centre lines, raised pavement blocks
   - [x] Zoning: each block is randomly high or low density, shown as a pavement tint
-  - [x] Neighbour rules: high density blocks with enough high density neighbours become high-rise, low density blocks surrounded by low density become houses
-  - [x] Special blocks: a park and a supermarket replace low density blocks, a parking lot replaces a high density block
+  - [x] Neighbour rules: mid density blocks with enough mid density neighbours become high-rise, low density blocks surrounded by low density become houses
+  - [x] Special blocks: a park and a supermarket replace low density blocks, a parking lot replaces a mid density block
   - [x] Outer wall: a continuous ring of blocks around the city that streets dead-end into
 - [ ] **7. Buildings**: placeholder boxes on every block, batched into one mesh, with collisions
   - [x] Per-block random: each block gets its own generator from the city seed and its index
@@ -68,8 +68,8 @@ npm run preview   # serve the production build locally
   - [ ] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
   - [ ] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
 - [ ] **8. Night lighting**: dark by default, headlights, street lamps, lit windows and neon
-  - [ ] Street lights on high density pavements
-  - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are high density
+  - [ ] Street lights on mid density and high-rise pavements
+  - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are mid density or high-rise
 - [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer
 - [ ] **10. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
 - [ ] **11. Multiplayer**: a small server to connect players, other players' cars, rollback netcode

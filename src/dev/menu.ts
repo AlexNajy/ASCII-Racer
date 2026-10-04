@@ -11,9 +11,11 @@ export interface DevSettings {
   cellWidth: number; // in CSS pixels; the height follows from the character shape
   viewDistance: number;
   renderMode: RenderMode;
+  lockHeight: boolean;
 }
 
 type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance';
+type BooleanSetting = 'lockHeight';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -54,6 +56,23 @@ export function createDevMenu(
     panel.append(row);
   }
 
+  function checkbox(label: string, key: BooleanSetting) {
+    const row = document.createElement('label');
+    const text = document.createElement('span');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = settings[key];
+    text.textContent = label;
+    input.addEventListener('change', () => {
+      settings[key] = input.checked;
+      onChange(key);
+      // Release keyboard focus so Space doesn't toggle it while flying.
+      input.blur();
+    });
+    row.append(text, input);
+    panel.append(row);
+  }
+
   slider('FOV', 'fovDegrees', 30, 120, 1);
   slider('Cell width', 'cellWidth', 4, 16, 1);
   slider('View distance', 'viewDistance', 5, 500, 1);
@@ -77,6 +96,8 @@ export function createDevMenu(
   });
   modeRow.append(modeText, select);
   panel.append(modeRow);
+
+  checkbox('Lock height (1.2 m)', 'lockHeight');
 
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'Backquote') return;

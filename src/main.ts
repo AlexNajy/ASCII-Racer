@@ -1,11 +1,12 @@
 import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
+import { generateBuildings } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, Zone, type Rect } from './game/city.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
-import { multiply, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
+import { multiply, perspective, rotationY, scaling, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
@@ -67,14 +68,14 @@ const wall = uploadMesh(city.wall.flatMap((strip) => slab(strip, 0, KERB_HEIGHT)
 
 // Temporary zone tints, one mesh per zone until colour moves into the vertex data.
 const ZONE_COLORS: Record<Zone, Vec3> = {
-  [Zone.LowDensity]: [0.2, 0.35, 0.2],
-  [Zone.HighDensity]: [0.5, 0.45, 0.4],
-  [Zone.HighRise]: [0.9, 0.85, 0.75],
-  [Zone.Houses]: [0.15, 0.25, 0.4],
-  [Zone.Park]: [0.1, 0.7, 0.1],
-  [Zone.Supermarket]: [0.9, 0.2, 0.2],
-  [Zone.ParkingLot]: [0.6, 0.6, 0.1],
-  [Zone.Plaza]: [0.6, 0.3, 0.9],
+  [Zone.LowDensity]: [0.2, 0.3, 0.75],
+  [Zone.MidDensity]: [0.05, 0.3, 0.1],
+  [Zone.HighRise]: [0.75, 0.75, 0.75],
+  [Zone.Houses]: [0.35, 0.55, 0.15],
+  [Zone.Park]: [0.15, 0.85, 0.2],
+  [Zone.Supermarket]: [0.9, 0.8, 0.1],
+  [Zone.ParkingLot]: [0.2, 0.2, 0.2],
+  [Zone.Plaza]: [0.2, 0.7, 0.9],
 };
 const pavements = Object.values(Zone).map((zone) => ({
   color: ZONE_COLORS[zone],
@@ -86,6 +87,9 @@ const pavements = Object.values(Zone).map((zone) => ({
 const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02)));
 
 const cube = uploadMesh(box([-0.5, 0, -0.5], [0.5, 1, 0.5]));
+
+const buildings = generateBuildings(city, DEFAULT_CITY_SETTINGS.seed);
+const unitCube = uploadMesh(box([0, 0, 0], [1, 1, 1]));
 
 const lampPost = uploadMesh([
   ...box([-0.05, 0, -0.05], [0.05, 2.2, 0.05]),
@@ -105,8 +109,9 @@ const fullscreenVao = gl.createVertexArray();
 const settings: DevSettings = {
   fovDegrees: 60,
   cellWidth: 6,
-  viewDistance: 50,
+  viewDistance: 500,
   renderMode: RenderMode.Glyphs,
+  lockHeight: false,
 };
 
 const dpr = window.devicePixelRatio || 1;
@@ -172,12 +177,12 @@ function frame(timeMs: number) {
   const t = timeMs / 1000;
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
-  updateFlyCamera(camera, dt);
+  updateFlyCamera(camera, dt, settings.lockHeight);
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(
     `camera ${cameraX.toFixed(1)}, ${cameraY.toFixed(1)}, ${cameraZ.toFixed(1)}` +
-      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°`,
+      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${DEFAULT_CITY_SETTINGS.seed}`,
   );
 
   // Full resolution skips the ASCII pass and draws the scene straight to the screen.
@@ -201,6 +206,15 @@ function frame(timeMs: number) {
   draw(markings, gl!.TRIANGLES, viewProjection, [1, 1, 1]);
   for (const { mesh, color } of pavements) draw(mesh, gl!.TRIANGLES, viewProjection, color);
   draw(wall, gl!.TRIANGLES, viewProjection, [0.3, 0.3, 0.32]);
+
+  // One unit cube, moved to each building's corner and stretched to its size.
+  for (const { rect, height } of buildings) {
+    const model = multiply(
+      translation(rect.minX, KERB_HEIGHT, rect.minZ),
+      scaling(rect.maxX - rect.minX, height, rect.maxZ - rect.minZ),
+    );
+    draw(unitCube, gl!.TRIANGLES, multiply(viewProjection, model), [0.75, 0.7, 0.65]);
+  }
   draw(triangle, gl!.TRIANGLES, multiply(viewProjection, rotationY(t)), [1.0, 0.5, 0.0]);
   draw(cube, gl!.TRIANGLES, multiply(viewProjection, translation(-2.5, 0, -2.5)), [0.3, 0.7, 1.0]);
 
