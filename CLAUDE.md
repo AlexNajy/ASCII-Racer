@@ -109,3 +109,4 @@ This is a learning project, i want to understand how it works.
 - Tell me where code goes (which file, which part of the file).
 - You can write the code yourself; explain what it does and why. Ask before committing or changing things outside the current step.
 - I'm on macOS, using VS Code and Chrome for development.
+- I commit the code not you

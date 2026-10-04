@@ -60,7 +60,7 @@ npm run preview   # serve the production build locally
   - [x] Special blocks: a park and a supermarket replace low density blocks, a parking lot replaces a high density block
   - [x] Outer wall: a continuous ring of blocks around the city that streets dead-end into
 - [ ] **7. Buildings**: placeholder boxes on every block, batched into one mesh, with collisions
-  - [ ] Per-block random: each block gets its own generator from the city seed and its index
+  - [x] Per-block random: each block gets its own generator from the city seed and its index
   - [ ] Buildings per zone: a simple box shape for each zone type, heights from the seed, one draw call each
   - [ ] Outer wall pieces: the wall cut into pieces that line up with the blocks and streets, zoned from the downtown gradient
   - [ ] Batching: all buildings merged into one mesh, with colour stored per vertex

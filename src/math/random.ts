@@ -9,3 +9,12 @@ export function createRandom(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+// Mixes a city seed and a block index into one seed, so each block has its own sequence.
+// Plain addition would collide (seed 1 + block 2 = seed 2 + block 1).
+export function blockSeed(seed: number, index: number): number {
+  let h = Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) ^ index;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return (h ^ (h >>> 16)) >>> 0;
+}
