@@ -99,7 +99,7 @@ export function createDevMenu(
 
   settingSlider('FOV', 'fovDegrees', 30, 120, 1);
   settingSlider('Cell width', 'cellWidth', 4, 16, 1);
-  settingSlider('View distance', 'viewDistance', 5, 500, 1);
+  settingSlider('View distance', 'viewDistance', 5, 1000, 1);
 
   const modeRow = document.createElement('label');
   const modeText = document.createElement('span');
@@ -124,6 +124,11 @@ export function createDevMenu(
   checkbox('Lock height (1.2 m)', 'lockHeight');
 
   citySlider('Seed', 'seed', 1, 1000, 1);
+  citySlider('Blocks per side', 'blocksPerSide', 3, 14, 1);
+  citySlider('Block size (m)', 'blockSize', 40, 100, 1);
+  citySlider('Road width (m)', 'roadWidth', 8, 20, 1);
+  citySlider('Centre density', 'centreDensityChance', 0, 1, 0.05);
+  citySlider('Edge density', 'edgeDensityChance', 0, 1, 0.05);
 
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'Backquote') return;
