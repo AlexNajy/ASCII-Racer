@@ -15,12 +15,13 @@ type BlockBuilder = (rect: Rect, random: () => number) => Building[];
 
 const SETBACK = 3;
 const ALLEY_WIDTH = 4;
-const MID_RISE_HEIGHT: Range = { min: 15, max: 35 };
-const SHOP_HEIGHT: Range = { min: 4, max: 10 };
+const MID_RISE_HEIGHT: Range = { min: 16, max: 37 };
+const SHOP_HEIGHT: Range = { min: 5, max: 12 };
 const TOWER_HEIGHT: Range = { min: 50, max: 120 };
 const TOWER_SIZE: Range = { min: 0.5, max: 0.7 }; // fraction of the block's width and depth
 const HOUSE_HEIGHT: Range = { min: 5, max: 7 };
 const HOUSE_SIZE: Range = { min: 10, max: 14 };
+const SUPERMARKET_HEIGHT = 10;
 const HOUSE_FENCE_GAP = 2; // space between each house and the block's centre lines, where the fence will go
 
 function between(range: Range, random: () => number): number {
@@ -94,6 +95,19 @@ const houses: BlockBuilder = (rect, random) => {
   return result;
 };
 
+// The store fills the half of the block away from a random street, the other half is its car park.
+const supermarket: BlockBuilder = (rect, random) => {
+  const midX = (rect.minX + rect.maxX) / 2;
+  const midZ = (rect.minZ + rect.maxZ) / 2;
+  const halves: Rect[] = [
+    { ...rect, maxZ: midZ },
+    { ...rect, minZ: midZ },
+    { ...rect, maxX: midX },
+    { ...rect, minX: midX },
+  ];
+  return [{ rect: halves[Math.floor(random() * halves.length)], height: SUPERMARKET_HEIGHT }];
+};
+
 const noBuildings: BlockBuilder = () => [];
 
 const BUILDERS: Record<Zone, BlockBuilder> = {
@@ -102,7 +116,7 @@ const BUILDERS: Record<Zone, BlockBuilder> = {
   [Zone.HighRise]: tower,
   [Zone.Houses]: houses,
   [Zone.Park]: noBuildings,
-  [Zone.Supermarket]: noBuildings,
+  [Zone.Supermarket]: supermarket,
   [Zone.ParkingLot]: noBuildings,
   [Zone.Plaza]: noBuildings,
 };
