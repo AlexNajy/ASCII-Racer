@@ -65,8 +65,7 @@ function slab(rect: Rect, bottom: number, top: number): number[] {
 
 const road = uploadMesh(slab(city.bounds, -0.1, 0));
 
-// Temporary wall tints with a small gap between pieces, for checking the shuffled order.
-const WALL_GAP = 0.5;
+// Temporary wall tints, for checking the shuffled order.
 const WALL_COLORS: Record<WallKind, Vec3> = {
   corner: [0.3, 0.3, 0.32],
   narrow: [0.9, 0.85, 0.2],
@@ -75,17 +74,7 @@ const WALL_COLORS: Record<WallKind, Vec3> = {
 };
 const wallPieces = (Object.keys(WALL_COLORS) as WallKind[]).map((kind) => ({
   color: WALL_COLORS[kind],
-  mesh: uploadMesh(
-    city.wall
-      .filter((piece) => piece.kind === kind)
-      .flatMap(({ rect }) =>
-        slab(
-          { minX: rect.minX + WALL_GAP, minZ: rect.minZ + WALL_GAP, maxX: rect.maxX - WALL_GAP, maxZ: rect.maxZ - WALL_GAP },
-          0,
-          KERB_HEIGHT,
-        ),
-      ),
-  ),
+  mesh: uploadMesh(city.wall.filter((piece) => piece.kind === kind).flatMap(({ rect }) => slab(rect, 0, KERB_HEIGHT))),
 }));
 
 // Temporary zone tints, one mesh per zone until colour moves into the vertex data.

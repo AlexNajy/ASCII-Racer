@@ -1,5 +1,5 @@
 import { blockSeed, createRandom } from '../math/random.ts';
-import { Zone, type City, type Rect } from './city.ts';
+import { Zone, type City, type Rect, type WallPiece } from './city.ts';
 
 export interface Building {
   rect: Rect;
@@ -23,6 +23,8 @@ const HOUSE_HEIGHT: Range = { min: 5, max: 7 };
 const HOUSE_SIZE: Range = { min: 10, max: 14 };
 const SUPERMARKET_HEIGHT = 10;
 const HOUSE_FENCE_GAP = 2; // space between each house and the block's centre lines, where the fence will go
+const WALL_HEIGHT: Range = { min: 16, max: 37 };
+const NARROW_WALL_HEIGHT: Range = { min: 14, max: 35 };
 
 function between(range: Range, random: () => number): number {
   return range.min + random() * (range.max - range.min);
@@ -121,8 +123,28 @@ const BUILDERS: Record<Zone, BlockBuilder> = {
   [Zone.Plaza]: noBuildings,
 };
 
+// One building filling the whole wall piece, so neighbours touch and the wall stays unbroken.
+// Only the edges facing the city are set back, like the blocks across the road.
+function wallBuilding({ rect, kind }: WallPiece, bounds: Rect, random: () => number): Building {
+  return {
+    rect: {
+      minX: rect.minX === bounds.maxX ? rect.minX + SETBACK : rect.minX,
+      minZ: rect.minZ === bounds.maxZ ? rect.minZ + SETBACK : rect.minZ,
+      maxX: rect.maxX === bounds.minX ? rect.maxX - SETBACK : rect.maxX,
+      maxZ: rect.maxZ === bounds.minZ ? rect.maxZ - SETBACK : rect.maxZ,
+    },
+    height: between(kind === 'narrow' ? NARROW_WALL_HEIGHT : WALL_HEIGHT, random),
+  };
+}
+
 export function generateBuildings(city: City, seed: number): Building[] {
-  return city.blocks.flatMap((block, index) =>
+  const blockBuildings = city.blocks.flatMap((block, index) =>
     BUILDERS[block.zone](inset(block.rect, SETBACK), createRandom(blockSeed(seed, index))),
   );
+  // Seeds after the block and wall side seeds used in city.ts.
+  const wallSeedStart = city.blocks.length + 4;
+  const wallBuildings = city.wall.map((piece, index) =>
+    wallBuilding(piece, city.bounds, createRandom(blockSeed(seed, wallSeedStart + index))),
+  );
+  return [...blockBuildings, ...wallBuildings];
 }
