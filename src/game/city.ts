@@ -1,4 +1,4 @@
-import { createRandom } from '../math/random.ts';
+import { blockSeed, createRandom, shuffle } from '../math/random.ts';
 
 // A rectangle on the ground plane, seen from above. Units are metres.
 export interface Rect {
@@ -27,6 +27,14 @@ export interface Block {
   zone: Zone;
 }
 
+// Corners fill the four corner squares; the sides are made of three widths of piece, one building each.
+export type WallKind = 'corner' | 'narrow' | 'medium' | 'wide';
+
+export interface WallPiece {
+  rect: Rect;
+  kind: WallKind;
+}
+
 export interface CitySettings {
   seed: number;
   blockSize: number;
@@ -50,7 +58,7 @@ export interface City {
   bounds: Rect; // the drivable area: blocks and roads, inside the wall
   blocks: Block[];
   markings: Rect[];
-  wall: Rect[];
+  wall: WallPiece[];
 }
 
 const MARKING_WIDTH = 0.4;
@@ -68,6 +76,10 @@ const PLAZA_NEIGHBOURS = 4;
 const PLAZA_MAX = 1;
 
 const PARK_COUNT = 1;
+
+// Each side is 588 m with the default settings: 7 × (21 + 28 + 35). Must add up to the side length.
+const WALL_WIDTHS: Record<Exclude<WallKind, 'corner'>, number> = { narrow: 21, medium: 28, wide: 35 };
+const WALL_PIECES_PER_WIDTH = 7;
 
 // Turns one random block of the `from` zone into the `to` zone. Skipped if no such block exists.
 function placeSpecial(blocks: Block[], from: Zone, to: Zone, random: () => number): void {
@@ -171,15 +183,37 @@ export function generateCity(settings: CitySettings): City {
     }
   }
 
-  // One block deep and unbroken, so every street ends at a building. North and south strips cover the corners.
+  // One block deep and unbroken. Each side holds the same set of pieces in a shuffled order,
+  // so the total length still fits exactly between the corners.
   const half = size / 2;
   const outer = half + blockSize;
-  const wall: Rect[] = [
-    { minX: -outer, minZ: -outer, maxX: outer, maxZ: -half },
-    { minX: -outer, minZ: half, maxX: outer, maxZ: outer },
-    { minX: -outer, minZ: -half, maxX: -half, maxZ: half },
-    { minX: half, minZ: -half, maxX: outer, maxZ: half },
+  const wall: WallPiece[] = [
+    { minX: -outer, minZ: -outer },
+    { minX: half, minZ: -outer },
+    { minX: -outer, minZ: half },
+    { minX: half, minZ: half },
+  ].map(({ minX, minZ }) => ({ rect: { minX, minZ, maxX: minX + blockSize, maxZ: minZ + blockSize }, kind: 'corner' }));
+
+  // Turns a stretch [from, to] along a side into that side's rectangle.
+  const sides: ((from: number, to: number) => Rect)[] = [
+    (from, to) => ({ minX: from, minZ: -outer, maxX: to, maxZ: -half }),
+    (from, to) => ({ minX: from, minZ: half, maxX: to, maxZ: outer }),
+    (from, to) => ({ minX: -outer, minZ: from, maxX: -half, maxZ: to }),
+    (from, to) => ({ minX: half, minZ: from, maxX: outer, maxZ: to }),
   ];
+  sides.forEach((side, sideIndex) => {
+    // Seeds after the block indices, so a side never shares a sequence with a block.
+    const sideRandom = createRandom(blockSeed(settings.seed, blocksPerSide * blocksPerSide + sideIndex));
+    const kinds = (Object.keys(WALL_WIDTHS) as (keyof typeof WALL_WIDTHS)[]).flatMap((kind) =>
+      Array<keyof typeof WALL_WIDTHS>(WALL_PIECES_PER_WIDTH).fill(kind),
+    );
+    shuffle(kinds, sideRandom);
+    let along = -half;
+    for (const kind of kinds) {
+      wall.push({ rect: side(along, along + WALL_WIDTHS[kind]), kind });
+      along += WALL_WIDTHS[kind];
+    }
+  });
 
   return { bounds: { minX: -half, minZ: -half, maxX: half, maxZ: half }, blocks, markings, wall };
 }

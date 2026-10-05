@@ -2,7 +2,7 @@ import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { generateBuildings } from './game/buildings.ts';
-import { DEFAULT_CITY_SETTINGS, generateCity, Zone, type Rect } from './game/city.ts';
+import { DEFAULT_CITY_SETTINGS, generateCity, Zone, type Rect, type WallKind } from './game/city.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
@@ -64,7 +64,29 @@ function slab(rect: Rect, bottom: number, top: number): number[] {
 }
 
 const road = uploadMesh(slab(city.bounds, -0.1, 0));
-const wall = uploadMesh(city.wall.flatMap((strip) => slab(strip, 0, KERB_HEIGHT)));
+
+// Temporary wall tints with a small gap between pieces, for checking the shuffled order.
+const WALL_GAP = 0.5;
+const WALL_COLORS: Record<WallKind, Vec3> = {
+  corner: [0.3, 0.3, 0.32],
+  narrow: [0.9, 0.85, 0.2],
+  medium: [0.95, 0.5, 0.1],
+  wide: [0.8, 0.15, 0.1],
+};
+const wallPieces = (Object.keys(WALL_COLORS) as WallKind[]).map((kind) => ({
+  color: WALL_COLORS[kind],
+  mesh: uploadMesh(
+    city.wall
+      .filter((piece) => piece.kind === kind)
+      .flatMap(({ rect }) =>
+        slab(
+          { minX: rect.minX + WALL_GAP, minZ: rect.minZ + WALL_GAP, maxX: rect.maxX - WALL_GAP, maxZ: rect.maxZ - WALL_GAP },
+          0,
+          KERB_HEIGHT,
+        ),
+      ),
+  ),
+}));
 
 // Temporary zone tints, one mesh per zone until colour moves into the vertex data.
 const ZONE_COLORS: Record<Zone, Vec3> = {
@@ -205,7 +227,7 @@ function frame(timeMs: number) {
   draw(road, gl!.TRIANGLES, viewProjection, [0, 0, 0]);
   draw(markings, gl!.TRIANGLES, viewProjection, [1, 1, 1]);
   for (const { mesh, color } of pavements) draw(mesh, gl!.TRIANGLES, viewProjection, color);
-  draw(wall, gl!.TRIANGLES, viewProjection, [0.3, 0.3, 0.32]);
+  for (const { mesh, color } of wallPieces) draw(mesh, gl!.TRIANGLES, viewProjection, color);
 
   // One unit cube, moved to each building's corner and stretched to its size.
   for (const { rect, height } of buildings) {

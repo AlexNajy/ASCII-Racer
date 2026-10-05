@@ -18,3 +18,11 @@ export function blockSeed(seed: number, index: number): number {
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
   return (h ^ (h >>> 16)) >>> 0;
 }
+
+// Fisher-Yates: every order is equally likely. Shuffles in place.
+export function shuffle<T>(items: T[], random: () => number): void {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+}
