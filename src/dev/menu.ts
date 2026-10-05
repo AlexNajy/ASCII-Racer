@@ -1,3 +1,5 @@
+import type { CitySettings } from '../game/city.ts';
+
 export const RenderMode = {
   Glyphs: 0,
   Brightness: 1,
@@ -23,7 +25,9 @@ export interface DevMenu {
 
 export function createDevMenu(
   settings: DevSettings,
+  citySettings: CitySettings,
   onChange: (setting: keyof DevSettings) => void,
+  onCityChange: () => void,
 ): DevMenu {
   const panel = document.createElement('div');
   panel.id = 'dev-menu';
@@ -37,7 +41,14 @@ export function createDevMenu(
   const info = document.createElement('div');
   panel.append(info);
 
-  function slider(label: string, key: NumberSetting, min: number, max: number, step: number) {
+  function slider(
+    label: string,
+    value: number,
+    min: number,
+    max: number,
+    step: number,
+    onInput: (value: number) => void,
+  ) {
     const row = document.createElement('label');
     const text = document.createElement('span');
     const input = document.createElement('input');
@@ -45,15 +56,28 @@ export function createDevMenu(
     input.min = String(min);
     input.max = String(max);
     input.step = String(step);
-    input.value = String(settings[key]);
-    text.textContent = `${label}: ${settings[key]}`;
+    input.value = String(value);
+    text.textContent = `${label}: ${value}`;
     input.addEventListener('input', () => {
-      settings[key] = Number(input.value);
-      text.textContent = `${label}: ${settings[key]}`;
-      onChange(key);
+      text.textContent = `${label}: ${input.value}`;
+      onInput(Number(input.value));
     });
     row.append(text, input);
     panel.append(row);
+  }
+
+  function settingSlider(label: string, key: NumberSetting, min: number, max: number, step: number) {
+    slider(label, settings[key], min, max, step, (value) => {
+      settings[key] = value;
+      onChange(key);
+    });
+  }
+
+  function citySlider(label: string, key: keyof CitySettings, min: number, max: number, step: number) {
+    slider(label, citySettings[key], min, max, step, (value) => {
+      citySettings[key] = value;
+      onCityChange();
+    });
   }
 
   function checkbox(label: string, key: BooleanSetting) {
@@ -73,9 +97,9 @@ export function createDevMenu(
     panel.append(row);
   }
 
-  slider('FOV', 'fovDegrees', 30, 120, 1);
-  slider('Cell width', 'cellWidth', 4, 16, 1);
-  slider('View distance', 'viewDistance', 5, 500, 1);
+  settingSlider('FOV', 'fovDegrees', 30, 120, 1);
+  settingSlider('Cell width', 'cellWidth', 4, 16, 1);
+  settingSlider('View distance', 'viewDistance', 5, 500, 1);
 
   const modeRow = document.createElement('label');
   const modeText = document.createElement('span');
@@ -98,6 +122,8 @@ export function createDevMenu(
   panel.append(modeRow);
 
   checkbox('Lock height (1.2 m)', 'lockHeight');
+
+  citySlider('Seed', 'seed', 1, 1000, 1);
 
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'Backquote') return;

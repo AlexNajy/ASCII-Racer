@@ -42,7 +42,7 @@ src/
 ### How it works today
 
 - `main.ts` holds setup and the frame loop: pass 1 draws into the `scene` render target, pass 2 draws the full-screen triangle with `ascii.frag.glsl`.
-- The scene shaders are still named `triangle.vert.glsl` / `triangle.frag.glsl`. Each vertex is `x, y, z, shade` (`render/shapes.ts`, `box()`); colour, matrix and fog are uniforms set per draw.
+- The scene shaders are still named `triangle.vert.glsl` / `triangle.frag.glsl`. Each vertex is `x, y, z, r, g, b` (`render/shapes.ts`, `box()`): `box()` bakes a fixed per-face shade (fake lighting until step 8) into the colour. Matrix and fog are uniforms set per draw.
 - The scene pass clears with alpha 0 and objects write alpha 1, so the ASCII pass can tell empty cells (drawn as solid background, no glyph) from objects. Material IDs for per-material glyph sets will use this channel later.
 - Fog uses `gl_Position.w` (distance in front of the camera) and fades to the background colour, which is black for now.
 - Cells are `settings.cellWidth` CSS px wide and 1.75× as tall, times `devicePixelRatio`. The scene render target has one pixel per cell, and the glyph atlas cells are exactly the cell size, so changing the cell size rebuilds the atlas.
@@ -62,7 +62,12 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
   3. Plaza: at most one, a random high-rise whose 4 neighbours are all high-rises. Breaks up walls of towers.
   4. Specials: 1 park and the supermarket replace random low density blocks, the parking lot a random mid density block. Skipped if no candidate exists.
 - **What zones mean**: low density = shops and low-rise, mid density = mid-rise, high-rise = towers, houses = 4 per block, set in towards the block centre with their yards facing the street, later separated by one cross-shaped fence along the block's centre lines (darkest area at night). Park, plaza and parking lot are open ground.
-- **Outer wall**: a continuous ring of buildings one block deep around the outer road, so every street dead-ends at a building and the city seems to carry on. It is the boundary; `bounds` is the drivable area inside it. Currently four plain strips. Planned: cut into pieces matching what they face (60 m opposite blocks, 12 m plugs opposite streets, 60 m corners), zoned from the downtown gradient using only the plain density zones.
+- **Outer wall**: a continuous ring of buildings one block deep around the outer road, so every street dead-ends at a building and the city seems to carry on. It is the boundary; `bounds` is the drivable area inside it.
+  - Set back 3 m (`WALL_SETBACK`) behind a pavement ring (`wallPavement`), like the blocks. Corners are the remaining squares (57×57 m).
+  - Each side (594 m by default) is made of fixed-width pieces so prefab designs fit: 21, 28 and 35 m (3, 4 and 5 units of `WALL_UNIT` = 7 m), plus one flex piece that takes the remainder.
+  - Counts: units = floor(side / 7), minus one if the remainder is under `FLEX_MIN_WIDTH` (7 m), so the flex piece is always 7–13 m. Equal sets of the three widths (12 units each), then `WALL_EXTRAS` fills the leftover units (1 and 2 borrow a set). Works for any side of at least 84 m. Default: 7×21, 8×28, 6×35 and a 13 m flex.
+  - Every side uses the same pieces in its own shuffled order (`shuffle`, Fisher-Yates, seeded with `blockSeed(seed, blocks + side)`), so the wall doesn't mirror the street grid. The flex piece is shuffled in like the others.
+  - The flex piece stays open as an alley. Planned: a gate across its mouth (a real collision box, not an invisible barrier) with prefabs inside, such as dumpsters or a parked car.
 - **Buildings** (`game/buildings.ts`, roadmap step 7): `generateBuildings(city, seed)` turns each block into a list of `Building`s (footprint `rect` + `height`), using a per-block generator (`blockSeed`). A `Record<Zone, BlockBuilder>` table picks the builder, so a new zone won't compile without one. Blocks are inset 3 m from the kerb (`inset`), and `split` cuts them into lots with 4 m alleys. Heights are seeded random within a per-zone `Range` (the constants are the ranges):
   - Low density: 8 shops (3×3 lots, centre lot empty as a back yard), 5–12 m.
   - Mid density: 2×2 mid-rises, 16–37 m.
@@ -70,9 +75,10 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
   - Houses: 4, one per quarter, in the corner nearest the block centre with a 2 m gap to the centre lines for the future fence, 10–14 m square-ish, 5–7 m tall.
   - Supermarket: one 10 m box on the half of the block away from a random street; the other half is its car park.
   - Park, plaza, parking lot: none.
-- Buildings are drawn in `main.ts` with one unit cube mesh (corner at the origin) and a model matrix `translation × scaling` per building, one draw call each, all one colour for now, until the batching sub-step.
-- Building notes: Judge proportions (height, width, spacing), not looks; detail comes in a later graphics revision by changing the per-zone shape functions. The boxes double as collision shapes. Later designs are either parametric (a function of footprint and height, e.g. several high-rise styles) or fixed-size prefabs (houses, kiosks) placed and rotated by the seed. The seed also picks a colour per building from a hand-picked palette per style; keep brightness similar within a palette so the glyphs stay the same. Per-building colour needs colour in the vertex data (the batching sub-step).
-- Zone tints on the pavements in `main.ts` are temporary, for seeing the zoning.
+  - Wall pieces: one building filling the whole piece, so neighbours touch, 16–37 m (`WALL_HEIGHT`, narrow pieces `NARROW_WALL_HEIGHT` 14–35 m). Own constants, separate from the zones, so game modes can change them. Flex pieces get none.
+- Batching: all buildings are one mesh built once at startup with corners already in world position (`slab` per building), drawn in a single call. Pavements and wall slabs are one mesh each too. Buildings are all one colour for now.
+- Building notes: Judge proportions (height, width, spacing), not looks; detail comes in a later graphics revision by changing the per-zone shape functions. The boxes double as collision shapes. Later designs are either parametric (a function of footprint and height, e.g. several high-rise styles) or fixed-size prefabs (houses, kiosks) placed and rotated by the seed. The seed also picks a colour per building from a hand-picked palette per style; keep brightness similar within a palette so the glyphs stay the same. Colour is in the vertex data, so per-building and per-face colours only need a different colour passed to `box()`.
+- Zone tints on the pavements and wall piece tints (by kind) in `main.ts` are temporary, for seeing the zoning and the wall order.
 
 ### Known limits
 
@@ -91,7 +97,8 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 8. Night lighting: dark by default, headlights, street lamps, lit windows and neon
 9. A drivable car: keyboard input, acceleration, steering, grip, drift, weight transfer
 10. Visual identity: per-material glyph sets, temporally stable glyphs (no flicker at speed), speed streaks
-11. Multiplayer: a small server to connect players, other players' cars, rollback netcode
+11. Menu + game modes
+12. Multiplayer: a small server to connect players, other players' cars, rollback netcode
 
 ## Conventions
 

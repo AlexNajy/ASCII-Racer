@@ -62,8 +62,9 @@ npm run preview   # serve the production build locally
 - [ ] **7. Buildings**: placeholder boxes on every block, batched into one mesh, with collisions
   - [x] Per-block random: each block gets its own generator from the city seed and its index
   - [x] Buildings per zone: a simple box shape for each zone type, heights from the seed, one draw call each
-  - [ ] Outer wall pieces: the wall cut into pieces that line up with the blocks and streets, zoned from the downtown gradient
-  - [ ] Batching: all buildings merged into one mesh, with colour stored per vertex
+  - [x] Outer wall pieces: each side cut into fixed 21, 28 and 35 m pieces plus one 7–13 m flex alley, in a seeded shuffled order, set back behind a pavement, one mid-rise height building per piece
+  - [x] Vertex colour: colour stored per vertex instead of per draw call
+  - [x] Batching: all buildings merged into one mesh
   - [ ] City sliders: seed, block size, road width, density and building heights in the dev menu, regenerated live
   - [ ] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
   - [ ] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
@@ -72,4 +73,5 @@ npm run preview   # serve the production build locally
   - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are mid density or high-rise
 - [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer
 - [ ] **10. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
-- [ ] **11. Multiplayer**: a small server to connect players, other players' cars, rollback netcode
+- [ ] **11. Menu + game modes**
+- [ ] **12. Multiplayer**: a small server to connect players, other players' cars, rollback netcode
