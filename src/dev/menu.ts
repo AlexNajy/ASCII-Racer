@@ -13,11 +13,9 @@ export interface DevSettings {
   cellWidth: number; // in CSS pixels; the height follows from the character shape
   viewDistance: number;
   renderMode: RenderMode;
-  lockHeight: boolean;
 }
 
 type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance';
-type BooleanSetting = 'lockHeight';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -41,7 +39,36 @@ export function createDevMenu(
   const info = document.createElement('div');
   panel.append(info);
 
+  // Each page is a div; the page dropdown shows one and hides the rest.
+  const pageRow = document.createElement('label');
+  const pageText = document.createElement('span');
+  pageText.textContent = 'Page';
+  const pageSelect = document.createElement('select');
+  pageRow.append(pageText, pageSelect);
+  panel.append(pageRow);
+  const pages: HTMLDivElement[] = [];
+
+  function page(name: string): HTMLDivElement {
+    const div = document.createElement('div');
+    div.className = 'page';
+    div.hidden = pages.length > 0;
+    const option = document.createElement('option');
+    option.textContent = name;
+    option.value = String(pages.length);
+    pageSelect.append(option);
+    pages.push(div);
+    panel.append(div);
+    return div;
+  }
+
+  pageSelect.addEventListener('change', () => {
+    pages.forEach((div, index) => (div.hidden = index !== Number(pageSelect.value)));
+    // Release keyboard focus so flying keys don't pick options by their first letter.
+    pageSelect.blur();
+  });
+
   function slider(
+    parent: HTMLElement,
     label: string,
     value: number,
     min: number,
@@ -63,39 +90,25 @@ export function createDevMenu(
       onInput(Number(input.value));
     });
     row.append(text, input);
-    panel.append(row);
+    parent.append(row);
   }
 
   function settingSlider(label: string, key: NumberSetting, min: number, max: number, step: number) {
-    slider(label, settings[key], min, max, step, (value) => {
+    slider(viewPage, label, settings[key], min, max, step, (value) => {
       settings[key] = value;
       onChange(key);
     });
   }
 
   function citySlider(label: string, key: keyof CitySettings, min: number, max: number, step: number) {
-    slider(label, citySettings[key], min, max, step, (value) => {
+    slider(cityPage, label, citySettings[key], min, max, step, (value) => {
       citySettings[key] = value;
       onCityChange();
     });
   }
 
-  function checkbox(label: string, key: BooleanSetting) {
-    const row = document.createElement('label');
-    const text = document.createElement('span');
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.checked = settings[key];
-    text.textContent = label;
-    input.addEventListener('change', () => {
-      settings[key] = input.checked;
-      onChange(key);
-      // Release keyboard focus so Space doesn't toggle it while flying.
-      input.blur();
-    });
-    row.append(text, input);
-    panel.append(row);
-  }
+  const viewPage = page('View');
+  const cityPage = page('City');
 
   settingSlider('FOV', 'fovDegrees', 30, 120, 1);
   settingSlider('Cell width', 'cellWidth', 4, 16, 1);
@@ -119,9 +132,7 @@ export function createDevMenu(
     select.blur();
   });
   modeRow.append(modeText, select);
-  panel.append(modeRow);
-
-  checkbox('Lock height (1.2 m)', 'lockHeight');
+  viewPage.append(modeRow);
 
   citySlider('Seed', 'seed', 1, 1000, 1);
   citySlider('Blocks per side', 'blocksPerSide', 3, 14, 1);
@@ -129,6 +140,12 @@ export function createDevMenu(
   citySlider('Road width (m)', 'roadWidth', 8, 20, 1);
   citySlider('Centre density', 'centreDensityChance', 0, 1, 0.05);
   citySlider('Edge density', 'edgeDensityChance', 0, 1, 0.05);
+  citySlider('Wall height ×', 'wallHeight', 0.1, 3, 0.1);
+  citySlider('Houses height ×', 'housesHeight', 0.1, 3, 0.1);
+  citySlider('Low density height ×', 'lowDensityHeight', 0.1, 3, 0.1);
+  citySlider('Mid density height ×', 'midDensityHeight', 0.1, 3, 0.1);
+  citySlider('High-rise height ×', 'highRiseHeight', 0.1, 3, 0.1);
+  citySlider('Supermarket height ×', 'supermarketHeight', 0.1, 3, 0.1);
 
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'Backquote') return;

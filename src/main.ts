@@ -100,7 +100,7 @@ function buildCityMeshes(settings: CitySettings): Mesh[] {
   ]);
   // All buildings in one mesh, with corners already in world position, so they draw in a single call.
   const buildings = uploadMesh(
-    generateBuildings(city, settings.seed).flatMap(({ rect, height }) =>
+    generateBuildings(city, settings).flatMap(({ rect, height }) =>
       slab(rect, KERB_HEIGHT, KERB_HEIGHT + height, [0.75, 0.7, 0.65]),
     ),
   );
@@ -137,7 +137,6 @@ const settings: DevSettings = {
   cellWidth: 6,
   viewDistance: 500,
   renderMode: RenderMode.FullResolution,
-  lockHeight: false,
 };
 
 const dpr = window.devicePixelRatio || 1;
@@ -207,7 +206,7 @@ function frame(timeMs: number) {
   const t = timeMs / 1000;
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
-  updateFlyCamera(camera, dt, settings.lockHeight);
+  updateFlyCamera(camera, dt);
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(

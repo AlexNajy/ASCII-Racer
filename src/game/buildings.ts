@@ -1,5 +1,5 @@
 import { blockSeed, createRandom } from '../math/random.ts';
-import { Zone, type City, type Rect, type WallPiece } from './city.ts';
+import { Zone, type City, type CitySettings, type Rect, type WallPiece } from './city.ts';
 
 export interface Building {
   rect: Rect;
@@ -128,15 +128,40 @@ function wallBuilding({ rect, kind }: WallPiece, random: () => number): Building
   return { rect, height: between(kind === 'narrow' ? NARROW_WALL_HEIGHT : WALL_HEIGHT, random) };
 }
 
-export function generateBuildings(city: City, seed: number): Building[] {
+// Zones without buildings use 1.
+function heightScales(settings: CitySettings): Record<Zone, number> {
+  return {
+    [Zone.LowDensity]: settings.lowDensityHeight,
+    [Zone.MidDensity]: settings.midDensityHeight,
+    [Zone.HighRise]: settings.highRiseHeight,
+    [Zone.Houses]: settings.housesHeight,
+    [Zone.Park]: 1,
+    [Zone.Supermarket]: settings.supermarketHeight,
+    [Zone.ParkingLot]: 1,
+    [Zone.Plaza]: 1,
+  };
+}
+
+function scaled(building: Building, scale: number): Building {
+  return { ...building, height: building.height * scale };
+}
+
+// Heights are scaled after generation, so a multiplier doesn't change the random calls or the layout.
+export function generateBuildings(city: City, settings: CitySettings): Building[] {
+  const { seed } = settings;
+  const scales = heightScales(settings);
   const blockBuildings = city.blocks.flatMap((block, index) =>
-    BUILDERS[block.zone](inset(block.rect, SETBACK), createRandom(blockSeed(seed, index))),
+    BUILDERS[block.zone](inset(block.rect, SETBACK), createRandom(blockSeed(seed, index))).map((building) =>
+      scaled(building, scales[block.zone]),
+    ),
   );
   // Seeds after the block and wall side seeds used in city.ts.
   const wallSeedStart = city.blocks.length + 4;
   // Flex pieces stay open as alleys.
   const wallBuildings = city.wall.flatMap((piece, index) =>
-    piece.kind === 'flex' ? [] : [wallBuilding(piece, createRandom(blockSeed(seed, wallSeedStart + index)))],
+    piece.kind === 'flex'
+      ? []
+      : [scaled(wallBuilding(piece, createRandom(blockSeed(seed, wallSeedStart + index))), settings.wallHeight)],
   );
   return [...blockBuildings, ...wallBuildings];
 }

@@ -45,6 +45,13 @@ export interface CitySettings {
   // Chance of mid density at the downtown centre and at the downtown radius and beyond, 0 to 1.
   centreDensityChance: number;
   edgeDensityChance: number;
+  // Building height multipliers per zone, 1 = the ranges in buildings.ts.
+  wallHeight: number;
+  housesHeight: number;
+  lowDensityHeight: number;
+  midDensityHeight: number;
+  highRiseHeight: number;
+  supermarketHeight: number;
 }
 
 export const DEFAULT_CITY_SETTINGS: CitySettings = {
@@ -54,6 +61,12 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
   blocksPerSide: 8,
   centreDensityChance: 0.9,
   edgeDensityChance: 0.1,
+  wallHeight: 1,
+  housesHeight: 1,
+  lowDensityHeight: 1,
+  midDensityHeight: 1,
+  highRiseHeight: 1,
+  supermarketHeight: 1,
 };
 
 export interface City {
