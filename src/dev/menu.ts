@@ -100,8 +100,15 @@ export function createDevMenu(
     });
   }
 
-  function citySlider(label: string, key: keyof CitySettings, min: number, max: number, step: number) {
-    slider(cityPage, label, citySettings[key], min, max, step, (value) => {
+  function citySlider(
+    parent: HTMLElement,
+    label: string,
+    key: keyof CitySettings,
+    min: number,
+    max: number,
+    step: number,
+  ) {
+    slider(parent, label, citySettings[key], min, max, step, (value) => {
       citySettings[key] = value;
       onCityChange();
     });
@@ -109,6 +116,7 @@ export function createDevMenu(
 
   const viewPage = page('View');
   const cityPage = page('City');
+  const buildingsPage = page('Buildings');
 
   settingSlider('FOV', 'fovDegrees', 30, 120, 1);
   settingSlider('Cell width', 'cellWidth', 4, 16, 1);
@@ -134,18 +142,22 @@ export function createDevMenu(
   modeRow.append(modeText, select);
   viewPage.append(modeRow);
 
-  citySlider('Seed', 'seed', 1, 1000, 1);
-  citySlider('Blocks per side', 'blocksPerSide', 3, 14, 1);
-  citySlider('Block size (m)', 'blockSize', 40, 100, 1);
-  citySlider('Road width (m)', 'roadWidth', 8, 20, 1);
-  citySlider('Centre density', 'centreDensityChance', 0, 1, 0.05);
-  citySlider('Edge density', 'edgeDensityChance', 0, 1, 0.05);
-  citySlider('Wall height ×', 'wallHeight', 0.1, 3, 0.1);
-  citySlider('Houses height ×', 'housesHeight', 0.1, 3, 0.1);
-  citySlider('Low density height ×', 'lowDensityHeight', 0.1, 3, 0.1);
-  citySlider('Mid density height ×', 'midDensityHeight', 0.1, 3, 0.1);
-  citySlider('High-rise height ×', 'highRiseHeight', 0.1, 3, 0.1);
-  citySlider('Supermarket height ×', 'supermarketHeight', 0.1, 3, 0.1);
+  citySlider(cityPage, 'Seed', 'seed', 1, 1000, 1);
+  citySlider(cityPage, 'Blocks per side', 'blocksPerSide', 3, 14, 1);
+  citySlider(cityPage, 'Block size (m)', 'blockSize', 40, 100, 1);
+  citySlider(cityPage, 'Road width (m)', 'roadWidth', 8, 20, 1);
+  citySlider(cityPage, 'Centre density', 'centreDensityChance', 0, 1, 0.05);
+  citySlider(cityPage, 'Edge density', 'edgeDensityChance', 0, 1, 0.05);
+  citySlider(buildingsPage, 'Wall height ×', 'wallHeight', 0.1, 3, 0.1);
+  citySlider(buildingsPage, 'Houses height ×', 'housesHeight', 0.1, 3, 0.1);
+  citySlider(buildingsPage, 'Low density height ×', 'lowDensityHeight', 0.1, 3, 0.1);
+  citySlider(buildingsPage, 'Mid density height ×', 'midDensityHeight', 0.1, 3, 0.1);
+  citySlider(buildingsPage, 'High-rise height ×', 'highRiseHeight', 0.1, 3, 0.1);
+  citySlider(buildingsPage, 'Supermarket height ×', 'supermarketHeight', 0.1, 3, 0.1);
+  citySlider(buildingsPage, 'Mid alley chance', 'midDensityAlleyChance', 0, 1, 0.025);
+  citySlider(buildingsPage, 'Low empty lot chance', 'lowDensityEmptyChance', 0, 1, 0.025);
+  citySlider(buildingsPage, 'Low merge chance', 'lowDensityMergeChance', 0, 1, 0.025);
+  citySlider(buildingsPage, 'Low strip mall chance', 'lowDensityStripMallChance', 0, 1, 0.025);
 
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'Backquote') return;

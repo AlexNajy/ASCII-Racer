@@ -52,6 +52,10 @@ export interface CitySettings {
   midDensityHeight: number;
   highRiseHeight: number;
   supermarketHeight: number;
+  midDensityAlleyChance: number; // per direction, 0 to 1
+  lowDensityEmptyChance: number; // per shop lot, 0 to 1
+  lowDensityMergeChance: number; // per side and corner, 0 to 1
+  lowDensityStripMallChance: number; // per block, 0 to 1
 }
 
 export const DEFAULT_CITY_SETTINGS: CitySettings = {
@@ -67,6 +71,10 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
   midDensityHeight: 1,
   highRiseHeight: 1,
   supermarketHeight: 1,
+  midDensityAlleyChance: 0.5,
+  lowDensityEmptyChance: 0.125,
+  lowDensityMergeChance: 0.2,
+  lowDensityStripMallChance: 0.1,
 };
 
 export interface City {
