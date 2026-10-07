@@ -72,7 +72,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
   - Low density: up to 8 touching shops (3×3 lots, centre lot empty as a back yard), 6.5–15 m. Each lot is left empty with `lowDensityEmptyChance` (1 in 8), for a small car park later. Then a side's middle shop can merge with each of its corners (`lowDensityMergeChance`, 0.2) into one building with the middle shop's height, if both lots have a shop; each corner joins at most one side (sides checked in a fixed order), so merged shops stay rectangles. A block is a strip mall with `lowDensityStripMallChance` (0.1): a random corner and its two neighbouring lots (0-1-3, 1-2-5, 5-7-8 or 3-6-7) become its car park, and the other shops are never left empty.
   - Mid density: 2×2 mid-rises, 16–42 m. Alleys north-south and east-west are rolled separately (`midDensityAlleyChance`, 0.5), so a block gets none, one direction or both.
   - High-rise: one tower, 50–70% of the block's width and depth each, at a random spot, 50–120 m.
-  - Houses: 4, one per quarter, in the corner nearest the block centre with a 2 m gap to the centre lines for the future fence, 10–14 m square-ish, 5–7 m tall.
+  - Houses: 4, one per quarter, in the corner nearest the block centre with a 2 m gap to the centre lines for the future fence, 14–18 m square-ish, 7–10 m tall.
   - Supermarket: one 10 m box on the half of the block away from a random street; the other half is its car park.
   - Park, plaza, parking lot: none.
   - Wall pieces: one building filling the whole piece, so neighbours touch, 10–37 m (`WALL_HEIGHT`, narrow pieces `NARROW_WALL_HEIGHT` 8–35 m). Own constants, separate from the zones, so game modes can change them. Flex pieces get none.

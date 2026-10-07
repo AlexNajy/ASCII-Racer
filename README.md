@@ -65,7 +65,7 @@ npm run preview   # serve the production build locally
   - [x] Outer wall pieces: each side cut into fixed 21, 28 and 35 m pieces plus one 7–13 m flex alley, in a seeded shuffled order, set back behind a pavement, one mid-rise height building per piece
   - [x] Vertex colour: colour stored per vertex instead of per draw call
   - [x] Batching: all buildings merged into one mesh
-  - [ ] City sliders: seed, block size, road width, density and building heights in the dev menu, regenerated live
+  - [x] City sliders: seed, block size, road width, density, building heights and lot chances on City and Buildings pages of the dev menu, regenerated live
   - [ ] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
   - [ ] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
 - [ ] **8. Night lighting**: dark by default, headlights, street lamps, lit windows and neon
