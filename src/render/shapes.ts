@@ -1,9 +1,10 @@
 import type { Vec3 } from '../math/mat4.ts';
 
-// Vertex layout: x, y, z, r, g, b, nx, ny, nz.
-export const FLOATS_PER_VERTEX = 9;
+// Vertex layout: x, y, z, r, g, b, nx, ny, nz, emission.
+// Emission 1 shows the colour at full strength whatever the lighting, for things that glow.
+export const FLOATS_PER_VERTEX = 10;
 
-export function box(min: Vec3, max: Vec3, color: Vec3): number[] {
+export function box(min: Vec3, max: Vec3, color: Vec3, emission = 0): number[] {
   const [x0, y0, z0] = min;
   const [x1, y1, z1] = max;
   const faces: [Vec3, Vec3, Vec3, Vec3, Vec3][] = [
@@ -16,7 +17,7 @@ export function box(min: Vec3, max: Vec3, color: Vec3): number[] {
   ];
   const vertices: number[] = [];
   for (const [a, b, c, d, normal] of faces) {
-    for (const corner of [a, b, c, a, c, d]) vertices.push(...corner, ...color, ...normal);
+    for (const corner of [a, b, c, a, c, d]) vertices.push(...corner, ...color, ...normal, emission);
   }
   return vertices;
 }
@@ -34,7 +35,7 @@ function along(origin: Vec3, ...steps: [Vec3, number][]): Vec3 {
 }
 
 // A square bar between two points at any angle. Must not point straight up.
-export function beam(from: Vec3, to: Vec3, thickness: number, color: Vec3): number[] {
+export function beam(from: Vec3, to: Vec3, thickness: number, color: Vec3, emission = 0): number[] {
   const length = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
   const forward: Vec3 = [(to[0] - from[0]) / length, (to[1] - from[1]) / length, (to[2] - from[2]) / length];
   const side = cross(forward, [0, 1, 0]);
@@ -54,7 +55,7 @@ export function beam(from: Vec3, to: Vec3, thickness: number, color: Vec3): numb
   ];
   const vertices: number[] = [];
   for (const [a, b, c, d, normal] of faces) {
-    for (const point of [a, b, c, a, c, d]) vertices.push(...point, ...color, ...normal);
+    for (const point of [a, b, c, a, c, d]) vertices.push(...point, ...color, ...normal, emission);
   }
   return vertices;
 }

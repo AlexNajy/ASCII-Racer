@@ -69,18 +69,20 @@ npm run preview   # serve the production build locally
   - [x] City sliders: seed, block size, road width, density, building heights and lot chances on City and Buildings pages of the dev menu, regenerated live
   - [x] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
   - [x] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
-- [ ] **8. Lighting**: dark by default, headlights, street lamps, lit windows and neon
+- [ ] **8. Lighting**: a dim moonlight base that shapes buildings, and things that glow (emission) instead of real lights
   - [x] Normals: per-vertex normals in `box()` (x, y, z, r, g, b, nx, ny, nz) and a second scene render target holding them, for lighting and later for orientation glyph sets (vertical ramp on walls, horizontal on ground and roofs)
-  - [ ] Street lights on low density, mid density and high-rise pavements, placed per road segment by spacing, staggered when both sides are lit
+  - [x] Street lights on low density, mid density and high-rise pavements, placed per road segment by spacing, staggered when both sides are lit
+  - [x] Emission: a per-vertex emission value, so bulbs, windows and neon glow at full brightness without lighting anything; glyphs drawn in the cell's true colour
   - [ ] Road widths: a width per road line, with seeded 4-lane avenues weighted towards downtown, lane markings per road type and a street light pattern per road type
   - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are mid density or high-rise, and crosswalks
-- [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer
+- [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer, headlights (the only real lights: a few cones that light what they hit)
 - [ ] **10. Building models**: real shapes in place of the boxes, with seeded spawning rules for which model goes where
   - [ ] Floors: building heights snapped to whole floors
   - [ ] Parametric styles: several shape functions per zone (setbacks, roofs, shopfronts), each a function of footprint and height
   - [ ] Prefabs: fixed-size models (houses, kiosks, dumpsters) placed and rotated by the seed
   - [ ] Spawn rules: which styles and prefabs each zone, lot and neighbourhood can get, and how often
   - [ ] Colour palettes: a hand-picked palette per style, one colour per building from the seed
+  - [ ] Lit windows and neon: emissive faces in the models, seeded per building
 - [ ] **11. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
 - [ ] **12. Menu + game modes**
 - [ ] **13. Multiplayer**: a small server to connect players, other players' cars, rollback netcode

@@ -40,6 +40,7 @@ export function streetLightVertices({ x, z, facingX, facingZ }: StreetLight): nu
     ...box(
       ...flatBox(HEAD_LENGTH - 2 * BULB_INSET, HEAD_WIDTH - 2 * BULB_INSET, headBottom - BULB_HEIGHT, BULB_HEIGHT),
       BULB_COLOR,
+      1,
     ),
   ];
 }

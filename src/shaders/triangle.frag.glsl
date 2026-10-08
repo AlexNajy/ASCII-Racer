@@ -4,6 +4,7 @@ precision highp float;
 in vec3 v_color;
 in vec3 v_viewPosition;
 in vec3 v_normal;
+in float v_emission;
 
 uniform vec3 u_fogColor;
 uniform float u_fogStart;
@@ -31,6 +32,7 @@ void main() {
   // Ambient lights every face equally, so faces turned away from the light aren't fully black.
   float diffuse = max(dot(normal, u_lightDirection), 0.0);
   vec3 lit = v_color * (u_ambient + u_lightIntensity * diffuse);
+  lit = mix(lit, v_color, v_emission);
 
   // The camera is at the origin of view space, so this is the true distance, giving a circle of fog.
   // Positions interpolate correctly across a triangle; distances don't, so the length is taken here.

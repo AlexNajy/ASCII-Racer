@@ -35,6 +35,7 @@ const ambientLocation = gl.getUniformLocation(program, 'u_ambient');
 const positionLocation = gl.getAttribLocation(program, 'a_position');
 const colorLocation = gl.getAttribLocation(program, 'a_color');
 const normalLocation = gl.getAttribLocation(program, 'a_normal');
+const emissionLocation = gl.getAttribLocation(program, 'a_emission');
 
 interface Mesh {
   vao: WebGLVertexArrayObject;
@@ -57,6 +58,8 @@ function uploadMesh(vertices: number[]): Mesh {
   gl!.vertexAttribPointer(colorLocation, 3, gl!.FLOAT, false, stride, 3 * 4);
   gl!.enableVertexAttribArray(normalLocation);
   gl!.vertexAttribPointer(normalLocation, 3, gl!.FLOAT, false, stride, 6 * 4);
+  gl!.enableVertexAttribArray(emissionLocation);
+  gl!.vertexAttribPointer(emissionLocation, 1, gl!.FLOAT, false, stride, 9 * 4);
 
   gl!.bindVertexArray(null);
   return { vao, buffer, vertexCount: vertices.length / FLOATS_PER_VERTEX };
@@ -68,9 +71,9 @@ function deleteMesh(mesh: Mesh) {
 }
 
 const triangle = uploadMesh([
-   0.0,  0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0,
-  -0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0,
-   0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0,
+   0.0,  0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0,
+  -0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0,
+   0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0,
 ]);
 
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
@@ -99,7 +102,7 @@ const ZONE_COLORS: Record<Zone, Vec3> = {
 };
 
 function buildCityMeshes(city: City, buildings: Building[], streetLights: StreetLight[]): Mesh[] {
-  const road = uploadMesh(slab(city.bounds, -0.1, 0, [0, 0, 0]));
+  const road = uploadMesh(slab(city.bounds, -0.1, 0, [0.25, 0.25, 0.25]));
   // Raised slightly so the paint doesn't fight the road surface for depth.
   const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02, [1, 1, 1])));
   const pavements = uploadMesh(city.blocks.flatMap(({ rect, zone }) => slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone])));

@@ -72,7 +72,5 @@ void main() {
   );
   float glyph = texelFetch(u_glyphs, atlasPixel, 0).r;
 
-  // Full-strength hue; the glyph's density already shows how bright the cell is.
-  vec3 tint = color / max(max(color.r, color.g), max(color.b, 0.001));
-  outColor = vec4(mix(u_background, tint, glyph), 1.0);
+  outColor = vec4(mix(u_background, color, glyph), 1.0);
 }
