@@ -2,8 +2,9 @@ import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
-import { DEFAULT_CITY_SETTINGS, generateCity, KERB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
+import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { pushOutOfBuildings } from './game/collision.ts';
+import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
@@ -11,6 +12,7 @@ import { multiply, normalize, perspective, rotationY, translation, type Mat4, ty
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
+import { streetLightVertices } from './render/streetLight.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
@@ -96,33 +98,36 @@ const ZONE_COLORS: Record<Zone, Vec3> = {
   [Zone.Plaza]: [0.2, 0.7, 0.9],
 };
 
-function buildCityMeshes(city: City, buildings: Building[]): Mesh[] {
+function buildCityMeshes(city: City, buildings: Building[], streetLights: StreetLight[]): Mesh[] {
   const road = uploadMesh(slab(city.bounds, -0.1, 0, [0, 0, 0]));
   // Raised slightly so the paint doesn't fight the road surface for depth.
   const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02, [1, 1, 1])));
-  const pavements = uploadMesh(city.blocks.flatMap(({ rect, zone }) => slab(rect, 0, KERB_HEIGHT, ZONE_COLORS[zone])));
+  const pavements = uploadMesh(city.blocks.flatMap(({ rect, zone }) => slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone])));
   const wall = uploadMesh([
-    ...city.wallPavement.flatMap((strip) => slab(strip, 0, KERB_HEIGHT, WALL_COLORS.corner)),
-    ...city.wall.flatMap(({ rect, kind }) => slab(rect, 0, KERB_HEIGHT, WALL_COLORS[kind])),
+    ...city.wallPavement.flatMap((strip) => slab(strip, 0, CURB_HEIGHT, WALL_COLORS.corner)),
+    ...city.wall.flatMap(({ rect, kind }) => slab(rect, 0, CURB_HEIGHT, WALL_COLORS[kind])),
   ]);
   // All buildings in one mesh, with corners already in world position, so they draw in a single call.
   const buildingMesh = uploadMesh(
-    buildings.flatMap(({ rect, height }) => slab(rect, KERB_HEIGHT, KERB_HEIGHT + height, [0.75, 0.7, 0.65])),
+    buildings.flatMap(({ rect, height }) => slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65])),
   );
-  return [road, markings, pavements, wall, buildingMesh];
+  const lights = uploadMesh(streetLights.flatMap(streetLightVertices));
+  return [road, markings, pavements, wall, buildingMesh, lights];
 }
 
 const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
 let city = generateCity(citySettings);
 let buildings = generateBuildings(city, citySettings);
-let cityMeshes = buildCityMeshes(city, buildings);
+let streetLights = generateStreetLights(city, citySettings);
+let cityMeshes = buildCityMeshes(city, buildings, streetLights);
 
 // The data is kept, not just the meshes, so the game can collide with it.
 function regenerateCity() {
   city = generateCity(citySettings);
   buildings = generateBuildings(city, citySettings);
+  streetLights = generateStreetLights(city, citySettings);
   cityMeshes.forEach(deleteMesh);
-  cityMeshes = buildCityMeshes(city, buildings);
+  cityMeshes = buildCityMeshes(city, buildings, streetLights);
 }
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
@@ -210,7 +215,7 @@ function draw(mesh: Mesh, mode: GLenum, modelView: Mat4) {
 
 // Longest step allowed, so returning to a background tab doesn't teleport the camera.
 const MAX_FRAME_SECONDS = 0.1;
-// Larger than needed up close, so the depth buffer keeps precision for kerbs and markings far away.
+// Larger than needed up close, so the depth buffer keeps precision for curbs and markings far away.
 const NEAR_PLANE = 0.5;
 let previousTimeMs = 0;
 
@@ -253,7 +258,6 @@ function frame(timeMs: number) {
   const view = viewMatrix(camera);
 
   for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
-  // Lifted by half its height so it stands on the road instead of half below it.
   draw(triangle, gl!.TRIANGLES, multiply(view, multiply(translation(0, 0.5, 0), rotationY(t))));
   if (fullResolution) return;
 

@@ -56,6 +56,7 @@ export interface CitySettings {
   lowDensityEmptyChance: number; // per shop lot, 0 to 1
   lowDensityMergeChance: number; // per side and corner, 0 to 1
   lowDensityStripMallChance: number; // per block, 0 to 1
+  streetLightSpacing: number; // metres between lights along a lit road
 }
 
 export const DEFAULT_CITY_SETTINGS: CitySettings = {
@@ -75,6 +76,7 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
   lowDensityEmptyChance: 0.125,
   lowDensityMergeChance: 0.2,
   lowDensityStripMallChance: 0.1,
+  streetLightSpacing: 25,
 };
 
 export interface City {
@@ -85,7 +87,7 @@ export interface City {
   wallPavement: Rect[]; // the strip between the outer road and the wall buildings
 }
 
-export const KERB_HEIGHT = 0.15; // pavements are raised this far above the road, and buildings stand on them
+export const CURB_HEIGHT = 0.15; // pavements are raised this far above the road, and buildings stand on them
 const MARKING_WIDTH = 0.4;
 const DASH_LENGTH = 3;
 const DASH_GAP = 3;

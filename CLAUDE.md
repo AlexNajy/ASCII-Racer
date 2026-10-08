@@ -55,7 +55,7 @@ src/
 The city is plain data (rectangles and zones) with no WebGL in it. The renderer, collisions and a future server all read the same data. Units are metres.
 
 - **Grid**: 8×8 blocks of 60 m, 12 m roads, a road around the outside too. Centred on the origin, which is an intersection.
-- **Ground**: roads are black so they draw no glyphs; only the white dashed centre lines show. Lines are 0.4 m wide (real paint is ~0.12 m) so they cover a cell at a distance, and dashes stop short of junctions. Pavements are raised 0.15 m so kerbs give each block an outline.
+- **Ground**: roads are black so they draw no glyphs; only the white dashed centre lines show. Lines are 0.4 m wide (real paint is ~0.12 m) so they cover a cell at a distance, and dashes stop short of junctions. Pavements are raised 0.15 m so curbs give each block an outline.
 - **Zoning**, in this order:
   1. Downtown gradient: a seeded centre near the middle (`DOWNTOWN_OFFSET`); each block's mid density chance slides from 0.9 at the centre to 0.1 at `DOWNTOWN_RADIUS`. Distances are in blocks, not metres.
   2. Neighbour rules (N/E/S/W only, edge blocks have fewer): mid density with 3+ mid density neighbours becomes high-rise; then low density with 3+ low density neighbours becomes houses, unless it shares a side with a high-rise (diagonals across a crossing are fine); those stay shops as a buffer. These read a copy of the original zones so the order blocks are checked in doesn't matter.
@@ -68,7 +68,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
   - Counts: units = floor(side / 7), minus one if the remainder is under `FLEX_MIN_WIDTH` (7 m), so the flex piece is always 7–13 m. Equal sets of the three widths (12 units each), then `WALL_EXTRAS` fills the leftover units (1 and 2 borrow a set). Works for any side of at least 84 m. Default: 7×21, 8×28, 6×35 and a 13 m flex.
   - Every side uses the same pieces in its own shuffled order (`shuffle`, Fisher-Yates, seeded with `blockSeed(seed, blocks + side)`), so the wall doesn't mirror the street grid. The flex piece is shuffled in like the others.
   - The flex piece stays open as an alley. Planned: a gate across its mouth (a real collision box, not an invisible barrier) with prefabs inside, such as dumpsters or a parked car.
-- **Buildings** (`game/buildings.ts`, roadmap step 7): `generateBuildings(city, settings)` turns each block into a list of `Building`s (footprint `rect` + `height`), using a per-block generator (`blockSeed`). A `Record<Zone, BlockBuilder>` table picks the builder, so a new zone won't compile without one. Blocks are inset 3 m from the kerb (`inset`), and `split` cuts them into lots, touching or with 4 m alleys (`ALLEY_WIDTH`) between columns and rows. Probabilities live in `CitySettings` so the dev menu can change them. Heights are seeded random within a per-zone `Range` (the constants are the ranges):
+- **Buildings** (`game/buildings.ts`, roadmap step 7): `generateBuildings(city, settings)` turns each block into a list of `Building`s (footprint `rect` + `height`), using a per-block generator (`blockSeed`). A `Record<Zone, BlockBuilder>` table picks the builder, so a new zone won't compile without one. Blocks are inset 3 m from the curb (`inset`), and `split` cuts them into lots, touching or with 4 m alleys (`ALLEY_WIDTH`) between columns and rows. Probabilities live in `CitySettings` so the dev menu can change them. Heights are seeded random within a per-zone `Range` (the constants are the ranges):
   - Low density: up to 8 touching shops (3×3 lots, centre lot empty as a back yard), 6.5–15 m. Each lot is left empty with `lowDensityEmptyChance` (1 in 8), for a small car park later. Then a side's middle shop can merge with each of its corners (`lowDensityMergeChance`, 0.2) into one building with the middle shop's height, if both lots have a shop; each corner joins at most one side (sides checked in a fixed order), so merged shops stay rectangles. A block is a strip mall with `lowDensityStripMallChance` (0.1): a random corner and its two neighbouring lots (0-1-3, 1-2-5, 5-7-8 or 3-6-7) become its car park, and the other shops are never left empty.
   - Mid density: 2×2 mid-rises, 16–42 m. Alleys north-south and east-west are rolled separately (`midDensityAlleyChance`, 0.5), so a block gets none, one direction or both.
   - High-rise: one tower, 50–70% of the block's width and depth each, at a random spot, 50–120 m.
@@ -112,7 +112,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 - Judge the look in glyph mode (and grey levels for whether shapes read), from driving height (~1.2 m). Full resolution mode is only for debugging geometry. Glyph choice follows brightness only; hue just tints the glyph, so brightness separates shapes.
 - Detail smaller than ~1 m disappears beyond ~40 m (about 8 cells per metre at 20 m, 2 at 80 m). Buildings read by silhouette and height.
 - Shaders live in `.glsl` files and are imported with Vite's `?raw` suffix.
-- Only use comments neccesarily and professionally
+- Keep comments to a minimal neccesary use
 - Commit after each small working step.
 - One branch per roadmap step, merged into `main` with a pull request. Tick sub-steps in `README.md` as they are done.
 

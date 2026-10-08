@@ -70,9 +70,10 @@ npm run preview   # serve the production build locally
   - [x] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
   - [x] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
 - [ ] **8. Lighting**: dark by default, headlights, street lamps, lit windows and neon
-  - [ ] Normals: per-vertex normals in `box()` (x, y, z, r, g, b, nx, ny, nz) and a second scene render target holding them, for lighting and later for orientation glyph sets (vertical ramp on walls, horizontal on ground and roofs)
-  - [ ] Street lights on mid density and high-rise pavements
-  - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are mid density or high-rise
+  - [x] Normals: per-vertex normals in `box()` (x, y, z, r, g, b, nx, ny, nz) and a second scene render target holding them, for lighting and later for orientation glyph sets (vertical ramp on walls, horizontal on ground and roofs)
+  - [ ] Street lights on low density, mid density and high-rise pavements, placed per road segment by spacing, staggered when both sides are lit
+  - [ ] Road widths: a width per road line, with seeded 4-lane avenues weighted towards downtown, lane markings per road type and a street light pattern per road type
+  - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are mid density or high-rise, and crosswalks
 - [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer
 - [ ] **10. Building models**: real shapes in place of the boxes, with seeded spawning rules for which model goes where
   - [ ] Floors: building heights snapped to whole floors
