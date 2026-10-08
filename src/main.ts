@@ -26,8 +26,10 @@ const projectionLocation = gl.getUniformLocation(program, 'u_projection');
 const fogColorLocation = gl.getUniformLocation(program, 'u_fogColor');
 const fogStartLocation = gl.getUniformLocation(program, 'u_fogStart');
 const fogEndLocation = gl.getUniformLocation(program, 'u_fogEnd');
+const showNormalsLocation = gl.getUniformLocation(program, 'u_showNormals');
 const positionLocation = gl.getAttribLocation(program, 'a_position');
 const colorLocation = gl.getAttribLocation(program, 'a_color');
+const normalLocation = gl.getAttribLocation(program, 'a_normal');
 
 interface Mesh {
   vao: WebGLVertexArrayObject;
@@ -48,6 +50,8 @@ function uploadMesh(vertices: number[]): Mesh {
   gl!.vertexAttribPointer(positionLocation, 3, gl!.FLOAT, false, stride, 0);
   gl!.enableVertexAttribArray(colorLocation);
   gl!.vertexAttribPointer(colorLocation, 3, gl!.FLOAT, false, stride, 3 * 4);
+  gl!.enableVertexAttribArray(normalLocation);
+  gl!.vertexAttribPointer(normalLocation, 3, gl!.FLOAT, false, stride, 6 * 4);
 
   gl!.bindVertexArray(null);
   return { vao, buffer, vertexCount: vertices.length / FLOATS_PER_VERTEX };
@@ -59,9 +63,9 @@ function deleteMesh(mesh: Mesh) {
 }
 
 const triangle = uploadMesh([
-   0.0,  0.5, 0.0, 1.0, 0.5, 0.0,
-  -0.5, -0.5, 0.0, 1.0, 0.5, 0.0,
-   0.5, -0.5, 0.0, 1.0, 0.5, 0.0,
+   0.0,  0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0,
+  -0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0,
+   0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0,
 ]);
 
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
@@ -215,8 +219,9 @@ function frame(timeMs: number) {
       `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}`,
   );
 
-  // Full resolution skips the ASCII pass and draws the scene straight to the screen.
-  const fullResolution = settings.renderMode === RenderMode.FullResolution;
+  // Full resolution and normals skip the ASCII pass and draw the scene straight to the screen.
+  const showNormals = settings.renderMode === RenderMode.Normals;
+  const fullResolution = settings.renderMode === RenderMode.FullResolution || showNormals;
   const target = fullResolution ? { framebuffer: null, width: canvas.width, height: canvas.height } : scene;
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, target.framebuffer);
   gl!.viewport(0, 0, target.width, target.height);
@@ -229,6 +234,7 @@ function frame(timeMs: number) {
   gl!.uniform3fv(fogColorLocation, background);
   gl!.uniform1f(fogStartLocation, settings.fogStart);
   gl!.uniform1f(fogEndLocation, settings.viewDistance);
+  gl!.uniform1i(showNormalsLocation, showNormals ? 1 : 0);
   const aspect = canvas.width / canvas.height;
   const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);

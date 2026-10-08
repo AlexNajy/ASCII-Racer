@@ -5,6 +5,7 @@ export const RenderMode = {
   Brightness: 1,
   Scene: 2,
   FullResolution: 3,
+  Normals: 4,
 } as const;
 export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 
