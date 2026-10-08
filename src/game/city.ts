@@ -41,6 +41,8 @@ export interface CitySettings {
   seed: number;
   blockSize: number;
   roadWidth: number;
+  avenueWidth: number;
+  avenueDensity: number; // chance of an extra avenue one road over from a downtown avenue, 0 to 1
   blocksPerSide: number;
   // Chance of mid density at the downtown centre and at the downtown radius and beyond, 0 to 1.
   centreDensityChance: number;
@@ -63,6 +65,8 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
   seed: 1,
   blockSize: 60,
   roadWidth: 12,
+  avenueWidth: 20,
+  avenueDensity: 0.4,
   blocksPerSide: 8,
   centreDensityChance: 0.9,
   edgeDensityChance: 0.1,
@@ -95,6 +99,8 @@ const DASH_GAP = 3;
 // Downtown radius as a fraction of the city width, and how far from the middle its centre may land.
 const DOWNTOWN_RADIUS = 0.8;
 const DOWNTOWN_OFFSET = 0.15;
+
+const AVENUE_FALLOFF = 0.25; // an extra avenue's chance drops by this per road line further from downtown
 
 // How many of the 4 side neighbours must share a block's zone for it to upgrade.
 const HIGH_RISE_NEIGHBOURS = 3;
@@ -147,6 +153,24 @@ function sideNeighbours(block: Block, blocksPerSide: number): number[] {
   return indices;
 }
 
+// The road line nearest the downtown point (in block units) along one axis. Never an outer road.
+// Road line `road` lies between blocks road - 1 and road.
+function avenueRoad(blocksPerSide: number, downtown: number): number {
+  return Math.min(Math.max(Math.round(downtown + 0.5), 1), blocksPerSide - 1);
+}
+
+// The downtown avenue, plus extra avenues with a chance that falls off further from it. Never an outer road.
+// Every road line rolls, so changing the density doesn't reshuffle the rolls.
+function pickAvenues(blocksPerSide: number, downtown: number, density: number, random: () => number): Set<number> {
+  const downtownAvenue = avenueRoad(blocksPerSide, downtown);
+  const avenues = new Set([downtownAvenue]);
+  for (let road = 1; road < blocksPerSide; road++) {
+    const chance = density - AVENUE_FALLOFF * (Math.abs(road - downtownAvenue) - 1);
+    if (random() < chance && road !== downtownAvenue) avenues.add(road);
+  }
+  return avenues;
+}
+
 // Positions along one axis, centred on the origin: roads and blocks take turns, starting and ending with a road.
 interface AxisLayout {
   blockStarts: number[];
@@ -194,19 +218,24 @@ function wallKinds(sideLength: number): { kinds: (WallWidthKind | 'flex')[]; fle
 
 // Blocks on a grid, centred on the origin. Everything inside the bounds that isn't a block is road.
 export function generateCity(settings: CitySettings): City {
-  const { blockSize, roadWidth, blocksPerSide, centreDensityChance, edgeDensityChance } = settings;
+  const { blockSize, roadWidth, avenueWidth, avenueDensity, blocksPerSide, centreDensityChance, edgeDensityChance } = settings;
   const random = createRandom(settings.seed);
-  // A road runs around the outside, so there is one more road line than there are blocks.
-  // Column roads run north-south (west of each column, plus the east edge), row roads east-west.
-  const columnRoads = Array<number>(blocksPerSide + 1).fill(roadWidth);
-  const rowRoads = Array<number>(blocksPerSide + 1).fill(roadWidth);
-  const columns = layoutAxis(columnRoads, blockSize);
-  const rows = layoutAxis(rowRoads, blockSize);
 
   // Downtown centre in block units, somewhere around the middle of the grid.
   const middle = (blocksPerSide - 1) / 2;
   const downtownColumn = middle + (random() * 2 - 1) * DOWNTOWN_OFFSET * blocksPerSide;
   const downtownRow = middle + (random() * 2 - 1) * DOWNTOWN_OFFSET * blocksPerSide;
+
+  // A road runs around the outside, so there is one more road line than there are blocks.
+  // Column roads run north-south (west of each column, plus the east edge), row roads east-west.
+  // Avenues get their own generator, seeded after the blocks and the 4 wall sides.
+  const avenueRandom = createRandom(blockSeed(settings.seed, blocksPerSide * blocksPerSide + 4));
+  const columnAvenues = pickAvenues(blocksPerSide, downtownColumn, avenueDensity, avenueRandom);
+  const rowAvenues = pickAvenues(blocksPerSide, downtownRow, avenueDensity, avenueRandom);
+  const roadWidths = (avenues: Set<number>) =>
+    Array.from({ length: blocksPerSide + 1 }, (_, road) => (avenues.has(road) ? avenueWidth : roadWidth));
+  const columns = layoutAxis(roadWidths(columnAvenues), blockSize);
+  const rows = layoutAxis(roadWidths(rowAvenues), blockSize);
 
   const blocks: Block[] = [];
   for (let row = 0; row < blocksPerSide; row++) {
@@ -259,29 +288,39 @@ export function generateCity(settings: CitySettings): City {
   placeSpecial(blocks, Zone.LowDensity, Zone.Supermarket, random);
   placeSpecial(blocks, Zone.MidDensity, Zone.ParkingLot, random);
 
-  // Centre lines run along each road segment between two intersections, so dashes don't cross junctions.
+  // Markings run along each road segment between two intersections, so they don't cross junctions.
   const markings: Rect[] = [];
   const dashCount = Math.floor((blockSize + DASH_GAP) / (DASH_LENGTH + DASH_GAP));
   const dashesLength = dashCount * DASH_LENGTH + (dashCount - 1) * DASH_GAP;
   const dashStart = (blockSize - dashesLength) / 2;
-  // Dashes along the road lines of one axis, one run per block they pass.
-  const addCentreLines = (roads: AxisLayout, segments: AxisLayout, runsAlong: 'x' | 'z') => {
-    for (const centre of roads.roadCentres) {
-      const across = { min: centre - MARKING_WIDTH / 2, max: centre + MARKING_WIDTH / 2 };
-      for (const segmentStart of segments.blockStarts) {
-        for (let dash = 0; dash < dashCount; dash++) {
-          const along = segmentStart + dashStart + dash * (DASH_LENGTH + DASH_GAP);
-          markings.push(
-            runsAlong === 'x'
-              ? { minX: along, minZ: across.min, maxX: along + DASH_LENGTH, maxZ: across.max }
-              : { minX: across.min, minZ: along, maxX: across.max, maxZ: along + DASH_LENGTH },
-          );
-        }
+  // Streets get a dashed centre line. Avenues get a solid centre line and a dashed divider in each half: 4 lanes.
+  const addRoadMarkings = (roads: AxisLayout, segments: AxisLayout, avenues: Set<number>, runsAlong: 'x' | 'z') => {
+    const line = (centre: number, from: number, to: number) =>
+      markings.push(
+        runsAlong === 'x'
+          ? { minX: from, minZ: centre - MARKING_WIDTH / 2, maxX: to, maxZ: centre + MARKING_WIDTH / 2 }
+          : { minX: centre - MARKING_WIDTH / 2, minZ: from, maxX: centre + MARKING_WIDTH / 2, maxZ: to },
+      );
+    const dashedLine = (centre: number, segmentStart: number) => {
+      for (let dash = 0; dash < dashCount; dash++) {
+        const along = segmentStart + dashStart + dash * (DASH_LENGTH + DASH_GAP);
+        line(centre, along, along + DASH_LENGTH);
       }
-    }
+    };
+    roads.roadCentres.forEach((centre, road) => {
+      for (const segmentStart of segments.blockStarts) {
+        if (!avenues.has(road)) {
+          dashedLine(centre, segmentStart);
+          continue;
+        }
+        line(centre, segmentStart + dashStart, segmentStart + blockSize - dashStart);
+        dashedLine(centre - avenueWidth / 4, segmentStart);
+        dashedLine(centre + avenueWidth / 4, segmentStart);
+      }
+    });
   };
-  addCentreLines(rows, columns, 'x');
-  addCentreLines(columns, rows, 'z');
+  addRoadMarkings(rows, columns, rowAvenues, 'x');
+  addRoadMarkings(columns, rows, columnAvenues, 'z');
 
   // One block deep and unbroken, set back behind a pavement. Opposite sides hold the same set of pieces
   // in a shuffled order, so the total length still fits exactly between the corners.

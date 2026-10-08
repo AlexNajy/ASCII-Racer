@@ -179,6 +179,8 @@ export function createDevMenu(
   citySlider(cityPage, 'Blocks per side', 'blocksPerSide', 3, 14, 1);
   citySlider(cityPage, 'Block size (m)', 'blockSize', 40, 100, 1);
   citySlider(cityPage, 'Road width (m)', 'roadWidth', 8, 20, 1);
+  citySlider(cityPage, 'Avenue width (m)', 'avenueWidth', 8, 40, 1);
+  citySlider(cityPage, 'Avenue density', 'avenueDensity', 0, 1, 0.05);
   citySlider(cityPage, 'Centre density', 'centreDensityChance', 0, 1, 0.05);
   citySlider(cityPage, 'Edge density', 'edgeDensityChance', 0, 1, 0.05);
   citySlider(buildingsPage, 'Wall height ×', 'wallHeight', 0.1, 3, 0.1);
