@@ -17,32 +17,38 @@ interface LitSide {
 }
 
 // One road segment between two intersections, from `start` to `end`. `before` and `after` are the curb lines
-// of the lit pavements on either side (undefined if unlit). Lights alternate sides if both are lit.
+// of the lit pavements on either side (undefined if unlit). Lights alternate sides, or stand opposite each
+// other in pairs (avenues). An unlit side's turns stay empty, so the lit side never gets extra lights.
 function lightRoad(
   before: number | undefined,
   after: number | undefined,
   start: number,
   end: number,
+  paired: boolean,
   runsAlong: 'x' | 'z',
   spacing: number,
   lights: StreetLight[],
 ): void {
-  const sides: LitSide[] = [];
-  if (before !== undefined) sides.push({ across: before - CURB_DISTANCE, facing: 1 });
-  if (after !== undefined) sides.push({ across: after + CURB_DISTANCE, facing: -1 });
-  if (sides.length === 0) return;
+  const sides: (LitSide | undefined)[] = [
+    before === undefined ? undefined : { across: before - CURB_DISTANCE, facing: 1 },
+    after === undefined ? undefined : { across: after + CURB_DISTANCE, facing: -1 },
+  ];
 
   const from = start + CORNER_CLEARANCE;
   const span = end - start - 2 * CORNER_CLEARANCE;
-  const count = Math.floor(span / spacing) + 1;
+  // Each light sits in the middle of an equal slot, so none end up pushed against the corners.
+  const count = Math.max(1, Math.round(span / spacing));
   for (let i = 0; i < count; i++) {
-    const along = count === 1 ? from + span / 2 : from + (i * span) / (count - 1);
-    const { across, facing } = sides[i % sides.length];
-    lights.push(
-      runsAlong === 'x'
-        ? { x: along, z: across, facingX: 0, facingZ: facing }
-        : { x: across, z: along, facingX: facing, facingZ: 0 },
-    );
+    const along = from + (span * (i + 0.5)) / count;
+    for (const side of paired ? sides : [sides[i % 2]]) {
+      if (side === undefined) continue;
+      const { across, facing } = side;
+      lights.push(
+        runsAlong === 'x'
+          ? { x: along, z: across, facingX: 0, facingZ: facing }
+          : { x: across, z: along, facingX: facing, facingZ: 0 },
+      );
+    }
   }
 }
 
@@ -63,14 +69,14 @@ export function generateStreetLights(city: City, settings: CitySettings): Street
       const northEdge = road === 0 ? bounds.minZ : isLit(north) ? north.rect.maxZ : undefined;
       const southEdge = road === blocksPerSide ? bounds.maxZ : isLit(south) ? south.rect.minZ : undefined;
       const { rect: alongX } = (north ?? south)!;
-      lightRoad(northEdge, southEdge, alongX.minX, alongX.maxX, 'x', streetLightSpacing, lights);
+      lightRoad(northEdge, southEdge, alongX.minX, alongX.maxX, city.avenues.rows.has(road), 'x', streetLightSpacing, lights);
 
       const west = blockAt(road - 1, segment);
       const east = blockAt(road, segment);
       const westEdge = road === 0 ? bounds.minX : isLit(west) ? west.rect.maxX : undefined;
       const eastEdge = road === blocksPerSide ? bounds.maxX : isLit(east) ? east.rect.minX : undefined;
       const { rect: alongZ } = (west ?? east)!;
-      lightRoad(westEdge, eastEdge, alongZ.minZ, alongZ.maxZ, 'z', streetLightSpacing, lights);
+      lightRoad(westEdge, eastEdge, alongZ.minZ, alongZ.maxZ, city.avenues.columns.has(road), 'z', streetLightSpacing, lights);
     }
   }
   return lights;

@@ -101,6 +101,7 @@ export interface City {
   bounds: Rect; // the drivable area: blocks and roads, inside the wall
   blocks: Block[];
   junctions: Junction[]; // row by row, (blocksPerSide + 1) per row
+  avenues: { columns: ReadonlySet<number>; rows: ReadonlySet<number> }; // road lines that are avenues
   markings: Rect[];
   wall: WallPiece[];
   wallPavement: Rect[]; // the strip between the outer road and the wall buildings
@@ -506,6 +507,7 @@ export function generateCity(settings: CitySettings): City {
     bounds: { minX: -halfX, minZ: -halfZ, maxX: halfX, maxZ: halfZ },
     blocks,
     junctions,
+    avenues: { columns: columnAvenues, rows: rowAvenues },
     markings,
     wall,
     wallPavement,
