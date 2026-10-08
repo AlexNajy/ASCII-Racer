@@ -17,9 +17,11 @@ export interface DevSettings {
   fogStart: number; // fog begins here
   renderMode: RenderMode;
   noclip: boolean; 
+  ambient: number; // light every surface gets, from 0 (black) to 1
+  lightIntensity: number; // strength of the directional light
 }
 
-type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance' | 'fogStart';
+type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance' | 'fogStart' | 'ambient' | 'lightIntensity';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -97,8 +99,15 @@ export function createDevMenu(
     parent.append(row);
   }
 
-  function settingSlider(label: string, key: NumberSetting, min: number, max: number, step: number) {
-    slider(viewPage, label, settings[key], min, max, step, (value) => {
+  function settingSlider(
+    parent: HTMLElement,
+    label: string,
+    key: NumberSetting,
+    min: number,
+    max: number,
+    step: number,
+  ) {
+    slider(parent, label, settings[key], min, max, step, (value) => {
       settings[key] = value;
       onChange(key);
     });
@@ -121,11 +130,14 @@ export function createDevMenu(
   const viewPage = page('View');
   const cityPage = page('City');
   const buildingsPage = page('Buildings');
+  const lightingPage = page('Lighting');
 
-  settingSlider('FOV', 'fovDegrees', 30, 120, 1);
-  settingSlider('Cell width', 'cellWidth', 4, 16, 1);
-  settingSlider('View distance', 'viewDistance', 5, 1000, 1);
-  settingSlider('Fog start', 'fogStart', 0, 1000, 1);
+  settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
+  settingSlider(viewPage, 'Cell width', 'cellWidth', 4, 16, 1);
+  settingSlider(viewPage, 'View distance', 'viewDistance', 5, 1000, 1);
+  settingSlider(viewPage, 'Fog start', 'fogStart', 0, 1000, 1);
+  settingSlider(lightingPage, 'Ambient', 'ambient', 0, 1, 0.01);
+  settingSlider(lightingPage, 'Directional light', 'lightIntensity', 0, 1, 0.01);
 
   const modeRow = document.createElement('label');
   const modeText = document.createElement('span');

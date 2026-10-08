@@ -28,6 +28,7 @@ const fogStartLocation = gl.getUniformLocation(program, 'u_fogStart');
 const fogEndLocation = gl.getUniformLocation(program, 'u_fogEnd');
 const showNormalsLocation = gl.getUniformLocation(program, 'u_showNormals');
 const lightDirectionLocation = gl.getUniformLocation(program, 'u_lightDirection');
+const lightIntensityLocation = gl.getUniformLocation(program, 'u_lightIntensity');
 const ambientLocation = gl.getUniformLocation(program, 'u_ambient');
 const positionLocation = gl.getAttribLocation(program, 'a_position');
 const colorLocation = gl.getAttribLocation(program, 'a_color');
@@ -137,15 +138,17 @@ const fullscreenVao = gl.createVertexArray();
 const settings: DevSettings = {
   fovDegrees: 60,
   cellWidth: 6,
-  viewDistance: 500,
+  viewDistance: 1000,
   fogStart: 150,
-  renderMode: RenderMode.FullResolution,
+  renderMode: RenderMode.Glyphs,
   noclip: false,
+  ambient: 0.3,
+  lightIntensity: 0.8,
 };
 
 const dpr = window.devicePixelRatio || 1;
 const CELL_ASPECT = 1.75;
-const GLYPH_RAMPS = [' .:-=+*#%@'];
+const GLYPH_RAMPS = [' .-:=+*%#@'];
 const scene = createRenderTarget(gl);
 
 let cellWidth = 0;
@@ -198,7 +201,6 @@ const CAMERA_RADIUS = 0.5;
 
 // A fixed light high up, from +x and +z, until the night lights replace it.
 const LIGHT_DIRECTION = normalize([0.5, 1, 0.3]);
-const AMBIENT = 0.25;
 
 function draw(mesh: Mesh, mode: GLenum, modelView: Mat4) {
   gl!.uniformMatrix4fv(modelViewLocation, false, modelView);
@@ -243,7 +245,8 @@ function frame(timeMs: number) {
   gl!.uniform1f(fogEndLocation, settings.viewDistance);
   gl!.uniform1i(showNormalsLocation, showNormals ? 1 : 0);
   gl!.uniform3fv(lightDirectionLocation, LIGHT_DIRECTION);
-  gl!.uniform1f(ambientLocation, AMBIENT);
+  gl!.uniform1f(ambientLocation, settings.ambient);
+  gl!.uniform1f(lightIntensityLocation, settings.lightIntensity);
   const aspect = canvas.width / canvas.height;
   const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);

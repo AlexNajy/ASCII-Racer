@@ -11,6 +11,7 @@ uniform float u_fogEnd;
 uniform bool u_showNormals;
 uniform vec3 u_lightDirection; // towards the light, unit length
 uniform float u_ambient;
+uniform float u_lightIntensity;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
@@ -27,9 +28,9 @@ void main() {
   }
 
   // Diffuse: a surface gets the most light facing it head-on, none when edge-on or facing away.
-  // Ambient keeps faces turned away from the light from going fully black.
+  // Ambient lights every face equally, so faces turned away from the light aren't fully black.
   float diffuse = max(dot(normal, u_lightDirection), 0.0);
-  vec3 lit = v_color * (u_ambient + (1.0 - u_ambient) * diffuse);
+  vec3 lit = v_color * (u_ambient + u_lightIntensity * diffuse);
 
   // The camera is at the origin of view space, so this is the true distance, giving a circle of fog.
   // Positions interpolate correctly across a triangle; distances don't, so the length is taken here.
