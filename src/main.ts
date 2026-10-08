@@ -1,8 +1,8 @@
 import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
-import { generateBuildings } from './game/buildings.ts';
-import { DEFAULT_CITY_SETTINGS, generateCity, Zone, type CitySettings, type Rect, type WallKind } from './game/city.ts';
+import { generateBuildings, type Building } from './game/buildings.ts';
+import { DEFAULT_CITY_SETTINGS, generateCity, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
@@ -90,8 +90,7 @@ const ZONE_COLORS: Record<Zone, Vec3> = {
   [Zone.Plaza]: [0.2, 0.7, 0.9],
 };
 
-function buildCityMeshes(settings: CitySettings): Mesh[] {
-  const city = generateCity(settings);
+function buildCityMeshes(city: City, buildings: Building[]): Mesh[] {
   const road = uploadMesh(slab(city.bounds, -0.1, 0, [0, 0, 0]));
   // Raised slightly so the paint doesn't fight the road surface for depth.
   const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02, [1, 1, 1])));
@@ -101,20 +100,23 @@ function buildCityMeshes(settings: CitySettings): Mesh[] {
     ...city.wall.flatMap(({ rect, kind }) => slab(rect, 0, KERB_HEIGHT, WALL_COLORS[kind])),
   ]);
   // All buildings in one mesh, with corners already in world position, so they draw in a single call.
-  const buildings = uploadMesh(
-    generateBuildings(city, settings).flatMap(({ rect, height }) =>
-      slab(rect, KERB_HEIGHT, KERB_HEIGHT + height, [0.75, 0.7, 0.65]),
-    ),
+  const buildingMesh = uploadMesh(
+    buildings.flatMap(({ rect, height }) => slab(rect, KERB_HEIGHT, KERB_HEIGHT + height, [0.75, 0.7, 0.65])),
   );
-  return [road, markings, pavements, wall, buildings];
+  return [road, markings, pavements, wall, buildingMesh];
 }
 
 const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
-let cityMeshes = buildCityMeshes(citySettings);
+let city = generateCity(citySettings);
+let buildings = generateBuildings(city, citySettings);
+let cityMeshes = buildCityMeshes(city, buildings);
 
+// The data is kept, not just the meshes, so the game can collide with it.
 function regenerateCity() {
+  city = generateCity(citySettings);
+  buildings = generateBuildings(city, citySettings);
   cityMeshes.forEach(deleteMesh);
-  cityMeshes = buildCityMeshes(citySettings);
+  cityMeshes = buildCityMeshes(city, buildings);
 }
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);

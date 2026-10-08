@@ -67,7 +67,7 @@ npm run preview   # serve the production build locally
   - [x] Vertex colour: colour stored per vertex instead of per draw call
   - [x] Batching: all buildings merged into one mesh
   - [x] City sliders: seed, block size, road width, density, building heights and lot chances on City and Buildings pages of the dev menu, regenerated live
-  - [ ] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
+  - [x] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
   - [ ] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
 - [ ] **8. Night lighting**: dark by default, headlights, street lamps, lit windows and neon
   - [ ] Normals: per-vertex normals in `box()` (x, y, z, r, g, b, nx, ny, nz) and a second scene render target holding them, for lighting and later for orientation glyph sets (vertical ramp on walls, horizontal on ground and roofs)
