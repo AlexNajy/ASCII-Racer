@@ -16,28 +16,22 @@ interface LitSide {
   facing: number;
 }
 
-// One road segment between two intersections. Lights alternate sides if both blocks are lit.
+// One road segment between two intersections, from `start` to `end`. `before` and `after` are the curb lines
+// of the lit pavements on either side (undefined if unlit). Lights alternate sides if both are lit.
 function lightRoad(
-  before: Block | undefined,
-  after: Block | undefined,
+  before: number | undefined,
+  after: number | undefined,
+  start: number,
+  end: number,
   runsAlong: 'x' | 'z',
   spacing: number,
   lights: StreetLight[],
 ): void {
-  const isLit = (block: Block | undefined): block is Block => block !== undefined && LIT_ZONES.includes(block.zone);
   const sides: LitSide[] = [];
-  if (isLit(before)) {
-    const edge = runsAlong === 'x' ? before.rect.maxZ : before.rect.maxX;
-    sides.push({ across: edge - CURB_DISTANCE, facing: 1 });
-  }
-  if (isLit(after)) {
-    const edge = runsAlong === 'x' ? after.rect.minZ : after.rect.minX;
-    sides.push({ across: edge + CURB_DISTANCE, facing: -1 });
-  }
+  if (before !== undefined) sides.push({ across: before - CURB_DISTANCE, facing: 1 });
+  if (after !== undefined) sides.push({ across: after + CURB_DISTANCE, facing: -1 });
   if (sides.length === 0) return;
 
-  const { rect } = (before ?? after)!;
-  const [start, end] = runsAlong === 'x' ? [rect.minX, rect.maxX] : [rect.minZ, rect.maxZ];
   const from = start + CORNER_CLEARANCE;
   const span = end - start - 2 * CORNER_CLEARANCE;
   const count = Math.floor(span / spacing) + 1;
@@ -58,11 +52,25 @@ export function generateStreetLights(city: City, settings: CitySettings): Street
     column >= 0 && column < blocksPerSide && row >= 0 && row < blocksPerSide
       ? city.blocks[row * blocksPerSide + column]
       : undefined;
+  const isLit = (block: Block | undefined): block is Block => block !== undefined && LIT_ZONES.includes(block.zone);
+  const { bounds } = city;
   const lights: StreetLight[] = [];
   for (let road = 0; road <= blocksPerSide; road++) {
     for (let segment = 0; segment < blocksPerSide; segment++) {
-      lightRoad(blockAt(segment, road - 1), blockAt(segment, road), 'x', streetLightSpacing, lights);
-      lightRoad(blockAt(road - 1, segment), blockAt(road, segment), 'z', streetLightSpacing, lights);
+      // The outer road's far side is the wall pavement, which is always lit.
+      const north = blockAt(segment, road - 1);
+      const south = blockAt(segment, road);
+      const northEdge = road === 0 ? bounds.minZ : isLit(north) ? north.rect.maxZ : undefined;
+      const southEdge = road === blocksPerSide ? bounds.maxZ : isLit(south) ? south.rect.minZ : undefined;
+      const { rect: alongX } = (north ?? south)!;
+      lightRoad(northEdge, southEdge, alongX.minX, alongX.maxX, 'x', streetLightSpacing, lights);
+
+      const west = blockAt(road - 1, segment);
+      const east = blockAt(road, segment);
+      const westEdge = road === 0 ? bounds.minX : isLit(west) ? west.rect.maxX : undefined;
+      const eastEdge = road === blocksPerSide ? bounds.maxX : isLit(east) ? east.rect.minX : undefined;
+      const { rect: alongZ } = (west ?? east)!;
+      lightRoad(westEdge, eastEdge, alongZ.minZ, alongZ.maxZ, 'z', streetLightSpacing, lights);
     }
   }
   return lights;
