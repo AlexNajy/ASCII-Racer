@@ -1,4 +1,6 @@
-import type { Rect } from './city.ts';
+import type { Vec3 } from '../math/mat4.ts';
+import type { Building } from './buildings.ts';
+import { KERB_HEIGHT, type Rect } from './city.ts';
 
 // Pushes a circle (centre x, z) out of a rectangle, seen from above. Returns the new centre,
 // unchanged if they don't overlap. Only the overlapping part of a move is undone, so the circle slides along walls.
@@ -26,4 +28,12 @@ export function pushOutOfRect(x: number, z: number, radius: number, rect: Rect):
   if (nearest === toMaxX) return [rect.maxX + radius, z];
   if (nearest === toMinZ) return [x, rect.minZ - radius];
   return [x, rect.maxZ + radius];
+}
+
+// Buildings whose roof is below the position are skipped, so the fly camera can pass over them.
+export function pushOutOfBuildings(position: Vec3, radius: number, buildings: Building[]): void {
+  for (const { rect, height } of buildings) {
+    if (position[1] > KERB_HEIGHT + height) continue;
+    [position[0], position[2]] = pushOutOfRect(position[0], position[2], radius, rect);
+  }
 }

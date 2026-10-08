@@ -85,6 +85,7 @@ export interface City {
   wallPavement: Rect[]; // the strip between the outer road and the wall buildings
 }
 
+export const KERB_HEIGHT = 0.15; // pavements are raised this far above the road, and buildings stand on them
 const MARKING_WIDTH = 0.4;
 const DASH_LENGTH = 3;
 const DASH_GAP = 3;

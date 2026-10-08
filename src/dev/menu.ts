@@ -14,6 +14,7 @@ export interface DevSettings {
   viewDistance: number; // fog is complete here, and the far plane
   fogStart: number; // fog begins here
   renderMode: RenderMode;
+  noclip: boolean; 
 }
 
 type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance' | 'fogStart';
@@ -143,6 +144,22 @@ export function createDevMenu(
   });
   modeRow.append(modeText, select);
   viewPage.append(modeRow);
+
+  const noclipRow = document.createElement('label');
+  noclipRow.className = 'checkbox';
+  const noclipText = document.createElement('span');
+  noclipText.textContent = 'Noclip';
+  const noclip = document.createElement('input');
+  noclip.type = 'checkbox';
+  noclip.checked = settings.noclip;
+  noclip.addEventListener('change', () => {
+    settings.noclip = noclip.checked;
+    onChange('noclip');
+    // Release keyboard focus so Space flies up instead of toggling the box.
+    noclip.blur();
+  });
+  noclipRow.append(noclip, noclipText);
+  viewPage.append(noclipRow);
 
   citySlider(cityPage, 'Seed', 'seed', 1, 1000, 1);
   citySlider(cityPage, 'Blocks per side', 'blocksPerSide', 3, 14, 1);

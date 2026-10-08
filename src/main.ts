@@ -2,7 +2,8 @@ import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
-import { DEFAULT_CITY_SETTINGS, generateCity, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
+import { DEFAULT_CITY_SETTINGS, generateCity, KERB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
+import { pushOutOfBuildings } from './game/collision.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
@@ -62,8 +63,6 @@ const triangle = uploadMesh([
   -0.5, -0.5, 0.0, 1.0, 0.5, 0.0,
    0.5, -0.5, 0.0, 1.0, 0.5, 0.0,
 ]);
-
-const KERB_HEIGHT = 0.15;
 
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
   return box([rect.minX, bottom, rect.minZ], [rect.maxX, top, rect.maxZ], color);
@@ -134,6 +133,7 @@ const settings: DevSettings = {
   viewDistance: 500,
   fogStart: 150,
   renderMode: RenderMode.FullResolution,
+  noclip: false,
 };
 
 const dpr = window.devicePixelRatio || 1;
@@ -187,6 +187,7 @@ const camera: Camera = {
   yaw: 0,
   pitch: -0.2,
 };
+const CAMERA_RADIUS = 0.5;
 
 function draw(mesh: Mesh, mode: GLenum, modelView: Mat4) {
   gl!.uniformMatrix4fv(modelViewLocation, false, modelView);
@@ -206,6 +207,7 @@ function frame(timeMs: number) {
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
   updateFlyCamera(camera, dt);
+  if (!settings.noclip) pushOutOfBuildings(camera.position, CAMERA_RADIUS, buildings);
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(
