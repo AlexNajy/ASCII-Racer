@@ -1,9 +1,10 @@
 import type { Vec3 } from '../math/mat4.ts';
 
-// Vertex layout: x, y, z, shade.
-export const FLOATS_PER_VERTEX = 4;
+// Vertex layout: x, y, z, r, g, b.
+export const FLOATS_PER_VERTEX = 6;
 
-export function box(min: Vec3, max: Vec3): number[] {
+// Each face gets the colour times a fixed shade, so the faces of a box stay apart without lighting.
+export function box(min: Vec3, max: Vec3, color: Vec3): number[] {
   const [x0, y0, z0] = min;
   const [x1, y1, z1] = max;
   const faces: [Vec3, Vec3, Vec3, Vec3, number][] = [
@@ -16,7 +17,8 @@ export function box(min: Vec3, max: Vec3): number[] {
   ];
   const vertices: number[] = [];
   for (const [a, b, c, d, shade] of faces) {
-    for (const corner of [a, b, c, a, c, d]) vertices.push(...corner, shade);
+    const shaded = color.map((channel) => channel * shade);
+    for (const corner of [a, b, c, a, c, d]) vertices.push(...corner, ...shaded);
   }
   return vertices;
 }

@@ -1,4 +1,4 @@
-import { createRandom } from '../math/random.ts';
+import { blockSeed, createRandom, shuffle } from '../math/random.ts';
 
 // A rectangle on the ground plane, seen from above. Units are metres.
 export interface Rect {
@@ -10,7 +10,7 @@ export interface Rect {
 
 export const Zone = {
   LowDensity: 0,
-  HighDensity: 1,
+  MidDensity: 1,
   HighRise: 2,
   Houses: 3,
   Park: 4,
@@ -27,14 +27,35 @@ export interface Block {
   zone: Zone;
 }
 
+// Corners fill the four corner squares; the sides are made of three fixed widths of piece, one building each,
+// plus one flex piece per side that takes up the remainder and stays open as an alley.
+type WallWidthKind = 'narrow' | 'medium' | 'wide';
+export type WallKind = 'corner' | 'flex' | WallWidthKind;
+
+export interface WallPiece {
+  rect: Rect;
+  kind: WallKind;
+}
+
 export interface CitySettings {
   seed: number;
   blockSize: number;
   roadWidth: number;
   blocksPerSide: number;
-  // Chance of high density at the downtown centre and at the downtown radius and beyond, 0 to 1.
+  // Chance of mid density at the downtown centre and at the downtown radius and beyond, 0 to 1.
   centreDensityChance: number;
   edgeDensityChance: number;
+  // Building height multipliers per zone, 1 = the ranges in buildings.ts.
+  wallHeight: number;
+  housesHeight: number;
+  lowDensityHeight: number;
+  midDensityHeight: number;
+  highRiseHeight: number;
+  supermarketHeight: number;
+  midDensityAlleyChance: number; // per direction, 0 to 1
+  lowDensityEmptyChance: number; // per shop lot, 0 to 1
+  lowDensityMergeChance: number; // per side and corner, 0 to 1
+  lowDensityStripMallChance: number; // per block, 0 to 1
 }
 
 export const DEFAULT_CITY_SETTINGS: CitySettings = {
@@ -44,15 +65,27 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
   blocksPerSide: 8,
   centreDensityChance: 0.9,
   edgeDensityChance: 0.1,
+  wallHeight: 1,
+  housesHeight: 1,
+  lowDensityHeight: 1,
+  midDensityHeight: 1,
+  highRiseHeight: 1,
+  supermarketHeight: 1,
+  midDensityAlleyChance: 0.5,
+  lowDensityEmptyChance: 0.125,
+  lowDensityMergeChance: 0.2,
+  lowDensityStripMallChance: 0.1,
 };
 
 export interface City {
   bounds: Rect; // the drivable area: blocks and roads, inside the wall
   blocks: Block[];
   markings: Rect[];
-  wall: Rect[];
+  wall: WallPiece[];
+  wallPavement: Rect[]; // the strip between the outer road and the wall buildings
 }
 
+export const KERB_HEIGHT = 0.15; // pavements are raised this far above the road, and buildings stand on them
 const MARKING_WIDTH = 0.4;
 const DASH_LENGTH = 3;
 const DASH_GAP = 3;
@@ -68,6 +101,29 @@ const PLAZA_NEIGHBOURS = 4;
 const PLAZA_MAX = 1;
 
 const PARK_COUNT = 1;
+
+// Fixed widths so prefabs fit. All are multiples of WALL_UNIT (3, 4 and 5 units), so together they make
+// any multiple of it; the remainder goes to the flex piece.
+const WALL_WIDTHS: Record<WallWidthKind, number> = { narrow: 21, medium: 28, wide: 35 };
+const WALL_UNIT = 7;
+const FLEX_MIN_WIDTH = 7; // below this the flex piece takes one more unit, so it always fits a gate and a dumpster
+// Extra pieces for the units left after the equal sets (a set is 12 units). 1 and 2 can't be made from 3, 4 and 5,
+// so those borrow a set and use 13 and 14 instead.
+const WALL_EXTRAS: Record<number, WallWidthKind[]> = {
+  0: [],
+  3: ['narrow'],
+  4: ['medium'],
+  5: ['wide'],
+  6: ['narrow', 'narrow'],
+  7: ['narrow', 'medium'],
+  8: ['narrow', 'wide'],
+  9: ['medium', 'wide'],
+  10: ['wide', 'wide'],
+  11: ['narrow', 'medium', 'medium'],
+  13: ['medium', 'medium', 'wide'],
+  14: ['medium', 'wide', 'wide'],
+};
+const WALL_SETBACK = 3; // pavement between the outer road and the wall buildings, like the blocks' setback
 
 // Turns one random block of the `from` zone into the `to` zone. Skipped if no such block exists.
 function placeSpecial(blocks: Block[], from: Zone, to: Zone, random: () => number): void {
@@ -110,23 +166,33 @@ export function generateCity(settings: CitySettings): City {
       const minZ = start + row * spacing;
       const distance = Math.hypot(column - downtownColumn, row - downtownRow) / blocksPerSide;
       const t = Math.min(distance / DOWNTOWN_RADIUS, 1);
-      const highDensityChance = centreDensityChance + (edgeDensityChance - centreDensityChance) * t;
+      const midDensityChance = centreDensityChance + (edgeDensityChance - centreDensityChance) * t;
       blocks.push({
         rect: { minX, minZ, maxX: minX + blockSize, maxZ: minZ + blockSize },
         column,
         row,
-        zone: random() < highDensityChance ? Zone.HighDensity : Zone.LowDensity,
+        zone: random() < midDensityChance ? Zone.MidDensity : Zone.LowDensity,
       });
     }
   }
 
-  // Upgrades only read the original zones, so the result doesn't depend on the order blocks are checked in.
+  // Neighbour counts read the original zones, so the result doesn't depend on the order blocks are checked in.
   const originalZones = blocks.map((block) => block.zone);
+  const matchingNeighbours = (block: Block, index: number) =>
+    sideNeighbours(block, blocksPerSide).filter((i) => originalZones[i] === originalZones[index]).length;
+
   blocks.forEach((block, index) => {
-    const zone = originalZones[index];
-    const matching = sideNeighbours(block, blocksPerSide).filter((i) => originalZones[i] === zone).length;
-    if (zone === Zone.HighDensity && matching >= HIGH_RISE_NEIGHBOURS) block.zone = Zone.HighRise;
-    if (zone === Zone.LowDensity && matching >= HOUSES_NEIGHBOURS) block.zone = Zone.Houses;
+    if (originalZones[index] === Zone.MidDensity && matchingNeighbours(block, index) >= HIGH_RISE_NEIGHBOURS) {
+      block.zone = Zone.HighRise;
+    }
+  });
+
+  // Houses never share a side with a high-rise; those blocks stay shops as a buffer.
+  blocks.forEach((block, index) => {
+    const besideHighRise = sideNeighbours(block, blocksPerSide).some((i) => blocks[i].zone === Zone.HighRise);
+    if (originalZones[index] === Zone.LowDensity && matchingNeighbours(block, index) >= HOUSES_NEIGHBOURS && !besideHighRise) {
+      block.zone = Zone.Houses;
+    }
   });
 
   // Breaks up walls of high-rises. Candidates are recounted after each pick, so plazas never touch.
@@ -142,7 +208,7 @@ export function generateCity(settings: CitySettings): City {
 
   for (let i = 0; i < PARK_COUNT; i++) placeSpecial(blocks, Zone.LowDensity, Zone.Park, random);
   placeSpecial(blocks, Zone.LowDensity, Zone.Supermarket, random);
-  placeSpecial(blocks, Zone.HighDensity, Zone.ParkingLot, random);
+  placeSpecial(blocks, Zone.MidDensity, Zone.ParkingLot, random);
 
   // Centre lines run along each road segment between two intersections, so dashes don't cross junctions.
   const markings: Rect[] = [];
@@ -161,15 +227,67 @@ export function generateCity(settings: CitySettings): City {
     }
   }
 
-  // One block deep and unbroken, so every street ends at a building. North and south strips cover the corners.
+  // One block deep and unbroken, set back behind a pavement. Each side holds the same set of pieces
+  // in a shuffled order, so the total length still fits exactly between the corners.
   const half = size / 2;
+  const inner = half + WALL_SETBACK;
   const outer = half + blockSize;
-  const wall: Rect[] = [
-    { minX: -outer, minZ: -outer, maxX: outer, maxZ: -half },
-    { minX: -outer, minZ: half, maxX: outer, maxZ: outer },
-    { minX: -outer, minZ: -half, maxX: -half, maxZ: half },
-    { minX: half, minZ: -half, maxX: outer, maxZ: half },
+  const wall: WallPiece[] = [
+    { minX: -outer, minZ: -outer },
+    { minX: inner, minZ: -outer },
+    { minX: -outer, minZ: inner },
+    { minX: inner, minZ: inner },
+  ].map(({ minX, minZ }) => ({
+    rect: { minX, minZ, maxX: minX + outer - inner, maxZ: minZ + outer - inner },
+    kind: 'corner',
+  }));
+
+  // North and south strips run the full length, so they cover the pavement's corners.
+  const wallPavement: Rect[] = [
+    { minX: -inner, minZ: -inner, maxX: inner, maxZ: -half },
+    { minX: -inner, minZ: half, maxX: inner, maxZ: inner },
+    { minX: -inner, minZ: -half, maxX: -half, maxZ: half },
+    { minX: half, minZ: -half, maxX: inner, maxZ: half },
   ];
 
-  return { bounds: { minX: -half, minZ: -half, maxX: half, maxZ: half }, blocks, markings, wall };
+  // Turns a stretch [from, to] along a side into that side's rectangle.
+  const sides: ((from: number, to: number) => Rect)[] = [
+    (from, to) => ({ minX: from, minZ: -outer, maxX: to, maxZ: -inner }),
+    (from, to) => ({ minX: from, minZ: inner, maxX: to, maxZ: outer }),
+    (from, to) => ({ minX: -outer, minZ: from, maxX: -inner, maxZ: to }),
+    (from, to) => ({ minX: inner, minZ: from, maxX: outer, maxZ: to }),
+  ];
+  // The same counts on every side: equal sets of the three widths, a few extras, and the flex piece.
+  // Needs a side of at least one set (84 m).
+  const sideLength = 2 * inner;
+  let units = Math.floor(sideLength / WALL_UNIT);
+  if (sideLength - units * WALL_UNIT < FLEX_MIN_WIDTH) units -= 1;
+  const flexWidth = sideLength - units * WALL_UNIT;
+  const setUnits = (WALL_WIDTHS.narrow + WALL_WIDTHS.medium + WALL_WIDTHS.wide) / WALL_UNIT;
+  let sets = Math.floor(units / setUnits);
+  let rest = units - sets * setUnits;
+  if (rest === 1 || rest === 2) {
+    sets -= 1;
+    rest += setUnits;
+  }
+  const sideKinds: (WallWidthKind | 'flex')[] = [
+    ...(['narrow', 'medium', 'wide'] as const).flatMap((kind) => Array<WallWidthKind>(sets).fill(kind)),
+    ...WALL_EXTRAS[rest],
+    'flex',
+  ];
+
+  sides.forEach((side, sideIndex) => {
+    // Seeds after the block indices, so a side never shares a sequence with a block.
+    const sideRandom = createRandom(blockSeed(settings.seed, blocksPerSide * blocksPerSide + sideIndex));
+    const kinds = [...sideKinds];
+    shuffle(kinds, sideRandom);
+    let along = -inner;
+    for (const kind of kinds) {
+      const width = kind === 'flex' ? flexWidth : WALL_WIDTHS[kind];
+      wall.push({ rect: side(along, along + width), kind });
+      along += width;
+    }
+  });
+
+  return { bounds: { minX: -half, minZ: -half, maxX: half, maxZ: half }, blocks, markings, wall, wallPavement };
 }

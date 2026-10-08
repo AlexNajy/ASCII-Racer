@@ -16,3 +16,6 @@ canvas { display: block; width: 100vw; height: 100vh; }
 }
 #dev-menu[hidden] { display: none; }
 #dev-menu label { display: flex; flex-direction: column; gap: 2px; }
+#dev-menu label.checkbox { flex-direction: row; align-items: center; gap: 6px; }
+#dev-menu .page { display: flex; flex-direction: column; gap: 8px; }
+#dev-menu .page[hidden] { display: none; }

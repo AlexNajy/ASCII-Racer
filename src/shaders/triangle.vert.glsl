@@ -1,15 +1,17 @@
 #version 300 es
 
 in vec3 a_position;
-in float a_shade;
+in vec3 a_color;
 
-uniform mat4 u_matrix;
+uniform mat4 u_modelView;
+uniform mat4 u_projection;
 
-out float v_shade;
-out float v_depth;
+out vec3 v_color;
+out vec3 v_viewPosition;
 
 void main() {
-  v_shade = a_shade;
-  gl_Position = u_matrix * vec4(a_position, 1.0);
-  v_depth = gl_Position.w;
+  v_color = a_color;
+  vec4 viewPosition = u_modelView * vec4(a_position, 1.0);
+  gl_Position = u_projection * viewPosition;
+  v_viewPosition = viewPosition.xyz;
 }

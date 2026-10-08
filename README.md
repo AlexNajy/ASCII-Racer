@@ -19,8 +19,9 @@ npm run preview   # serve the production build locally
 - `W` / `S`: fly forward / back along the view direction
 - `A` / `D`: fly left / right
 - `Space` / `Shift`: fly up / down
-- `Q` (hold): fly 4× faster
-- `` ` `` (backtick): toggle the dev menu (camera position, FOV, cell size, view distance, render mode)
+- `Q` (hold): fly 5× faster
+- `E` (hold): fly 10× faster
+- `` ` `` (backtick): toggle the dev menu (camera position, FOV, cell size, view distance, fog start, render mode; city and building sliders on their own pages)
 
 ## Roadmap
 
@@ -56,20 +57,29 @@ npm run preview   # serve the production build locally
   - [x] City layout: block and road rectangles as plain data, separate from rendering
   - [x] Ground: black roads with dashed centre lines, raised pavement blocks
   - [x] Zoning: each block is randomly high or low density, shown as a pavement tint
-  - [x] Neighbour rules: high density blocks with enough high density neighbours become high-rise, low density blocks surrounded by low density become houses
-  - [x] Special blocks: a park and a supermarket replace low density blocks, a parking lot replaces a high density block
+  - [x] Neighbour rules: mid density blocks with enough mid density neighbours become high-rise, low density blocks surrounded by low density become houses
+  - [x] Special blocks: a park and a supermarket replace low density blocks, a parking lot replaces a mid density block
   - [x] Outer wall: a continuous ring of blocks around the city that streets dead-end into
 - [ ] **7. Buildings**: placeholder boxes on every block, batched into one mesh, with collisions
-  - [ ] Per-block random: each block gets its own generator from the city seed and its index
-  - [ ] Buildings per zone: a simple box shape for each zone type, heights from the seed, one draw call each
-  - [ ] Outer wall pieces: the wall cut into pieces that line up with the blocks and streets, zoned from the downtown gradient
-  - [ ] Batching: all buildings merged into one mesh, with colour stored per vertex
-  - [ ] City sliders: seed, block size, road width, density and building heights in the dev menu, regenerated live
-  - [ ] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
-  - [ ] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
+  - [x] Per-block random: each block gets its own generator from the city seed and its index
+  - [x] Buildings per zone: a simple box shape for each zone type, heights from the seed, one draw call each
+  - [x] Outer wall pieces: each side cut into fixed 21, 28 and 35 m pieces plus one 7–13 m flex alley, in a seeded shuffled order, set back behind a pavement, one mid-rise height building per piece
+  - [x] Vertex colour: colour stored per vertex instead of per draw call
+  - [x] Batching: all buildings merged into one mesh
+  - [x] City sliders: seed, block size, road width, density, building heights and lot chances on City and Buildings pages of the dev menu, regenerated live
+  - [x] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
+  - [x] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
 - [ ] **8. Night lighting**: dark by default, headlights, street lamps, lit windows and neon
-  - [ ] Street lights on high density pavements
-  - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are high density
+  - [ ] Normals: per-vertex normals in `box()` (x, y, z, r, g, b, nx, ny, nz) and a second scene render target holding them, for lighting and later for orientation glyph sets (vertical ramp on walls, horizontal on ground and roofs)
+  - [ ] Street lights on mid density and high-rise pavements
+  - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are mid density or high-rise
 - [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer
-- [ ] **10. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
-- [ ] **11. Multiplayer**: a small server to connect players, other players' cars, rollback netcode
+- [ ] **10. Building models**: real shapes in place of the boxes, with seeded spawning rules for which model goes where
+  - [ ] Floors: building heights snapped to whole floors
+  - [ ] Parametric styles: several shape functions per zone (setbacks, roofs, shopfronts), each a function of footprint and height
+  - [ ] Prefabs: fixed-size models (houses, kiosks, dumpsters) placed and rotated by the seed
+  - [ ] Spawn rules: which styles and prefabs each zone, lot and neighbourhood can get, and how often
+  - [ ] Colour palettes: a hand-picked palette per style, one colour per building from the seed
+- [ ] **11. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
+- [ ] **12. Menu + game modes**
+- [ ] **13. Multiplayer**: a small server to connect players, other players' cars, rollback netcode
