@@ -147,14 +147,61 @@ function sideNeighbours(block: Block, blocksPerSide: number): number[] {
   return indices;
 }
 
-// Blocks on a square grid, centred on the origin. Everything inside the bounds that isn't a block is road.
+// Positions along one axis, centred on the origin: roads and blocks take turns, starting and ending with a road.
+interface AxisLayout {
+  blockStarts: number[];
+  roadCentres: number[];
+  half: number;
+}
+
+function layoutAxis(roadWidths: number[], blockSize: number): AxisLayout {
+  const size = roadWidths.reduce((sum, width) => sum + width, 0) + (roadWidths.length - 1) * blockSize;
+  const blockStarts: number[] = [];
+  const roadCentres: number[] = [];
+  let at = -size / 2;
+  roadWidths.forEach((width, i) => {
+    roadCentres.push(at + width / 2);
+    at += width;
+    if (i < roadWidths.length - 1) {
+      blockStarts.push(at);
+      at += blockSize;
+    }
+  });
+  return { blockStarts, roadCentres, half: size / 2 };
+}
+
+// The same counts on every side of a length: equal sets of the three widths, a few extras, and the flex piece.
+// Needs a side of at least one set (84 m).
+function wallKinds(sideLength: number): { kinds: (WallWidthKind | 'flex')[]; flexWidth: number } {
+  let units = Math.floor(sideLength / WALL_UNIT);
+  if (sideLength - units * WALL_UNIT < FLEX_MIN_WIDTH) units -= 1;
+  const setUnits = (WALL_WIDTHS.narrow + WALL_WIDTHS.medium + WALL_WIDTHS.wide) / WALL_UNIT;
+  let sets = Math.floor(units / setUnits);
+  let rest = units - sets * setUnits;
+  if (rest === 1 || rest === 2) {
+    sets -= 1;
+    rest += setUnits;
+  }
+  return {
+    kinds: [
+      ...(['narrow', 'medium', 'wide'] as const).flatMap((kind) => Array<WallWidthKind>(sets).fill(kind)),
+      ...WALL_EXTRAS[rest],
+      'flex',
+    ],
+    flexWidth: sideLength - units * WALL_UNIT,
+  };
+}
+
+// Blocks on a grid, centred on the origin. Everything inside the bounds that isn't a block is road.
 export function generateCity(settings: CitySettings): City {
   const { blockSize, roadWidth, blocksPerSide, centreDensityChance, edgeDensityChance } = settings;
   const random = createRandom(settings.seed);
-  const spacing = blockSize + roadWidth;
-  // A road runs around the outside, so there is one more road than there are blocks.
-  const size = blocksPerSide * spacing + roadWidth;
-  const start = -size / 2 + roadWidth;
+  // A road runs around the outside, so there is one more road line than there are blocks.
+  // Column roads run north-south (west of each column, plus the east edge), row roads east-west.
+  const columnRoads = Array<number>(blocksPerSide + 1).fill(roadWidth);
+  const rowRoads = Array<number>(blocksPerSide + 1).fill(roadWidth);
+  const columns = layoutAxis(columnRoads, blockSize);
+  const rows = layoutAxis(rowRoads, blockSize);
 
   // Downtown centre in block units, somewhere around the middle of the grid.
   const middle = (blocksPerSide - 1) / 2;
@@ -164,8 +211,8 @@ export function generateCity(settings: CitySettings): City {
   const blocks: Block[] = [];
   for (let row = 0; row < blocksPerSide; row++) {
     for (let column = 0; column < blocksPerSide; column++) {
-      const minX = start + column * spacing;
-      const minZ = start + row * spacing;
+      const minX = columns.blockStarts[column];
+      const minZ = rows.blockStarts[row];
       const distance = Math.hypot(column - downtownColumn, row - downtownRow) / blocksPerSide;
       const t = Math.min(distance / DOWNTOWN_RADIUS, 1);
       const midDensityChance = centreDensityChance + (edgeDensityChance - centreDensityChance) * t;
@@ -217,79 +264,72 @@ export function generateCity(settings: CitySettings): City {
   const dashCount = Math.floor((blockSize + DASH_GAP) / (DASH_LENGTH + DASH_GAP));
   const dashesLength = dashCount * DASH_LENGTH + (dashCount - 1) * DASH_GAP;
   const dashStart = (blockSize - dashesLength) / 2;
-  for (let road = 0; road <= blocksPerSide; road++) {
-    const centre = start - roadWidth / 2 + road * spacing;
-    const across = { min: centre - MARKING_WIDTH / 2, max: centre + MARKING_WIDTH / 2 };
-    for (let segment = 0; segment < blocksPerSide; segment++) {
-      for (let dash = 0; dash < dashCount; dash++) {
-        const along = start + segment * spacing + dashStart + dash * (DASH_LENGTH + DASH_GAP);
-        markings.push({ minX: along, minZ: across.min, maxX: along + DASH_LENGTH, maxZ: across.max });
-        markings.push({ minX: across.min, minZ: along, maxX: across.max, maxZ: along + DASH_LENGTH });
+  // Dashes along the road lines of one axis, one run per block they pass.
+  const addCentreLines = (roads: AxisLayout, segments: AxisLayout, runsAlong: 'x' | 'z') => {
+    for (const centre of roads.roadCentres) {
+      const across = { min: centre - MARKING_WIDTH / 2, max: centre + MARKING_WIDTH / 2 };
+      for (const segmentStart of segments.blockStarts) {
+        for (let dash = 0; dash < dashCount; dash++) {
+          const along = segmentStart + dashStart + dash * (DASH_LENGTH + DASH_GAP);
+          markings.push(
+            runsAlong === 'x'
+              ? { minX: along, minZ: across.min, maxX: along + DASH_LENGTH, maxZ: across.max }
+              : { minX: across.min, minZ: along, maxX: across.max, maxZ: along + DASH_LENGTH },
+          );
+        }
       }
     }
-  }
+  };
+  addCentreLines(rows, columns, 'x');
+  addCentreLines(columns, rows, 'z');
 
-  // One block deep and unbroken, set back behind a pavement. Each side holds the same set of pieces
+  // One block deep and unbroken, set back behind a pavement. Opposite sides hold the same set of pieces
   // in a shuffled order, so the total length still fits exactly between the corners.
-  const half = size / 2;
-  const inner = half + WALL_SETBACK;
-  const outer = half + blockSize;
+  const halfX = columns.half;
+  const halfZ = rows.half;
+  const innerX = halfX + WALL_SETBACK;
+  const innerZ = halfZ + WALL_SETBACK;
+  const outerX = halfX + blockSize;
+  const outerZ = halfZ + blockSize;
+  const cornerSize = blockSize - WALL_SETBACK;
   const wall: WallPiece[] = [
-    { minX: -outer, minZ: -outer },
-    { minX: inner, minZ: -outer },
-    { minX: -outer, minZ: inner },
-    { minX: inner, minZ: inner },
+    { minX: -outerX, minZ: -outerZ },
+    { minX: innerX, minZ: -outerZ },
+    { minX: -outerX, minZ: innerZ },
+    { minX: innerX, minZ: innerZ },
   ].map(({ minX, minZ }) => ({
-    rect: { minX, minZ, maxX: minX + outer - inner, maxZ: minZ + outer - inner },
+    rect: { minX, minZ, maxX: minX + cornerSize, maxZ: minZ + cornerSize },
     kind: 'corner',
   }));
 
   // North and south strips run the full length, so they cover the pavement's corners.
   const wallPavement: Rect[] = [
-    { minX: -inner, minZ: -inner, maxX: inner, maxZ: -half },
-    { minX: -inner, minZ: half, maxX: inner, maxZ: inner },
-    { minX: -inner, minZ: -half, maxX: -half, maxZ: half },
-    { minX: half, minZ: -half, maxX: inner, maxZ: half },
+    { minX: -innerX, minZ: -innerZ, maxX: innerX, maxZ: -halfZ },
+    { minX: -innerX, minZ: halfZ, maxX: innerX, maxZ: innerZ },
+    { minX: -innerX, minZ: -halfZ, maxX: -halfX, maxZ: halfZ },
+    { minX: halfX, minZ: -halfZ, maxX: innerX, maxZ: halfZ },
   ];
 
-  // Turns a stretch [from, to] along a side into that side's rectangle.
-  const sides: ((from: number, to: number) => Rect)[] = [
-    (from, to) => ({ minX: from, minZ: -outer, maxX: to, maxZ: -inner }),
-    (from, to) => ({ minX: from, minZ: inner, maxX: to, maxZ: outer }),
-    (from, to) => ({ minX: -outer, minZ: from, maxX: -inner, maxZ: to }),
-    (from, to) => ({ minX: inner, minZ: from, maxX: outer, maxZ: to }),
-  ];
-  // The same counts on every side: equal sets of the three widths, a few extras, and the flex piece.
-  // Needs a side of at least one set (84 m).
-  const sideLength = 2 * inner;
-  let units = Math.floor(sideLength / WALL_UNIT);
-  if (sideLength - units * WALL_UNIT < FLEX_MIN_WIDTH) units -= 1;
-  const flexWidth = sideLength - units * WALL_UNIT;
-  const setUnits = (WALL_WIDTHS.narrow + WALL_WIDTHS.medium + WALL_WIDTHS.wide) / WALL_UNIT;
-  let sets = Math.floor(units / setUnits);
-  let rest = units - sets * setUnits;
-  if (rest === 1 || rest === 2) {
-    sets -= 1;
-    rest += setUnits;
-  }
-  const sideKinds: (WallWidthKind | 'flex')[] = [
-    ...(['narrow', 'medium', 'wide'] as const).flatMap((kind) => Array<WallWidthKind>(sets).fill(kind)),
-    ...WALL_EXTRAS[rest],
-    'flex',
+  // Each side turns a stretch [from, to] along it into its rectangle. North and south run along x.
+  const sides: { inner: number; rect: (from: number, to: number) => Rect }[] = [
+    { inner: innerX, rect: (from, to) => ({ minX: from, minZ: -outerZ, maxX: to, maxZ: -innerZ }) },
+    { inner: innerX, rect: (from, to) => ({ minX: from, minZ: innerZ, maxX: to, maxZ: outerZ }) },
+    { inner: innerZ, rect: (from, to) => ({ minX: -outerX, minZ: from, maxX: -innerX, maxZ: to }) },
+    { inner: innerZ, rect: (from, to) => ({ minX: innerX, minZ: from, maxX: outerX, maxZ: to }) },
   ];
 
   sides.forEach((side, sideIndex) => {
     // Seeds after the block indices, so a side never shares a sequence with a block.
     const sideRandom = createRandom(blockSeed(settings.seed, blocksPerSide * blocksPerSide + sideIndex));
-    const kinds = [...sideKinds];
+    const { kinds, flexWidth } = wallKinds(2 * side.inner);
     shuffle(kinds, sideRandom);
-    let along = -inner;
+    let along = -side.inner;
     for (const kind of kinds) {
       const width = kind === 'flex' ? flexWidth : WALL_WIDTHS[kind];
-      wall.push({ rect: side(along, along + width), kind });
+      wall.push({ rect: side.rect(along, along + width), kind });
       along += width;
     }
   });
 
-  return { bounds: { minX: -half, minZ: -half, maxX: half, maxZ: half }, blocks, markings, wall, wallPavement };
+  return { bounds: { minX: -halfX, minZ: -halfZ, maxX: halfX, maxZ: halfZ }, blocks, markings, wall, wallPavement };
 }
