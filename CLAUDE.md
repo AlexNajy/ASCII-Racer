@@ -42,13 +42,13 @@ src/
 ### How it works today
 
 - `main.ts` holds setup and the frame loop: pass 1 draws into the `scene` render target, pass 2 draws the full-screen triangle with `ascii.frag.glsl`.
-- The scene shaders are still named `triangle.vert.glsl` / `triangle.frag.glsl`. Each vertex is `x, y, z, r, g, b` (`render/shapes.ts`, `box()`): `box()` bakes a fixed per-face shade (fake lighting until step 8) into the colour. Matrix and fog are uniforms set per draw.
+- The scene shaders are still named `triangle.vert.glsl` / `triangle.frag.glsl`. Each vertex is `x, y, z, r, g, b` (`render/shapes.ts`, `box()`): `box()` bakes a fixed per-face shade (fake lighting until step 8) into the colour. Matrices and fog are uniforms.
 - The scene pass clears with alpha 0 and objects write alpha 1, so the ASCII pass can tell empty cells (drawn as solid background, no glyph) from objects. Material IDs for per-material glyph sets will use this channel later.
-- Fog uses `gl_Position.w` (distance in front of the camera) and fades to the background colour, which is black for now.
+- Fog uses the true distance to the camera (length of the view-space position, per pixel), so it is a circle around the camera. It is clear up to `fogStart`, then fades linearly to the background colour at the view distance, which is also the far plane (the fog circle always fits inside it). The background is black for now. The vertex shader takes `u_modelView` and `u_projection` separately so view space is available.
 - Cells are `settings.cellWidth` CSS px wide and 1.75× as tall, times `devicePixelRatio`. The scene render target has one pixel per cell, and the glyph atlas cells are exactly the cell size, so changing the cell size rebuilds the atlas.
 - `GLYPH_RAMPS` is a list: one atlas row per ramp, all the same length, so more character sets can be added later.
 - The camera is a position plus yaw and pitch (`render/camera.ts`). `game/input.ts` tracks held keys (by `event.code`) and pointer-locked mouse movement; `game/flyCamera.ts` moves the camera each frame using the frame time `dt`. The fly camera is a dev tool, not simulation, so it does not use the fixed timestep.
-- Runtime settings (FOV, cell width, view distance, render mode) live in a `DevSettings` object edited by the dev menu (`dev/menu.ts`, backtick key). The dev menu is plain HTML on top of the canvas; that is fine because it is developer UI, not the game picture.
+- Runtime settings (FOV, cell width, view distance, fog start, render mode) live in a `DevSettings` object edited by the dev menu (`dev/menu.ts`, backtick key). The dev menu is plain HTML on top of the canvas; that is fine because it is developer UI, not the game picture.
 
 ### City generation (`game/city.ts`)
 
@@ -77,7 +77,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
   - Park, plaza, parking lot: none.
   - Wall pieces: one building filling the whole piece, so neighbours touch, 10–37 m (`WALL_HEIGHT`, narrow pieces `NARROW_WALL_HEIGHT` 8–35 m). Own constants, separate from the zones, so game modes can change them. Flex pieces get none.
 - Batching: all buildings are one mesh built once at startup with corners already in world position (`slab` per building), drawn in a single call. Pavements and wall slabs are one mesh each too. Buildings are all one colour for now.
-- Building notes: Judge proportions (height, width, spacing), not looks; detail comes in a later graphics revision by changing the per-zone shape functions. The boxes double as collision shapes. Later designs are either parametric (a function of footprint and height, e.g. several high-rise styles) or fixed-size prefabs (houses, kiosks) placed and rotated by the seed. The seed also picks a colour per building from a hand-picked palette per style; keep brightness similar within a palette so the glyphs stay the same. Colour is in the vertex data, so per-building and per-face colours only need a different colour passed to `box()`.
+- Building notes: Judge proportions (height, width, spacing), not looks; detail comes in roadmap step 10 (building models) by changing the per-zone shape functions. The boxes double as collision shapes. Later designs are either parametric (a function of footprint and height, e.g. several high-rise styles) or fixed-size prefabs (houses, kiosks) placed and rotated by the seed. The seed also picks a colour per building from a hand-picked palette per style; keep brightness similar within a palette so the glyphs stay the same. Colour is in the vertex data, so per-building and per-face colours only need a different colour passed to `box()`.
 - Zone tints on the pavements and wall piece tints (by kind) in `main.ts` are temporary, for seeing the zoning and the wall order.
 
 ### Known limits
@@ -96,9 +96,10 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 7. Buildings: placeholder boxes on every block, batched into one mesh, collisions with buildings
 8. Night lighting: dark by default, headlights, street lamps, lit windows and neon
 9. A drivable car: keyboard input, acceleration, steering, grip, drift, weight transfer
-10. Visual identity: per-material glyph sets, temporally stable glyphs (no flicker at speed), speed streaks
-11. Menu + game modes
-12. Multiplayer: a small server to connect players, other players' cars, rollback netcode
+10. Building models: parametric styles and fixed prefabs in place of the boxes, with seeded spawning rules per zone, lot and neighbourhood
+11. Visual identity: per-material glyph sets, temporally stable glyphs (no flicker at speed), speed streaks
+12. Menu + game modes
+13. Multiplayer: a small server to connect players, other players' cars, rollback netcode
 
 ## Conventions
 

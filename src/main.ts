@@ -20,9 +20,11 @@ const gl = canvas.getContext('webgl2', { antialias: false });
 if (!gl) throw new Error('WebGL2 not supported');
 
 const program = createProgram(gl, vertexSource, fragmentSource);
-const matrixLocation = gl.getUniformLocation(program, 'u_matrix');
+const modelViewLocation = gl.getUniformLocation(program, 'u_modelView');
+const projectionLocation = gl.getUniformLocation(program, 'u_projection');
 const fogColorLocation = gl.getUniformLocation(program, 'u_fogColor');
-const fogDistanceLocation = gl.getUniformLocation(program, 'u_fogDistance');
+const fogStartLocation = gl.getUniformLocation(program, 'u_fogStart');
+const fogEndLocation = gl.getUniformLocation(program, 'u_fogEnd');
 const positionLocation = gl.getAttribLocation(program, 'a_position');
 const colorLocation = gl.getAttribLocation(program, 'a_color');
 
@@ -115,14 +117,6 @@ function regenerateCity() {
   cityMeshes = buildCityMeshes(citySettings);
 }
 
-const cube = uploadMesh(box([-0.5, 0, -0.5], [0.5, 1, 0.5], [0.3, 0.7, 1.0]));
-
-const lamp = uploadMesh([
-  ...box([-0.05, 0, -0.05], [0.05, 2.2, 0.05], [0.6, 0.6, 0.65]),
-  ...box([-0.6, 2.1, -0.04], [0.05, 2.2, 0.04], [0.6, 0.6, 0.65]),
-  ...box([-0.7, 1.95, -0.12], [-0.4, 2.1, 0.12], [1.0, 0.9, 0.4]),
-]);
-
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
 const sceneTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scene');
 const cellSizeLocation = gl.getUniformLocation(asciiProgram, 'u_cellSize');
@@ -136,6 +130,7 @@ const settings: DevSettings = {
   fovDegrees: 60,
   cellWidth: 6,
   viewDistance: 500,
+  fogStart: 150,
   renderMode: RenderMode.FullResolution,
 };
 
@@ -191,14 +186,16 @@ const camera: Camera = {
   pitch: -0.2,
 };
 
-function draw(mesh: Mesh, mode: GLenum, matrix: Mat4) {
-  gl!.uniformMatrix4fv(matrixLocation, false, matrix);
+function draw(mesh: Mesh, mode: GLenum, modelView: Mat4) {
+  gl!.uniformMatrix4fv(modelViewLocation, false, modelView);
   gl!.bindVertexArray(mesh.vao);
   gl!.drawArrays(mode, 0, mesh.vertexCount);
 }
 
 // Longest step allowed, so returning to a background tab doesn't teleport the camera.
 const MAX_FRAME_SECONDS = 0.1;
+// Larger than needed up close, so the depth buffer keeps precision for kerbs and markings far away.
+const NEAR_PLANE = 0.5;
 let previousTimeMs = 0;
 
 function frame(timeMs: number) {
@@ -226,16 +223,16 @@ function frame(timeMs: number) {
 
   gl!.useProgram(program);
   gl!.uniform3fv(fogColorLocation, background);
-  gl!.uniform1f(fogDistanceLocation, settings.viewDistance);
+  gl!.uniform1f(fogStartLocation, settings.fogStart);
+  gl!.uniform1f(fogEndLocation, settings.viewDistance);
   const aspect = canvas.width / canvas.height;
-  const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, 0.1, settings.viewDistance);
-  const viewProjection = multiply(projection, viewMatrix(camera));
+  const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
+  gl!.uniformMatrix4fv(projectionLocation, false, projection);
+  const view = viewMatrix(camera);
 
-  for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, viewProjection);
-  draw(triangle, gl!.TRIANGLES, multiply(viewProjection, rotationY(t)));
-  draw(cube, gl!.TRIANGLES, multiply(viewProjection, translation(-2.5, 0, -2.5)));
-
-  draw(lamp, gl!.TRIANGLES, multiply(viewProjection, translation(2.5, 0, -2.5)));
+  for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
+  // Lifted by half its height so it stands on the road instead of half below it.
+  draw(triangle, gl!.TRIANGLES, multiply(view, multiply(translation(0, 0.5, 0), rotationY(t))));
   if (fullResolution) return;
 
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);

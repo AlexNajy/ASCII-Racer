@@ -19,8 +19,9 @@ npm run preview   # serve the production build locally
 - `W` / `S`: fly forward / back along the view direction
 - `A` / `D`: fly left / right
 - `Space` / `Shift`: fly up / down
-- `Q` (hold): fly 4× faster
-- `` ` `` (backtick): toggle the dev menu (camera position, FOV, cell size, view distance, render mode, lock height at 1.2 m)
+- `Q` (hold): fly 5× faster
+- `E` (hold): fly 10× faster
+- `` ` `` (backtick): toggle the dev menu (camera position, FOV, cell size, view distance, fog start, render mode; city and building sliders on their own pages)
 
 ## Roadmap
 
@@ -69,9 +70,16 @@ npm run preview   # serve the production build locally
   - [ ] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
   - [ ] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
 - [ ] **8. Night lighting**: dark by default, headlights, street lamps, lit windows and neon
+  - [ ] Normals: per-vertex normals in `box()` (x, y, z, r, g, b, nx, ny, nz) and a second scene render target holding them, for lighting and later for orientation glyph sets (vertical ramp on walls, horizontal on ground and roofs)
   - [ ] Street lights on mid density and high-rise pavements
   - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are mid density or high-rise
 - [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer
-- [ ] **10. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
-- [ ] **11. Menu + game modes**
-- [ ] **12. Multiplayer**: a small server to connect players, other players' cars, rollback netcode
+- [ ] **10. Building models**: real shapes in place of the boxes, with seeded spawning rules for which model goes where
+  - [ ] Floors: building heights snapped to whole floors
+  - [ ] Parametric styles: several shape functions per zone (setbacks, roofs, shopfronts), each a function of footprint and height
+  - [ ] Prefabs: fixed-size models (houses, kiosks, dumpsters) placed and rotated by the seed
+  - [ ] Spawn rules: which styles and prefabs each zone, lot and neighbourhood can get, and how often
+  - [ ] Colour palettes: a hand-picked palette per style, one colour per building from the seed
+- [ ] **11. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
+- [ ] **12. Menu + game modes**
+- [ ] **13. Multiplayer**: a small server to connect players, other players' cars, rollback netcode

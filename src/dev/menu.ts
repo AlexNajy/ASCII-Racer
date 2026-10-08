@@ -11,11 +11,12 @@ export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 export interface DevSettings {
   fovDegrees: number;
   cellWidth: number; // in CSS pixels; the height follows from the character shape
-  viewDistance: number;
+  viewDistance: number; // fog is complete here, and the far plane
+  fogStart: number; // fog begins here
   renderMode: RenderMode;
 }
 
-type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance';
+type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance' | 'fogStart';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -121,6 +122,7 @@ export function createDevMenu(
   settingSlider('FOV', 'fovDegrees', 30, 120, 1);
   settingSlider('Cell width', 'cellWidth', 4, 16, 1);
   settingSlider('View distance', 'viewDistance', 5, 1000, 1);
+  settingSlider('Fog start', 'fogStart', 0, 1000, 1);
 
   const modeRow = document.createElement('label');
   const modeText = document.createElement('span');
