@@ -7,7 +7,7 @@ import { pushOutOfBuildings } from './game/collision.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
-import { multiply, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
+import { multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
@@ -27,6 +27,8 @@ const fogColorLocation = gl.getUniformLocation(program, 'u_fogColor');
 const fogStartLocation = gl.getUniformLocation(program, 'u_fogStart');
 const fogEndLocation = gl.getUniformLocation(program, 'u_fogEnd');
 const showNormalsLocation = gl.getUniformLocation(program, 'u_showNormals');
+const lightDirectionLocation = gl.getUniformLocation(program, 'u_lightDirection');
+const ambientLocation = gl.getUniformLocation(program, 'u_ambient');
 const positionLocation = gl.getAttribLocation(program, 'a_position');
 const colorLocation = gl.getAttribLocation(program, 'a_color');
 const normalLocation = gl.getAttribLocation(program, 'a_normal');
@@ -193,6 +195,10 @@ const camera: Camera = {
 };
 const CAMERA_RADIUS = 0.5;
 
+// A fixed light high up, from +x and +z, until the night lights replace it.
+const LIGHT_DIRECTION = normalize([0.5, 1, 0.3]);
+const AMBIENT = 0.25;
+
 function draw(mesh: Mesh, mode: GLenum, modelView: Mat4) {
   gl!.uniformMatrix4fv(modelViewLocation, false, modelView);
   gl!.bindVertexArray(mesh.vao);
@@ -235,6 +241,8 @@ function frame(timeMs: number) {
   gl!.uniform1f(fogStartLocation, settings.fogStart);
   gl!.uniform1f(fogEndLocation, settings.viewDistance);
   gl!.uniform1i(showNormalsLocation, showNormals ? 1 : 0);
+  gl!.uniform3fv(lightDirectionLocation, LIGHT_DIRECTION);
+  gl!.uniform1f(ambientLocation, AMBIENT);
   const aspect = canvas.width / canvas.height;
   const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
