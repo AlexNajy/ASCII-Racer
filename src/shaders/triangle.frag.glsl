@@ -12,18 +12,23 @@ uniform bool u_showNormals;
 uniform vec3 u_lightDirection; // towards the light, unit length
 uniform float u_ambient;
 
-out vec4 outColor;
+layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outNormal;
 
 void main() {
+  vec3 normal = normalize(v_normal);
+  // Alpha 1 marks the cell as covered, like the colour texture.
+  outNormal = vec4(normal * 0.5 + 0.5, 1.0);
+
   // Debug view: normals run from -1 to 1, colours from 0 to 1, so each axis is remapped.
   if (u_showNormals) {
-    outColor = vec4(normalize(v_normal) * 0.5 + 0.5, 1.0);
+    outColor = vec4(normal * 0.5 + 0.5, 1.0);
     return;
   }
 
   // Diffuse: a surface gets the most light facing it head-on, none when edge-on or facing away.
   // Ambient keeps faces turned away from the light from going fully black.
-  float diffuse = max(dot(normalize(v_normal), u_lightDirection), 0.0);
+  float diffuse = max(dot(normal, u_lightDirection), 0.0);
   vec3 lit = v_color * (u_ambient + (1.0 - u_ambient) * diffuse);
 
   // The camera is at the origin of view space, so this is the true distance, giving a circle of fog.

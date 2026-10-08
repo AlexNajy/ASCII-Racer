@@ -2,11 +2,12 @@
 precision highp float;
 
 uniform sampler2D u_scene;
+uniform sampler2D u_normals;
 uniform sampler2D u_glyphs;
 uniform ivec2 u_cellSize;
 uniform int u_rampLength;
 uniform vec3 u_background;
-uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene
+uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene, 5 normal texture
 
 out vec4 outColor;
 
@@ -18,6 +19,11 @@ void main() {
   // Alpha 0 means nothing was drawn here: show the background as a solid colour.
   if (scene.a == 0.0) {
     outColor = vec4(u_background, 1.0);
+    return;
+  }
+
+  if (u_renderMode == 5) {
+    outColor = vec4(texelFetch(u_normals, cell, 0).rgb, 1.0);
     return;
   }
 

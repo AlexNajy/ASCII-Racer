@@ -6,6 +6,7 @@ export const RenderMode = {
   Scene: 2,
   FullResolution: 3,
   Normals: 4,
+  NormalTexture: 5,
 } as const;
 export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 

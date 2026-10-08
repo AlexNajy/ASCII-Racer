@@ -126,6 +126,7 @@ function regenerateCity() {
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
 const sceneTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scene');
+const normalTextureLocation = gl.getUniformLocation(asciiProgram, 'u_normals');
 const cellSizeLocation = gl.getUniformLocation(asciiProgram, 'u_cellSize');
 const glyphsLocation = gl.getUniformLocation(asciiProgram, 'u_glyphs');
 const rampLengthLocation = gl.getUniformLocation(asciiProgram, 'u_rampLength');
@@ -265,6 +266,9 @@ function frame(timeMs: number) {
   gl!.activeTexture(gl!.TEXTURE1);
   gl!.bindTexture(gl!.TEXTURE_2D, glyphAtlas);
   gl!.uniform1i(glyphsLocation, 1);
+  gl!.activeTexture(gl!.TEXTURE2);
+  gl!.bindTexture(gl!.TEXTURE_2D, scene.normalTexture);
+  gl!.uniform1i(normalTextureLocation, 2);
   gl!.uniform1i(rampLengthLocation, [...GLYPH_RAMPS[0]].length);
   gl!.uniform3fv(backgroundLocation, background);
   gl!.uniform1i(renderModeLocation, settings.renderMode);
