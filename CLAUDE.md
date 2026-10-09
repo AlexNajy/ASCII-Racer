@@ -84,7 +84,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
   - Park, plaza, parking lot: none.
   - Wall pieces: one building filling the whole piece, so neighbours touch, 10–37 m (`WALL_HEIGHT`, narrow pieces `NARROW_WALL_HEIGHT` 8–35 m). Own constants, separate from the zones, so game modes can change them. Flex pieces get none.
 - Batching: all buildings are one mesh built once at startup with corners already in world position (`slab` per building), drawn in a single call. Pavements and wall slabs are one mesh each too. Buildings are all one colour for now.
-- Building notes: Judge proportions (height, width, spacing), not looks; detail comes in roadmap step 10 (building models) by changing the per-zone shape functions. The boxes double as collision shapes. Later designs are either parametric (a function of footprint and height, e.g. several high-rise styles) or fixed-size prefabs (houses, kiosks) placed and rotated by the seed. The seed also picks a colour per building from a hand-picked palette per style; keep brightness similar within a palette so the glyphs stay the same. Colour is in the vertex data, so per-building and per-face colours only need a different colour passed to `box()`.
+- Building notes: Judge proportions (height, width, spacing), not looks; detail comes in roadmap step 12 (building models) by changing the per-zone shape functions. The boxes double as collision shapes. Later designs are either parametric (a function of footprint and height, e.g. several high-rise styles) or fixed-size prefabs (houses, kiosks) placed and rotated by the seed. The seed also picks a colour per building from a hand-picked palette per style; keep brightness similar within a palette so the glyphs stay the same. Colour is in the vertex data, so per-building and per-face colours only need a different colour passed to `box()`.
 - **Street lights** (`game/streetLights.ts`): placed per road segment (between two intersections), on the pavement 1 m from the curb, if the block beside it is low density, mid density or high-rise. Spaced by `streetLightSpacing` (25 m) between `CORNER_CLEARANCE` (8 m) at each end, kept free for traffic lights and stop signs; when both sides are lit they alternate sides. Each light is a position plus the direction its arm faces. The model (pole, slanted arm, head, glowing bulb) is in `render/models/street/streetLight.ts`, all lights in one mesh.
 - **Intersections** (`game/intersections.ts`): traffic lights and stop signs from the junction data, as plain data. Corners are written as signs (±1 in x, ±1 in z); poles stand 1 m in from both curbs. Traffic lights stand on the far right corner of the leg they control (US style), so each corner serves one leg, with the arm reaching back over that traffic's lanes: 2 heads over the lane centres on an avenue, 1 over the centre line on a street. Crosswalk lights (Vancouver style: walking person and hand in one spot) go on the poles at both ends of each crosswalk, on a short pole where a corner has no traffic light. Stop signs stand on the near right corner, just before the crosswalk (`CROSSWALK_LENGTH` is shared with `city.ts`). A stop sign's position is its pole; the plate hangs in front.
 - **Signals** (`game/signals.ts`): `signalPhase(tick, offset)` is a pure integer function: a 48 s cycle per junction (column road green with walking person then flashing hand, yellow, all red, then the same for the row road; the hand flashes 0.5 s on, 0.5 s off). `signalOffsets` gives each junction an offset: green waves along avenues at `WAVE_SPEED` (50 km/h) in a seeded direction with a seeded start (the column avenue wins where two cross), seeded random offsets elsewhere. Its generator is `blockSeed(seed, SIGNAL_SEED_INDEX)`, separate from the rest of the city.
@@ -108,10 +108,12 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 7. Buildings: placeholder boxes on every block, batched into one mesh, collisions with buildings
 8. Lighting: a dim moonlight base that shapes buildings, and things that glow (emission) instead of real lights
 9. A drivable car: keyboard input, acceleration, steering, grip, drift, weight transfer, headlights
-10. Building models: parametric styles and fixed prefabs in place of the boxes, with seeded spawning rules per zone, lot and neighbourhood
-11. Visual identity: per-material glyph sets, temporally stable glyphs (no flicker at speed), speed streaks
-12. Menu + game modes
-13. Multiplayer: a small server to connect players, other players' cars, rollback netcode
+10. Per-material glyph sets: material IDs in the scene buffer pick an atlas row per cell
+11. HUD: a text layer drawn in the glyph grid (speedometer first)
+12. Building models: parametric styles and fixed prefabs in place of the boxes, with seeded spawning rules per zone, lot and neighbourhood
+13. Visual identity: temporally stable glyphs (no flicker at speed), speed streaks, particles
+14. Menu + game modes
+15. Multiplayer: a small server to connect players, other players' cars, rollback netcode
 
 ## Conventions
 
