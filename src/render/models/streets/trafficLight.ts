@@ -1,7 +1,7 @@
-import { CURB_HEIGHT } from '../game/city.ts';
-import type { TrafficLight } from '../game/intersections.ts';
-import type { Vec3 } from '../math/mat4.ts';
-import { beam, box, disc, facingBox, pixelArt } from './shapes.ts';
+import { CURB_HEIGHT } from '../../../game/city.ts';
+import type { TrafficLight } from '../../../game/intersections.ts';
+import type { Vec3 } from '../../../math/mat4.ts';
+import { beam, box, disc, facingBox, pixelArt } from '../../shapes.ts';
 
 type Signal = 'red' | 'yellow' | 'green';
 

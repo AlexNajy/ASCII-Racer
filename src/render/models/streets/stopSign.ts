@@ -1,7 +1,7 @@
-import { CURB_HEIGHT } from '../game/city.ts';
-import type { StopSign } from '../game/intersections.ts';
-import type { Vec3 } from '../math/mat4.ts';
-import { box, disc, pixelArt } from './shapes.ts';
+import { CURB_HEIGHT } from '../../../game/city.ts';
+import type { StopSign } from '../../../game/intersections.ts';
+import type { Vec3 } from '../../../math/mat4.ts';
+import { box, disc, pixelArt } from '../../shapes.ts';
 
 // Bigger than a real sign (0.75 m across) so the octagon still reads as one at a distance.
 const POLE_WIDTH = 0.2;

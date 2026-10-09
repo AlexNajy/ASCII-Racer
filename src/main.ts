@@ -1,5 +1,6 @@
 import './style.css';
 import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
+import { advanceClock, createClock } from './game/clock.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
@@ -13,9 +14,9 @@ import { multiply, normalize, perspective, rotationY, translation, type Mat4, ty
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
-import { streetLightVertices } from './render/streetLight.ts';
-import { stopSignVertices } from './render/stopSign.ts';
-import { trafficLightVertices } from './render/trafficLight.ts';
+import { streetLightVertices } from './render/models/streets/streetLight.ts';
+import { stopSignVertices } from './render/models/streets/stopSign.ts';
+import { trafficLightVertices } from './render/models/streets/trafficLight.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
@@ -230,7 +231,10 @@ function draw(mesh: Mesh, mode: GLenum, modelView: Mat4) {
   gl!.drawArrays(mode, 0, mesh.vertexCount);
 }
 
-// Longest step allowed, so returning to a background tab doesn't teleport the camera.
+const clock = createClock();
+
+// Longest step allowed, so returning to a background tab doesn't teleport the camera
+// or run a burst of simulation ticks.
 const MAX_FRAME_SECONDS = 0.1;
 // Larger than needed up close, so the depth buffer keeps precision for curbs and markings far away.
 const NEAR_PLANE = 0.5;
@@ -241,13 +245,16 @@ function frame(timeMs: number) {
   const t = timeMs / 1000;
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
+  advanceClock(clock, dt, () => {
+    // Simulation steps go here.
+  });
   updateFlyCamera(camera, dt);
   if (!settings.noclip) pushOutOfBuildings(camera.position, CAMERA_RADIUS, buildings);
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(
     `camera ${cameraX.toFixed(1)}, ${cameraY.toFixed(1)}, ${cameraZ.toFixed(1)}` +
-      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}`,
+      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}`,
   );
 
   // Full resolution and normals skip the ASCII pass and draw the scene straight to the screen.

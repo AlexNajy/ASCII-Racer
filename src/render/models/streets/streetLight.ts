@@ -1,7 +1,7 @@
-import { CURB_HEIGHT } from '../game/city.ts';
-import type { StreetLight } from '../game/streetLights.ts';
-import type { Vec3 } from '../math/mat4.ts';
-import { beam, box } from './shapes.ts';
+import { CURB_HEIGHT } from '../../../game/city.ts';
+import type { StreetLight } from '../../../game/streetLights.ts';
+import type { Vec3 } from '../../../math/mat4.ts';
+import { beam, box } from '../../shapes.ts';
 
 const POLE_WIDTH = 0.4;
 const POLE_HEIGHT = 7;
