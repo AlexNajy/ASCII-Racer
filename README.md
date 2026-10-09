@@ -60,7 +60,7 @@ npm run preview   # serve the production build locally
   - [x] Neighbour rules: mid density blocks with enough mid density neighbours become high-rise, low density blocks surrounded by low density become houses
   - [x] Special blocks: a park and a supermarket replace low density blocks, a parking lot replaces a mid density block
   - [x] Outer wall: a continuous ring of blocks around the city that streets dead-end into
-- [ ] **7. Buildings**: placeholder boxes on every block, batched into one mesh, with collisions
+- [x] **7. Buildings**: placeholder boxes on every block, batched into one mesh, with collisions
   - [x] Per-block random: each block gets its own generator from the city seed and its index
   - [x] Buildings per zone: a simple box shape for each zone type, heights from the seed, one draw call each
   - [x] Outer wall pieces: each side cut into fixed 21, 28 and 35 m pieces plus one 7–13 m flex alley, in a seeded shuffled order, set back behind a pavement, one mid-rise height building per piece
@@ -69,12 +69,14 @@ npm run preview   # serve the production build locally
   - [x] City sliders: seed, block size, road width, density, building heights and lot chances on City and Buildings pages of the dev menu, regenerated live
   - [x] View distance and cleanup: remove the test shapes, set the far plane and fog for city scale
   - [x] Collisions: circle-vs-rectangle push-out for the fly camera, with a noclip toggle
-- [ ] **8. Lighting**: a dim moonlight base that shapes buildings, and things that glow (emission) instead of real lights
+- [x] **8. Lighting**: a dim moonlight base that shapes buildings, and things that glow (emission) instead of real lights
   - [x] Normals: per-vertex normals in `box()` (x, y, z, r, g, b, nx, ny, nz) and a second scene render target holding them, for lighting and later for orientation glyph sets (vertical ramp on walls, horizontal on ground and roofs)
   - [x] Street lights on low density, mid density and high-rise pavements, placed per road segment by spacing, staggered when both sides are lit
   - [x] Emission: a per-vertex emission value, so bulbs, windows and neon glow at full brightness without lighting anything; glyphs drawn in the cell's true colour
-  - [ ] Road widths: a width per road line, with seeded 4-lane avenues weighted towards downtown, lane markings per road type and a street light pattern per road type
-  - [ ] Intersections: traffic lights or stop signs, depending on how many corner blocks are mid density or high-rise, and crosswalks
+  - [x] Road widths: a width per road line, with seeded 4-lane avenues weighted towards downtown, lane markings per road type and a street light pattern per road type
+  - [x] Intersections: traffic lights on avenues, all-way or two-way stop signs on streets depending on how many corner blocks are busy, and crosswalks
+  - [x] Signal phases: a fixed 60 Hz world tick, a deterministic phase cycle (green, yellow, all red, walk and flashing hand), seeded offsets with green waves along avenues, switched on the GPU from a per-frame signal texture
+  - [x] Pole collisions: street lights, traffic lights and stop signs collide like buildings
 - [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer, headlights (the only real lights: a few cones that light what they hit)
 - [ ] **10. Building models**: real shapes in place of the boxes, with seeded spawning rules for which model goes where
   - [ ] Floors: building heights snapped to whole floors

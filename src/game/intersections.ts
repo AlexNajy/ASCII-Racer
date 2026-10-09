@@ -13,6 +13,7 @@ export interface TrafficLight {
   walkSignals: { facingX: number; facingZ: number }[]; // crosswalk lights, facing the people waiting across
 }
 
+// The position is the pole's; the sign hangs in front of it.
 export interface StopSign {
   x: number;
   z: number;
@@ -24,6 +25,13 @@ export interface Intersections {
   trafficLights: TrafficLight[];
   stopSigns: StopSign[];
 }
+
+// Pole sizes, shared by the models and the collisions. Heights are above the pavement.
+export const TRAFFIC_LIGHT_POLE_WIDTH = 0.4;
+export const TRAFFIC_LIGHT_POLE_HEIGHT = 6;
+export const WALK_POLE_HEIGHT = 3.5; // a pole with crosswalk lights only
+export const STOP_SIGN_POLE_WIDTH = 0.2;
+export const STOP_SIGN_HEIGHT = 2.6; // centre of the sign, where its pole ends
 
 const CURB_DISTANCE = 1; // poles stand this far in from both curbs of their corner
 const STOP_SIGN_GAP = 0.5; // between the crosswalk and the stop sign, along the road

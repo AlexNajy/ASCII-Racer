@@ -1,10 +1,8 @@
 import { CURB_HEIGHT } from '../../../game/city.ts';
-import type { StreetLight } from '../../../game/streetLights.ts';
+import { STREET_LIGHT_POLE_HEIGHT, STREET_LIGHT_POLE_WIDTH, type StreetLight } from '../../../game/streetLights.ts';
 import type { Vec3 } from '../../../math/mat4.ts';
 import { beam, box } from '../../shapes.ts';
 
-const POLE_WIDTH = 0.4;
-const POLE_HEIGHT = 7;
 const ARM_THICKNESS = 0.3;
 const ARM_REACH = 3;
 const ARM_RISE = 0.8;
@@ -18,8 +16,8 @@ const POLE_COLOR: Vec3 = [0.35, 0.35, 0.35];
 const BULB_COLOR: Vec3 = [1, 0.9, 0.6];
 
 export function streetLightVertices({ x, z, facingX, facingZ }: StreetLight): number[] {
-  const pole = POLE_WIDTH / 2;
-  const top = CURB_HEIGHT + POLE_HEIGHT;
+  const pole = STREET_LIGHT_POLE_WIDTH / 2;
+  const top = CURB_HEIGHT + STREET_LIGHT_POLE_HEIGHT;
   const armEnd: Vec3 = [x + facingX * ARM_REACH, top + ARM_RISE, z + facingZ * ARM_REACH];
   const headCentreX = armEnd[0] + facingX * (HEAD_OVERHANG - HEAD_LENGTH / 2);
   const headCentreZ = armEnd[2] + facingZ * (HEAD_OVERHANG - HEAD_LENGTH / 2);

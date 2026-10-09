@@ -7,6 +7,10 @@ export interface StreetLight {
   facingZ: number;
 }
 
+// Pole size, shared by the model and the collisions.
+export const STREET_LIGHT_POLE_WIDTH = 0.4;
+export const STREET_LIGHT_POLE_HEIGHT = 7;
+
 const LIT_ZONES: readonly Zone[] = [Zone.LowDensity, Zone.MidDensity, Zone.HighRise];
 const CURB_DISTANCE = 1;
 const CORNER_CLEARANCE = 8; // kept free for traffic lights and stop signs

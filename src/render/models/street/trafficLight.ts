@@ -1,5 +1,10 @@
 import { CURB_HEIGHT } from '../../../game/city.ts';
-import type { TrafficLight } from '../../../game/intersections.ts';
+import {
+  TRAFFIC_LIGHT_POLE_HEIGHT,
+  TRAFFIC_LIGHT_POLE_WIDTH,
+  WALK_POLE_HEIGHT,
+  type TrafficLight,
+} from '../../../game/intersections.ts';
 import type { Vec3 } from '../../../math/mat4.ts';
 import { beam, box, disc, facingBox, pixelArt, withId } from '../../shapes.ts';
 
@@ -14,9 +19,6 @@ function signalId(junction: number, alongZ: boolean, lamp: number): number {
   return junction * 10 + (alongZ ? 0 : 1) * 5 + lamp;
 }
 
-const POLE_WIDTH = 0.4;
-const POLE_HEIGHT = 6;
-const WALK_POLE_HEIGHT = 3.5; // a pole with crosswalk lights only
 const ARM_THICKNESS = 0.3;
 const BEND_REACH = 1.5; // the diagonal part of the arm, before it turns flat
 const BEND_RISE = 0.8;
@@ -53,9 +55,9 @@ const HAND = ['..#.#.#', '..#.#.#', '#.#.#.#', '#.#####', '#######', '.######', 
 
 export function trafficLightVertices(light: TrafficLight): number[] {
   const { junction, x, z, armX, armZ, facingX, facingZ, heads, walkSignals } = light;
-  const pole = POLE_WIDTH / 2;
+  const pole = TRAFFIC_LIGHT_POLE_WIDTH / 2;
   const walkY = CURB_HEIGHT + WALK_HEIGHT;
-  const top = CURB_HEIGHT + (heads.length > 0 ? POLE_HEIGHT : WALK_POLE_HEIGHT);
+  const top = CURB_HEIGHT + (heads.length > 0 ? TRAFFIC_LIGHT_POLE_HEIGHT : WALK_POLE_HEIGHT);
   const vertices = box([x - pole, CURB_HEIGHT, z - pole], [x + pole, top, z + pole], POLE_COLOR);
   // Lamps facing ±z face traffic on the column road. Walk lights facing ±z stand at the ends of a crosswalk
   // over the row road, so the people using them walk alongside the column road.

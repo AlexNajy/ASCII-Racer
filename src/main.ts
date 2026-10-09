@@ -4,7 +4,7 @@ import { advanceClock, createClock } from './game/clock.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
-import { pushOutOfBuildings } from './game/collision.ts';
+import { cityColliders, pushOutOfColliders } from './game/collision.ts';
 import { generateIntersections, type Intersections } from './game/intersections.ts';
 import { signalOffsets, signalPhase } from './game/signals.ts';
 import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
@@ -144,6 +144,7 @@ let streetLights = generateStreetLights(city, citySettings);
 let intersections = generateIntersections(city, citySettings);
 let offsets = signalOffsets(city, citySettings.seed);
 let signals = createSignalTexture(gl, city.junctions.length);
+let colliders = cityColliders(buildings, streetLights, intersections);
 let cityMeshes = buildCityMeshes(city, buildings, streetLights, intersections);
 
 // The data is kept, not just the meshes, so the game can collide with it.
@@ -152,6 +153,7 @@ function regenerateCity() {
   buildings = generateBuildings(city, citySettings);
   streetLights = generateStreetLights(city, citySettings);
   intersections = generateIntersections(city, citySettings);
+  colliders = cityColliders(buildings, streetLights, intersections);
   offsets = signalOffsets(city, citySettings.seed);
   gl!.deleteTexture(signals.texture);
   signals = createSignalTexture(gl!, city.junctions.length);
@@ -260,7 +262,7 @@ function frame(timeMs: number) {
     // Simulation steps go here.
   });
   updateFlyCamera(camera, dt);
-  if (!settings.noclip) pushOutOfBuildings(camera.position, CAMERA_RADIUS, buildings);
+  if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, colliders);
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(
