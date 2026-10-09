@@ -4,6 +4,7 @@ import { updateFlyCamera } from './game/flyCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { pushOutOfBuildings } from './game/collision.ts';
+import { generateIntersections, type Intersections } from './game/intersections.ts';
 import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
@@ -103,54 +104,12 @@ const ZONE_COLORS: Record<Zone, Vec3> = {
   [Zone.Plaza]: [0.2, 0.7, 0.9],
 };
 
-// Temporary: two traffic lights and a stop sign at the middle junction, to look at the models.
-function showcaseVertices(city: City, blocksPerSide: number): number[] {
-  const middle = Math.floor(blocksPerSide / 2);
-  const junction = city.junctions[middle * (blocksPerSide + 1) + middle];
-  const northEast = city.blocks[(middle - 1) * blocksPerSide + middle].rect;
-  const northWest = city.blocks[(middle - 1) * blocksPerSide + middle - 1].rect;
-  const CURB_DISTANCE = 1;
-  // Avenues get a head over each of the 2 lanes, streets one over the centre line.
-  const heads = (isAvenue: boolean, halfRoad: number) =>
-    isAvenue
-      ? [CURB_DISTANCE + halfRoad / 4, CURB_DISTANCE + (halfRoad * 3) / 4]
-      : [CURB_DISTANCE + halfRoad];
-  return [
-    // North-east corner: arm west over the northbound lanes. Walk lights for the north and east crosswalks.
-    ...trafficLightVertices({
-      x: northEast.minX + CURB_DISTANCE,
-      z: northEast.maxZ - CURB_DISTANCE,
-      armX: -1,
-      armZ: 0,
-      facingX: 0,
-      facingZ: 1,
-      heads: heads(city.avenues.columns.has(junction.column), northEast.minX - junction.x),
-      walkSignals: [
-        { facing: [-1, 0, 0], walk: true },
-        { facing: [0, 0, 1], walk: false },
-      ],
-      signal: 'red',
-    }),
-    // North-west corner: arm south over the westbound lanes. Walk lights for the north and west crosswalks.
-    ...trafficLightVertices({
-      x: northWest.maxX - CURB_DISTANCE,
-      z: northWest.maxZ - CURB_DISTANCE,
-      armX: 0,
-      armZ: 1,
-      facingX: 1,
-      facingZ: 0,
-      heads: heads(city.avenues.rows.has(junction.row), junction.z - northWest.maxZ),
-      walkSignals: [
-        { facing: [1, 0, 0], walk: false },
-        { facing: [0, 0, 1], walk: true },
-      ],
-      signal: 'green',
-    }),
-    ...stopSignVertices({ x: northWest.maxX - 4, z: northWest.maxZ - CURB_DISTANCE, facingX: 0, facingZ: 1 }),
-  ];
-}
-
-function buildCityMeshes(city: City, buildings: Building[], streetLights: StreetLight[]): Mesh[] {
+function buildCityMeshes(
+  city: City,
+  buildings: Building[],
+  streetLights: StreetLight[],
+  { trafficLights, stopSigns }: Intersections,
+): Mesh[] {
   const road = uploadMesh(slab(city.bounds, -0.1, 0, [0.25, 0.25, 0.25]));
   // Raised slightly so the paint doesn't fight the road surface for depth.
   const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02, [1, 1, 1])));
@@ -164,23 +123,28 @@ function buildCityMeshes(city: City, buildings: Building[], streetLights: Street
     buildings.flatMap(({ rect, height }) => slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65])),
   );
   const lights = uploadMesh(streetLights.flatMap(streetLightVertices));
-  const showcase = uploadMesh(showcaseVertices(city, citySettings.blocksPerSide));
-  return [road, markings, pavements, wall, buildingMesh, lights, showcase];
+  const signals = uploadMesh([
+    ...trafficLights.flatMap((light) => trafficLightVertices(light)),
+    ...stopSigns.flatMap((sign) => stopSignVertices(sign)),
+  ]);
+  return [road, markings, pavements, wall, buildingMesh, lights, signals];
 }
 
 const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
 let city = generateCity(citySettings);
 let buildings = generateBuildings(city, citySettings);
 let streetLights = generateStreetLights(city, citySettings);
-let cityMeshes = buildCityMeshes(city, buildings, streetLights);
+let intersections = generateIntersections(city, citySettings);
+let cityMeshes = buildCityMeshes(city, buildings, streetLights, intersections);
 
 // The data is kept, not just the meshes, so the game can collide with it.
 function regenerateCity() {
   city = generateCity(citySettings);
   buildings = generateBuildings(city, citySettings);
   streetLights = generateStreetLights(city, citySettings);
+  intersections = generateIntersections(city, citySettings);
   cityMeshes.forEach(deleteMesh);
-  cityMeshes = buildCityMeshes(city, buildings, streetLights);
+  cityMeshes = buildCityMeshes(city, buildings, streetLights, intersections);
 }
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);

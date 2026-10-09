@@ -112,7 +112,7 @@ const MARKING_WIDTH = 0.4;
 const DASH_LENGTH = 3;
 const DASH_GAP = 3;
 // Zebra stripes across both ends of every road segment. Chunky so they still read as stripes from a distance.
-const CROSSWALK_LENGTH = 3; // along the road
+export const CROSSWALK_LENGTH = 3; // along the road
 const CROSSWALK_STRIPE = 1;
 const CROSSWALK_GAP = 1;
 const CROSSWALK_CLEARANCE = 1; // between a crosswalk and the lane markings

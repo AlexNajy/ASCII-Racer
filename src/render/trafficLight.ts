@@ -1,29 +1,13 @@
 import { CURB_HEIGHT } from '../game/city.ts';
+import type { TrafficLight } from '../game/intersections.ts';
 import type { Vec3 } from '../math/mat4.ts';
 import { beam, box, disc, facingBox, pixelArt } from './shapes.ts';
 
-export type Signal = 'red' | 'yellow' | 'green';
-
-export interface TrafficLight {
-  x: number;
-  z: number;
-  armX: number; // the direction the arm reaches out over the road
-  armZ: number;
-  facingX: number; // the side the lamps point to, towards the traffic they control
-  facingZ: number;
-  heads: number[]; // distance of each signal head from the pole, along the arm; the arm ends at the furthest
-  walkSignals: WalkSignal[];
-  signal: Signal; // temporary: which lamp glows, until signals change over time
-}
-
-// A crosswalk light on the pole, facing the people waiting on the other side of the crosswalk.
-export interface WalkSignal {
-  facing: Vec3;
-  walk: boolean; // temporary: walking person (true) or hand (false), until signals change over time
-}
+type Signal = 'red' | 'yellow' | 'green';
 
 const POLE_WIDTH = 0.4;
 const POLE_HEIGHT = 6;
+const WALK_POLE_HEIGHT = 3.5; // a pole with crosswalk lights only
 const ARM_THICKNESS = 0.3;
 const BEND_REACH = 1.5; // the diagonal part of the arm, before it turns flat
 const BEND_RISE = 0.8;
@@ -64,20 +48,46 @@ function dim(color: Vec3): Vec3 {
 }
 
 export function trafficLightVertices(light: TrafficLight): number[] {
-  const { x, z, armX, armZ, facingX, facingZ, heads, walkSignals, signal } = light;
+  const { x, z, armX, armZ, facingX, facingZ, heads, walkSignals } = light;
+  // Temporary, until signals change over time: the column road (north-south) has green, so people may walk
+  // across the row road, along it. Lamps facing ±z face column road traffic; walk lights facing ±z stand at
+  // the ends of a crosswalk over the row road.
+  const signal: Signal = facingZ !== 0 ? 'green' : 'red';
   const pole = POLE_WIDTH / 2;
-  const top = CURB_HEIGHT + POLE_HEIGHT;
+  const walkY = CURB_HEIGHT + WALK_HEIGHT;
+  const top = CURB_HEIGHT + (heads.length > 0 ? POLE_HEIGHT : WALK_POLE_HEIGHT);
+  const vertices = box([x - pole, CURB_HEIGHT, z - pole], [x + pole, top, z + pole], POLE_COLOR);
+  for (const { facingX: walkX, facingZ: walkZ } of walkSignals) {
+    const walk = walkZ !== 0;
+    const direction: Vec3 = [walkX, 0, walkZ];
+    const out = (distance: number): Vec3 => [x + walkX * distance, walkY, z + walkZ * distance];
+    const front = pole + WALK_DEPTH;
+    vertices.push(
+      ...facingBox(out(pole + WALK_DEPTH / 2), direction, WALK_SIZE, WALK_SIZE, WALK_DEPTH, WALK_BOX_COLOR),
+      ...facingBox(out(front + WALK_PANEL_DEPTH / 2), direction, WALK_PANEL, WALK_PANEL, WALK_PANEL_DEPTH, WALK_PANEL_COLOR),
+      ...pixelArt(
+        walk ? WALKER : HAND,
+        out(front + WALK_PANEL_DEPTH),
+        direction,
+        WALK_PIXEL,
+        WALK_PANEL_DEPTH,
+        walk ? WALKER_COLOR : HAND_COLOR,
+        1,
+      ),
+    );
+  }
+  if (heads.length === 0) return vertices;
+
   const armY = top + BEND_RISE;
   const bend: Vec3 = [x + armX * BEND_REACH, armY, z + armZ * BEND_REACH];
   // The flat part starts half a thickness early to fill the gap at the bend,
   // and stops flush with the far side of the furthest head.
   const flatStart = BEND_REACH - ARM_THICKNESS / 2;
   const armEnd = Math.max(...heads) + HEAD_WIDTH / 2;
-  const vertices = [
-    ...box([x - pole, CURB_HEIGHT, z - pole], [x + pole, top, z + pole], POLE_COLOR),
+  vertices.push(
     ...beam([x, top - ARM_THICKNESS / 2, z], bend, ARM_THICKNESS, POLE_COLOR),
     ...beam([x + armX * flatStart, armY, z + armZ * flatStart], [x + armX * armEnd, armY, z + armZ * armEnd], ARM_THICKNESS, POLE_COLOR),
-  ];
+  );
 
   // Heads hang from the underside of the arm.
   const facing: Vec3 = [facingX, 0, facingZ];
@@ -97,24 +107,5 @@ export function trafficLightVertices(light: TrafficLight): number[] {
     });
   }
 
-  // Crosswalk lights sit against the side of the pole they face.
-  const walkY = CURB_HEIGHT + WALK_HEIGHT;
-  for (const { facing: direction, walk } of walkSignals) {
-    const out = (distance: number): Vec3 => [x + direction[0] * distance, walkY, z + direction[2] * distance];
-    const front = pole + WALK_DEPTH;
-    vertices.push(
-      ...facingBox(out(pole + WALK_DEPTH / 2), direction, WALK_SIZE, WALK_SIZE, WALK_DEPTH, WALK_BOX_COLOR),
-      ...facingBox(out(front + WALK_PANEL_DEPTH / 2), direction, WALK_PANEL, WALK_PANEL, WALK_PANEL_DEPTH, WALK_PANEL_COLOR),
-      ...pixelArt(
-        walk ? WALKER : HAND,
-        out(front + WALK_PANEL_DEPTH),
-        direction,
-        WALK_PIXEL,
-        WALK_PANEL_DEPTH,
-        walk ? WALKER_COLOR : HAND_COLOR,
-        1,
-      ),
-    );
-  }
   return vertices;
 }
