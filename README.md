@@ -86,5 +86,16 @@ npm run preview   # serve the production build locally
   - [ ] Colour palettes: a hand-picked palette per style, one colour per building from the seed
   - [ ] Lit windows and neon: emissive faces in the models, seeded per building
 - [ ] **11. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
+  - [ ] Material IDs: the vertex `id` slot carries a material, the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell
+  - [ ] Glyph sets per material: one atlas row per set; a set can repeat one or two characters to force them (signal lamps `( ) 0` as the first test, then neon and windows)
+  - [ ] Animated sets: glyph picked from time and cell position as well as brightness, so things like fire flicker between `(` and `)` on their own
+  - [ ] Orientation sets: separate ramps for walls and for ground and roofs, from the normals target
+  - [ ] Particles: GL points of size 1 in the one-pixel-per-cell scene target, so each particle is exactly one glyph (crash debris as flying `#`); visual only, so they don't need to be deterministic
+  - [ ] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
+  - [ ] Speed streaks
 - [ ] **12. Menu + game modes**
+  - [ ] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded each frame and drawn over the scene by the ASCII pass
+  - [ ] HUD: speed, timers and a minimap drawn with the text layer
+  - [ ] Menus drawn with the text layer
+  - [ ] Game modes
 - [ ] **13. Multiplayer**: a small server to connect players, other players' cars, rollback netcode

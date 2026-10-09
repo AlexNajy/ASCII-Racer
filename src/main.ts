@@ -9,7 +9,13 @@ import { generateIntersections, type Intersections } from './game/intersections.
 import { signalOffsets, signalPhase } from './game/signals.ts';
 import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
-import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
+import {
+  createColorTarget,
+  createRenderTarget,
+  deleteColorTarget,
+  resizeRenderTarget,
+  type ColorTarget,
+} from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
 import { multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
@@ -23,6 +29,7 @@ import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
 import asciiFragmentSource from './shaders/ascii.frag.glsl?raw';
+import crtFragmentSource from './shaders/crt.frag.glsl?raw';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const gl = canvas.getContext('webgl2', { antialias: false });
@@ -170,6 +177,22 @@ const rampLengthLocation = gl.getUniformLocation(asciiProgram, 'u_rampLength');
 const backgroundLocation = gl.getUniformLocation(asciiProgram, 'u_background');
 const renderModeLocation = gl.getUniformLocation(asciiProgram, 'u_renderMode');
 const fullscreenVao = gl.createVertexArray();
+const crtProgram = createProgram(gl, fullscreenVertexSource, crtFragmentSource);
+const crtImageLocation = gl.getUniformLocation(crtProgram, 'u_image');
+// For the CRT glyphs view: the glyph picture is drawn here first, then blurred to the screen. It only exists
+// while that view is on, so it costs no memory otherwise.
+let glyphImage: ColorTarget | null = null;
+
+// Creates, resizes or deletes the CRT glyph image to match whether the view is on.
+function updateGlyphImage(on: boolean): ColorTarget | null {
+  const fits = glyphImage !== null && glyphImage.width === canvas.width && glyphImage.height === canvas.height;
+  if (glyphImage && (!on || !fits)) {
+    deleteColorTarget(gl!, glyphImage);
+    glyphImage = null;
+  }
+  if (on && !glyphImage) glyphImage = createColorTarget(gl!, canvas.width, canvas.height);
+  return glyphImage;
+}
 
 const settings: DevSettings = {
   fovDegrees: 60,
@@ -270,6 +293,7 @@ function frame(timeMs: number) {
       `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}`,
   );
 
+  const crtImage = updateGlyphImage(settings.renderMode === RenderMode.CrtGlyphs);
   // Full resolution and normals skip the ASCII pass and draw the scene straight to the screen.
   const showNormals = settings.renderMode === RenderMode.Normals;
   const fullResolution = settings.renderMode === RenderMode.FullResolution || showNormals;
@@ -301,7 +325,7 @@ function frame(timeMs: number) {
   draw(triangle, gl!.TRIANGLES, multiply(view, multiply(translation(0, 0.5, 0), rotationY(t))));
   if (fullResolution) return;
 
-  gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
+  gl!.bindFramebuffer(gl!.FRAMEBUFFER, crtImage ? crtImage.framebuffer : null);
   gl!.viewport(0, 0, canvas.width, canvas.height);
   gl!.disable(gl!.DEPTH_TEST);
 
@@ -318,8 +342,16 @@ function frame(timeMs: number) {
   gl!.uniform1i(normalTextureLocation, 2);
   gl!.uniform1i(rampLengthLocation, [...GLYPH_RAMPS[0]].length);
   gl!.uniform3fv(backgroundLocation, background);
-  gl!.uniform1i(renderModeLocation, settings.renderMode);
+  gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);
   gl!.bindVertexArray(fullscreenVao);
+  gl!.drawArrays(gl!.TRIANGLES, 0, 3);
+  if (!crtImage) return;
+
+  gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
+  gl!.useProgram(crtProgram);
+  gl!.activeTexture(gl!.TEXTURE0);
+  gl!.bindTexture(gl!.TEXTURE_2D, crtImage.texture);
+  gl!.uniform1i(crtImageLocation, 0);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
 }
 requestAnimationFrame(frame);

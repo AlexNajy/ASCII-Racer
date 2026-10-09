@@ -57,3 +57,26 @@ export function resizeRenderTarget(
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error(`Framebuffer incomplete: ${status}`);
 }
+
+// A framebuffer with only a colour texture, for full-screen passes that need no depth or normals.
+export interface ColorTarget {
+  framebuffer: WebGLFramebuffer;
+  texture: WebGLTexture;
+  width: number;
+  height: number;
+}
+
+export function createColorTarget(gl: WebGL2RenderingContext, width: number, height: number): ColorTarget {
+  const texture = createTargetTexture(gl);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  const framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { framebuffer, texture, width, height };
+}
+
+export function deleteColorTarget(gl: WebGL2RenderingContext, target: ColorTarget): void {
+  gl.deleteFramebuffer(target.framebuffer);
+  gl.deleteTexture(target.texture);
+}
