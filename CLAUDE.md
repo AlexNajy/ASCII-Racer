@@ -2,7 +2,7 @@
 
 A real 3D multiplayer driving game set in a city at night. It runs in the browser and is rendered entirely in ASCII characters. The scene is rendered in 3D on the GPU, then a shader pass converts it into a grid of text glyphs.
 
-The night setting is the core of the look: darkness becomes empty cells, light becomes dense glyphs. Headlights, street lamps, lit windows and neon are what draw the city.
+The night setting is the core of the look: darkness becomes empty cells, light becomes dense glyphs. Glowing street lamps, lit windows and neon draw the city, plus headlights, the only real lights.
 
 ## Stack
 
@@ -21,7 +21,7 @@ The night setting is the core of the look: darkness becomes empty cells, light b
 
 Rendering happens in two GPU passes every frame:
 
-1. **Scene pass**: draw the 3D world (streets, buildings, cars, lights) into a small offscreen framebuffer. Outputs color, brightness and, later, normals and material IDs.
+1. **Scene pass**: draw the 3D world (streets, buildings, cars, lights) into a small offscreen framebuffer. Outputs colour and normals (two render targets) and, later, material IDs.
 2. **ASCII pass**: a full-screen fragment shader. Each screen pixel finds its character cell, samples the scene buffer at the cell center, picks a glyph from a ramp, and looks up that glyph's shape in a font atlas texture.
 
 The ASCII conversion must stay on the GPU. Never read pixels back to JavaScript for per-frame work.
@@ -33,6 +33,7 @@ src/
   main.ts          entry point, game loop
   gl/              WebGL2 helpers (shader compile, buffers, framebuffers)
   render/          scene pass, ASCII pass, camera
+    models/street/ street furniture models (street light, traffic light, stop sign)
   shaders/         .glsl files
   game/            car physics, city layout, input
   math/            vec3, mat4 and other math helpers
@@ -42,20 +43,26 @@ src/
 ### How it works today
 
 - `main.ts` holds setup and the frame loop: pass 1 draws into the `scene` render target, pass 2 draws the full-screen triangle with `ascii.frag.glsl`.
-- The scene shaders are still named `triangle.vert.glsl` / `triangle.frag.glsl`. Each vertex is `x, y, z, r, g, b` (`render/shapes.ts`, `box()`): `box()` bakes a fixed per-face shade (fake lighting until step 8) into the colour. Matrices and fog are uniforms.
+- The scene shaders are still named `triangle.vert.glsl` / `triangle.frag.glsl`. Each vertex is `x, y, z, r, g, b, nx, ny, nz, emission, id` (`render/shapes.ts`: `box()` for axis-aligned boxes, `beam()` for bars at any angle, `disc()` for upright regular polygons such as octagon signs and round lamps, `facingBox()` for boxes facing ±x or ±z, `pixelArt()` for flat pixel letters and symbols drawn as one quad per run). `id` is -1 for nothing special; `withId()` tags a shape, for now only traffic signal lamps, later material IDs. Matrices and fog are uniforms.
+- Lighting is a dim ambient plus one directional "moonlight" on the per-vertex normals, so faces at different angles read as different brightnesses. Things that glow (bulbs, later windows and neon) use emission: at 1 the colour shows at full strength whatever the lighting. Glowing things don't light anything around them; per-light lighting for every lamp and window looked bad and doesn't scale. Only headlights (step 9) will be real lights.
+- The ASCII pass draws each glyph in the cell's true colour, so dark surfaces get both sparser and darker glyphs.
 - The scene pass clears with alpha 0 and objects write alpha 1, so the ASCII pass can tell empty cells (drawn as solid background, no glyph) from objects. Material IDs for per-material glyph sets will use this channel later.
 - Fog uses the true distance to the camera (length of the view-space position, per pixel), so it is a circle around the camera. It is clear up to `fogStart`, then fades linearly to the background colour at the view distance, which is also the far plane (the fog circle always fits inside it). The background is black for now. The vertex shader takes `u_modelView` and `u_projection` separately so view space is available.
 - Cells are `settings.cellWidth` CSS px wide and 1.75× as tall, times `devicePixelRatio`. The scene render target has one pixel per cell, and the glyph atlas cells are exactly the cell size, so changing the cell size rebuilds the atlas.
 - `GLYPH_RAMPS` is a list: one atlas row per ramp, all the same length, so more character sets can be added later.
+- World clock (`game/clock.ts`): the simulation counts fixed ticks at 60 per second (`advanceClock` runs one step per whole tick in the frame time and carries the rest over). Anything that changes over time in the simulation reads the tick, never frame time or the browser clock, so it is the same on every machine and in replays. It is world time, not race time: it starts when the city loads, and game modes record their start tick. The frame time is capped at 0.1 s, so a slow frame never runs more than 6 ticks.
+- Collisions (`game/collision.ts`): everything solid is a `Collider` (footprint `rect` seen from above, plus `top`). `cityColliders` collects buildings and the poles of street lights, traffic lights and stop signs; arms, signal heads and signs hang overhead and don't collide. Pole sizes are exported from the `game/` files and imported by the models, so drawn and solid poles always match. A circle is pushed out of each rectangle (`pushOutOfRect`); colliders whose top is below it are skipped, so the fly camera can pass over.
 - The camera is a position plus yaw and pitch (`render/camera.ts`). `game/input.ts` tracks held keys (by `event.code`) and pointer-locked mouse movement; `game/flyCamera.ts` moves the camera each frame using the frame time `dt`. The fly camera is a dev tool, not simulation, so it does not use the fixed timestep.
-- Runtime settings (FOV, cell width, view distance, fog start, render mode) live in a `DevSettings` object edited by the dev menu (`dev/menu.ts`, backtick key). The dev menu is plain HTML on top of the canvas; that is fine because it is developer UI, not the game picture.
+- Runtime settings (FOV, cell width, view distance, fog start, render mode, ambient and directional light) live in a `DevSettings` object edited by the dev menu (`dev/menu.ts`, backtick key). The dev menu is plain HTML on top of the canvas; that is fine because it is developer UI, not the game picture.
 
 ### City generation (`game/city.ts`)
 
 The city is plain data (rectangles and zones) with no WebGL in it. The renderer, collisions and a future server all read the same data. Units are metres.
 
 - **Grid**: 8×8 blocks of 60 m, 12 m roads, a road around the outside too. Centred on the origin, which is an intersection.
-- **Ground**: roads are black so they draw no glyphs; only the white dashed centre lines show. Lines are 0.4 m wide (real paint is ~0.12 m) so they cover a cell at a distance, and dashes stop short of junctions. Pavements are raised 0.15 m so kerbs give each block an outline.
+- **Avenues**: some road lines are 20 m, 4-lane avenues: one through downtown each way, plus extra avenues with `avenueDensity`, less likely by `AVENUE_FALLOFF` per road line further out. Never the outer ring. Streets get a dashed centre line; avenues a solid centre line and a dashed divider in each half.
+- **Junctions** (`city.junctions`, row by row): each has a `control`, and per leg (the road leading in) whether its traffic `stops` and whether it has a crosswalk. Lights where an avenue crosses; nothing at the ring's corners; two-way stops where streets meet the ring (the ring drives through); all-way stops where 2+ corner blocks are busy (mid density, high-rise, plaza, supermarket); other street crossings are two-way stops where the road nearer a downtown avenue drives through. Crosswalks only on legs that stop, and only at lights or with a busy corner.
+- **Ground**: roads are dark grey, so they show as dim glyphs and the white dashed centre lines stand out. Lines are 0.4 m wide (real paint is ~0.12 m) so they cover a cell at a distance, and dashes stop short of junctions. Pavements are raised 0.15 m so curbs give each block an outline.
 - **Zoning**, in this order:
   1. Downtown gradient: a seeded centre near the middle (`DOWNTOWN_OFFSET`); each block's mid density chance slides from 0.9 at the centre to 0.1 at `DOWNTOWN_RADIUS`. Distances are in blocks, not metres.
   2. Neighbour rules (N/E/S/W only, edge blocks have fewer): mid density with 3+ mid density neighbours becomes high-rise; then low density with 3+ low density neighbours becomes houses, unless it shares a side with a high-rise (diagonals across a crossing are fine); those stay shops as a buffer. These read a copy of the original zones so the order blocks are checked in doesn't matter.
@@ -68,7 +75,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
   - Counts: units = floor(side / 7), minus one if the remainder is under `FLEX_MIN_WIDTH` (7 m), so the flex piece is always 7–13 m. Equal sets of the three widths (12 units each), then `WALL_EXTRAS` fills the leftover units (1 and 2 borrow a set). Works for any side of at least 84 m. Default: 7×21, 8×28, 6×35 and a 13 m flex.
   - Every side uses the same pieces in its own shuffled order (`shuffle`, Fisher-Yates, seeded with `blockSeed(seed, blocks + side)`), so the wall doesn't mirror the street grid. The flex piece is shuffled in like the others.
   - The flex piece stays open as an alley. Planned: a gate across its mouth (a real collision box, not an invisible barrier) with prefabs inside, such as dumpsters or a parked car.
-- **Buildings** (`game/buildings.ts`, roadmap step 7): `generateBuildings(city, settings)` turns each block into a list of `Building`s (footprint `rect` + `height`), using a per-block generator (`blockSeed`). A `Record<Zone, BlockBuilder>` table picks the builder, so a new zone won't compile without one. Blocks are inset 3 m from the kerb (`inset`), and `split` cuts them into lots, touching or with 4 m alleys (`ALLEY_WIDTH`) between columns and rows. Probabilities live in `CitySettings` so the dev menu can change them. Heights are seeded random within a per-zone `Range` (the constants are the ranges):
+- **Buildings** (`game/buildings.ts`, roadmap step 7): `generateBuildings(city, settings)` turns each block into a list of `Building`s (footprint `rect` + `height`), using a per-block generator (`blockSeed`). A `Record<Zone, BlockBuilder>` table picks the builder, so a new zone won't compile without one. Blocks are inset 3 m from the curb (`inset`), and `split` cuts them into lots, touching or with 4 m alleys (`ALLEY_WIDTH`) between columns and rows. Probabilities live in `CitySettings` so the dev menu can change them. Heights are seeded random within a per-zone `Range` (the constants are the ranges):
   - Low density: up to 8 touching shops (3×3 lots, centre lot empty as a back yard), 6.5–15 m. Each lot is left empty with `lowDensityEmptyChance` (1 in 8), for a small car park later. Then a side's middle shop can merge with each of its corners (`lowDensityMergeChance`, 0.2) into one building with the middle shop's height, if both lots have a shop; each corner joins at most one side (sides checked in a fixed order), so merged shops stay rectangles. A block is a strip mall with `lowDensityStripMallChance` (0.1): a random corner and its two neighbouring lots (0-1-3, 1-2-5, 5-7-8 or 3-6-7) become its car park, and the other shops are never left empty.
   - Mid density: 2×2 mid-rises, 16–42 m. Alleys north-south and east-west are rolled separately (`midDensityAlleyChance`, 0.5), so a block gets none, one direction or both.
   - High-rise: one tower, 50–70% of the block's width and depth each, at a random spot, 50–120 m.
@@ -78,11 +85,16 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
   - Wall pieces: one building filling the whole piece, so neighbours touch, 10–37 m (`WALL_HEIGHT`, narrow pieces `NARROW_WALL_HEIGHT` 8–35 m). Own constants, separate from the zones, so game modes can change them. Flex pieces get none.
 - Batching: all buildings are one mesh built once at startup with corners already in world position (`slab` per building), drawn in a single call. Pavements and wall slabs are one mesh each too. Buildings are all one colour for now.
 - Building notes: Judge proportions (height, width, spacing), not looks; detail comes in roadmap step 10 (building models) by changing the per-zone shape functions. The boxes double as collision shapes. Later designs are either parametric (a function of footprint and height, e.g. several high-rise styles) or fixed-size prefabs (houses, kiosks) placed and rotated by the seed. The seed also picks a colour per building from a hand-picked palette per style; keep brightness similar within a palette so the glyphs stay the same. Colour is in the vertex data, so per-building and per-face colours only need a different colour passed to `box()`.
+- **Street lights** (`game/streetLights.ts`): placed per road segment (between two intersections), on the pavement 1 m from the curb, if the block beside it is low density, mid density or high-rise. Spaced by `streetLightSpacing` (25 m) between `CORNER_CLEARANCE` (8 m) at each end, kept free for traffic lights and stop signs; when both sides are lit they alternate sides. Each light is a position plus the direction its arm faces. The model (pole, slanted arm, head, glowing bulb) is in `render/models/street/streetLight.ts`, all lights in one mesh.
+- **Intersections** (`game/intersections.ts`): traffic lights and stop signs from the junction data, as plain data. Corners are written as signs (±1 in x, ±1 in z); poles stand 1 m in from both curbs. Traffic lights stand on the far right corner of the leg they control (US style), so each corner serves one leg, with the arm reaching back over that traffic's lanes: 2 heads over the lane centres on an avenue, 1 over the centre line on a street. Crosswalk lights (Vancouver style: walking person and hand in one spot) go on the poles at both ends of each crosswalk, on a short pole where a corner has no traffic light. Stop signs stand on the near right corner, just before the crosswalk (`CROSSWALK_LENGTH` is shared with `city.ts`). A stop sign's position is its pole; the plate hangs in front.
+- **Signals** (`game/signals.ts`): `signalPhase(tick, offset)` is a pure integer function: a 48 s cycle per junction (column road green with walking person then flashing hand, yellow, all red, then the same for the row road; the hand flashes 0.5 s on, 0.5 s off). `signalOffsets` gives each junction an offset: green waves along avenues at `WAVE_SPEED` (50 km/h) in a seeded direction with a seeded start (the column avenue wins where two cross), seeded random offsets elsewhere. Its generator is `blockSeed(seed, SIGNAL_SEED_INDEX)`, separate from the rest of the city.
+- **Signal rendering**: lamp and walk symbol vertices are built lit and tagged with `id = junction * 10 + road * 5 + lamp` (road 0 column, 1 row; lamps red, yellow, green, walking person, hand). Every frame `render/signalTexture.ts` uploads one RGBA8UI texel per junction (road lights and walk lights) and the scene vertex shader dims lamps that are off and clips the walk symbol that is off, so the mesh is never rebuilt. The tick itself never goes to the GPU (floats lose whole numbers past ~77 hours of ticks).
 - Zone tints on the pavements and wall piece tints (by kind) in `main.ts` are temporary, for seeing the zoning and the wall order.
 
 ### Known limits
 
 - Anything thinner than a cell (lines, thin poles) can vanish or flicker. Prefer filled surfaces over `gl.LINES`, and make thin real-world things chunky (hedges instead of wire fences, thick poles, big sign faces).
+- Flat details (markings, pixel letters, sign layers) sit 2 cm in front of their surface. With the 0.5 m near plane, depth precision is ~3 cm at 500 m, so they could fight beyond ~400 m, where they are smaller than a cell anyway.
 - Headless Chrome (SwiftShader) drops lines that cross behind the camera; real GPUs draw them. Only matters for headless screenshots.
 
 ## Roadmap
@@ -94,8 +106,8 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 5. Fly camera: move freely through the scene with the keyboard and look around with the mouse
 6. A city: street grid, zoning and an outer wall, as plain seeded data
 7. Buildings: placeholder boxes on every block, batched into one mesh, collisions with buildings
-8. Night lighting: dark by default, headlights, street lamps, lit windows and neon
-9. A drivable car: keyboard input, acceleration, steering, grip, drift, weight transfer
+8. Lighting: a dim moonlight base that shapes buildings, and things that glow (emission) instead of real lights
+9. A drivable car: keyboard input, acceleration, steering, grip, drift, weight transfer, headlights
 10. Building models: parametric styles and fixed prefabs in place of the boxes, with seeded spawning rules per zone, lot and neighbourhood
 11. Visual identity: per-material glyph sets, temporally stable glyphs (no flicker at speed), speed streaks
 12. Menu + game modes
@@ -109,10 +121,10 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 - The game client stays a static site (any static host works). Only multiplayer needs a server.
 - Generation is seeded (`math/random.ts`, Mulberry32), never `Math.random()`. A seed is the city's ID: same seed, same city for every player. Results depend on the order of `random()` calls, so from roadmap step 7 on each block gets its own generator from the city seed and the block index (zoning uses one city-wide generator); adding a random call in one place then doesn't reshuffle the rest of the city.
 - Open numbers (thresholds, sizes, counts) are named constants with a sensible default, tuned as we go; later exposed as dev menu sliders. Don't block on choosing them.
-- Judge the look in glyph mode (and grey levels for whether shapes read), from driving height (~1.2 m). Full resolution mode is only for debugging geometry. Glyph choice follows brightness only; hue just tints the glyph, so brightness separates shapes.
+- Judge the look in glyph mode (and grey levels for whether shapes read), from driving height (~1.2 m). Full resolution mode is only for debugging geometry. Glyph choice follows brightness only and the glyph takes the cell's true colour, so brightness separates shapes.
 - Detail smaller than ~1 m disappears beyond ~40 m (about 8 cells per metre at 20 m, 2 at 80 m). Buildings read by silhouette and height.
 - Shaders live in `.glsl` files and are imported with Vite's `?raw` suffix.
-- Only use comments neccesarily and professionally
+- Keep comments to a minimal neccesary use
 - Commit after each small working step.
 - One branch per roadmap step, merged into `main` with a pull request. Tick sub-steps in `README.md` as they are done.
 

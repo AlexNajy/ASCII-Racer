@@ -41,6 +41,8 @@ export interface CitySettings {
   seed: number;
   blockSize: number;
   roadWidth: number;
+  avenueWidth: number;
+  avenueDensity: number; // chance of an extra avenue one road over from a downtown avenue, 0 to 1
   blocksPerSide: number;
   // Chance of mid density at the downtown centre and at the downtown radius and beyond, 0 to 1.
   centreDensityChance: number;
@@ -56,12 +58,15 @@ export interface CitySettings {
   lowDensityEmptyChance: number; // per shop lot, 0 to 1
   lowDensityMergeChance: number; // per side and corner, 0 to 1
   lowDensityStripMallChance: number; // per block, 0 to 1
+  streetLightSpacing: number; // metres between lights along a lit road
 }
 
 export const DEFAULT_CITY_SETTINGS: CitySettings = {
   seed: 1,
   blockSize: 60,
   roadWidth: 12,
+  avenueWidth: 20,
+  avenueDensity: 0.4,
   blocksPerSide: 8,
   centreDensityChance: 0.9,
   edgeDensityChance: 0.1,
@@ -75,24 +80,51 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
   lowDensityEmptyChance: 0.125,
   lowDensityMergeChance: 0.2,
   lowDensityStripMallChance: 0.1,
+  streetLightSpacing: 25,
 };
+
+export type JunctionControl = 'none' | 'lights' | 'allWayStop' | 'twoWayStop';
+export type Leg = 'north' | 'east' | 'south' | 'west';
+
+// Where column road `column` (north-south) crosses row road `row` (east-west). Legs are the roads leading in.
+export interface Junction {
+  column: number;
+  row: number;
+  x: number;
+  z: number;
+  control: JunctionControl;
+  stops: Record<Leg, boolean>; // legs whose traffic has to stop
+  crosswalks: Record<Leg, boolean>;
+}
 
 export interface City {
   bounds: Rect; // the drivable area: blocks and roads, inside the wall
   blocks: Block[];
+  junctions: Junction[]; // row by row, (blocksPerSide + 1) per row
+  avenues: { columns: ReadonlySet<number>; rows: ReadonlySet<number> }; // road lines that are avenues
   markings: Rect[];
   wall: WallPiece[];
   wallPavement: Rect[]; // the strip between the outer road and the wall buildings
 }
 
-export const KERB_HEIGHT = 0.15; // pavements are raised this far above the road, and buildings stand on them
+export const CURB_HEIGHT = 0.15; // pavements are raised this far above the road, and buildings stand on them
 const MARKING_WIDTH = 0.4;
 const DASH_LENGTH = 3;
 const DASH_GAP = 3;
+// Zebra stripes across both ends of every road segment. Chunky so they still read as stripes from a distance.
+export const CROSSWALK_LENGTH = 3; // along the road
+const CROSSWALK_STRIPE = 1;
+const CROSSWALK_GAP = 1;
+const CROSSWALK_CLEARANCE = 1; // between a crosswalk and the lane markings
+// Corner blocks where many people walk. Street junctions with ALL_WAY_BUSY_CORNERS of them get an all-way stop.
+const BUSY_ZONES: readonly Zone[] = [Zone.MidDensity, Zone.HighRise, Zone.Plaza, Zone.Supermarket];
+const ALL_WAY_BUSY_CORNERS = 2;
 
 // Downtown radius as a fraction of the city width, and how far from the middle its centre may land.
 const DOWNTOWN_RADIUS = 0.8;
 const DOWNTOWN_OFFSET = 0.15;
+
+const AVENUE_FALLOFF = 0.25; // an extra avenue's chance drops by this per road line further from downtown
 
 // How many of the 4 side neighbours must share a block's zone for it to upgrade.
 const HIGH_RISE_NEIGHBOURS = 3;
@@ -124,6 +156,7 @@ const WALL_EXTRAS: Record<number, WallWidthKind[]> = {
   14: ['medium', 'wide', 'wide'],
 };
 const WALL_SETBACK = 3; // pavement between the outer road and the wall buildings, like the blocks' setback
+const WALL_DEPTH = 0.5; // fraction of the block size, from the outer road's edge, setback included
 
 // Turns one random block of the `from` zone into the `to` zone. Skipped if no such block exists.
 function placeSpecial(blocks: Block[], from: Zone, to: Zone, random: () => number): void {
@@ -145,25 +178,167 @@ function sideNeighbours(block: Block, blocksPerSide: number): number[] {
   return indices;
 }
 
-// Blocks on a square grid, centred on the origin. Everything inside the bounds that isn't a block is road.
+// The road line nearest the downtown point (in block units) along one axis. Never an outer road.
+// Road line `road` lies between blocks road - 1 and road.
+function avenueRoad(blocksPerSide: number, downtown: number): number {
+  return Math.min(Math.max(Math.round(downtown + 0.5), 1), blocksPerSide - 1);
+}
+
+// The downtown avenue, plus extra avenues with a chance that falls off further from it. Never an outer road.
+// Every road line rolls, so changing the density doesn't reshuffle the rolls.
+function pickAvenues(blocksPerSide: number, downtownAvenue: number, density: number, random: () => number): Set<number> {
+  const avenues = new Set([downtownAvenue]);
+  for (let road = 1; road < blocksPerSide; road++) {
+    const chance = density - AVENUE_FALLOFF * (Math.abs(road - downtownAvenue) - 1);
+    if (random() < chance && road !== downtownAvenue) avenues.add(road);
+  }
+  return avenues;
+}
+
+interface AxisRoads {
+  layout: AxisLayout;
+  avenues: Set<number>;
+  downtownAvenue: number;
+}
+
+// Control per junction, then per leg: does its traffic stop, and is there a crosswalk across it.
+// Lights on avenues; the ring drives through where streets meet it; busy street crossings are all-way stops;
+// at other street crossings the road nearer a downtown avenue drives through. Crosswalks only where traffic
+// stops, and only at lights or with a busy corner. Ring corners are bends: nothing stops.
+function generateJunctions(blocks: Block[], blocksPerSide: number, columns: AxisRoads, rows: AxisRoads): Junction[] {
+  const isRing = (road: number) => road === 0 || road === blocksPerSide;
+  const junctions: Junction[] = [];
+  for (let row = 0; row <= blocksPerSide; row++) {
+    for (let column = 0; column <= blocksPerSide; column++) {
+      let busyCorners = 0;
+      for (const c of [column - 1, column]) {
+        for (const r of [row - 1, row]) {
+          const inGrid = c >= 0 && c < blocksPerSide && r >= 0 && r < blocksPerSide;
+          if (inGrid && BUSY_ZONES.includes(blocks[r * blocksPerSide + c].zone)) busyCorners++;
+        }
+      }
+
+      // The road that keeps driving at a 2-way stop: the column road (north-south) or the row road (east-west).
+      let control: JunctionControl;
+      let through: 'column' | 'row' | undefined;
+      if (columns.avenues.has(column) || rows.avenues.has(row)) {
+        control = 'lights';
+      } else if (isRing(column) && isRing(row)) {
+        control = 'none';
+      } else if (isRing(column) || isRing(row)) {
+        control = 'twoWayStop';
+        through = isRing(column) ? 'column' : 'row';
+      } else if (busyCorners >= ALL_WAY_BUSY_CORNERS) {
+        control = 'allWayStop';
+      } else {
+        control = 'twoWayStop';
+        const columnDistance = Math.abs(column - columns.downtownAvenue);
+        const rowDistance = Math.abs(row - rows.downtownAvenue);
+        through = rowDistance < columnDistance ? 'row' : 'column';
+      }
+
+      const exists: Record<Leg, boolean> = {
+        north: row > 0,
+        east: column < blocksPerSide,
+        south: row < blocksPerSide,
+        west: column > 0,
+      };
+      const stops = {} as Record<Leg, boolean>;
+      const crosswalks = {} as Record<Leg, boolean>;
+      for (const leg of ['north', 'east', 'south', 'west'] as const) {
+        const onColumnRoad = leg === 'north' || leg === 'south';
+        const isThrough = through !== undefined && (through === 'column') === onColumnRoad;
+        stops[leg] = exists[leg] && control !== 'none' && !isThrough;
+        crosswalks[leg] = stops[leg] && (control === 'lights' || busyCorners > 0);
+      }
+      junctions.push({
+        column,
+        row,
+        x: columns.layout.roadCentres[column],
+        z: rows.layout.roadCentres[row],
+        control,
+        stops,
+        crosswalks,
+      });
+    }
+  }
+  return junctions;
+}
+
+// Positions along one axis, centred on the origin: roads and blocks take turns, starting and ending with a road.
+interface AxisLayout {
+  roadWidths: number[];
+  blockStarts: number[];
+  roadCentres: number[];
+  half: number;
+}
+
+function layoutAxis(roadWidths: number[], blockSize: number): AxisLayout {
+  const size = roadWidths.reduce((sum, width) => sum + width, 0) + (roadWidths.length - 1) * blockSize;
+  const blockStarts: number[] = [];
+  const roadCentres: number[] = [];
+  let at = -size / 2;
+  roadWidths.forEach((width, i) => {
+    roadCentres.push(at + width / 2);
+    at += width;
+    if (i < roadWidths.length - 1) {
+      blockStarts.push(at);
+      at += blockSize;
+    }
+  });
+  return { roadWidths, blockStarts, roadCentres, half: size / 2 };
+}
+
+// The same counts on every side of a length: equal sets of the three widths, a few extras, and the flex piece.
+// Needs a side of at least one set (84 m).
+function wallKinds(sideLength: number): { kinds: (WallWidthKind | 'flex')[]; flexWidth: number } {
+  let units = Math.floor(sideLength / WALL_UNIT);
+  if (sideLength - units * WALL_UNIT < FLEX_MIN_WIDTH) units -= 1;
+  const setUnits = (WALL_WIDTHS.narrow + WALL_WIDTHS.medium + WALL_WIDTHS.wide) / WALL_UNIT;
+  let sets = Math.floor(units / setUnits);
+  let rest = units - sets * setUnits;
+  if (rest === 1 || rest === 2) {
+    sets -= 1;
+    rest += setUnits;
+  }
+  return {
+    kinds: [
+      ...(['narrow', 'medium', 'wide'] as const).flatMap((kind) => Array<WallWidthKind>(sets).fill(kind)),
+      ...WALL_EXTRAS[rest],
+      'flex',
+    ],
+    flexWidth: sideLength - units * WALL_UNIT,
+  };
+}
+
+// Blocks on a grid, centred on the origin. Everything inside the bounds that isn't a block is road.
 export function generateCity(settings: CitySettings): City {
-  const { blockSize, roadWidth, blocksPerSide, centreDensityChance, edgeDensityChance } = settings;
+  const { blockSize, roadWidth, avenueWidth, avenueDensity, blocksPerSide, centreDensityChance, edgeDensityChance } = settings;
   const random = createRandom(settings.seed);
-  const spacing = blockSize + roadWidth;
-  // A road runs around the outside, so there is one more road than there are blocks.
-  const size = blocksPerSide * spacing + roadWidth;
-  const start = -size / 2 + roadWidth;
 
   // Downtown centre in block units, somewhere around the middle of the grid.
   const middle = (blocksPerSide - 1) / 2;
   const downtownColumn = middle + (random() * 2 - 1) * DOWNTOWN_OFFSET * blocksPerSide;
   const downtownRow = middle + (random() * 2 - 1) * DOWNTOWN_OFFSET * blocksPerSide;
 
+  // A road runs around the outside, so there is one more road line than there are blocks.
+  // Column roads run north-south (west of each column, plus the east edge), row roads east-west.
+  // Avenues get their own generator, seeded after the blocks and the 4 wall sides.
+  const avenueRandom = createRandom(blockSeed(settings.seed, blocksPerSide * blocksPerSide + 4));
+  const columnDowntownAvenue = avenueRoad(blocksPerSide, downtownColumn);
+  const rowDowntownAvenue = avenueRoad(blocksPerSide, downtownRow);
+  const columnAvenues = pickAvenues(blocksPerSide, columnDowntownAvenue, avenueDensity, avenueRandom);
+  const rowAvenues = pickAvenues(blocksPerSide, rowDowntownAvenue, avenueDensity, avenueRandom);
+  const roadWidths = (avenues: Set<number>) =>
+    Array.from({ length: blocksPerSide + 1 }, (_, road) => (avenues.has(road) ? avenueWidth : roadWidth));
+  const columns = layoutAxis(roadWidths(columnAvenues), blockSize);
+  const rows = layoutAxis(roadWidths(rowAvenues), blockSize);
+
   const blocks: Block[] = [];
   for (let row = 0; row < blocksPerSide; row++) {
     for (let column = 0; column < blocksPerSide; column++) {
-      const minX = start + column * spacing;
-      const minZ = start + row * spacing;
+      const minX = columns.blockStarts[column];
+      const minZ = rows.blockStarts[row];
       const distance = Math.hypot(column - downtownColumn, row - downtownRow) / blocksPerSide;
       const t = Math.min(distance / DOWNTOWN_RADIUS, 1);
       const midDensityChance = centreDensityChance + (edgeDensityChance - centreDensityChance) * t;
@@ -210,84 +385,131 @@ export function generateCity(settings: CitySettings): City {
   placeSpecial(blocks, Zone.LowDensity, Zone.Supermarket, random);
   placeSpecial(blocks, Zone.MidDensity, Zone.ParkingLot, random);
 
-  // Centre lines run along each road segment between two intersections, so dashes don't cross junctions.
+  // Markings run along each road segment between two intersections, so they don't cross junctions.
   const markings: Rect[] = [];
-  const dashCount = Math.floor((blockSize + DASH_GAP) / (DASH_LENGTH + DASH_GAP));
+  const laneMarkingLength = blockSize - 2 * (CROSSWALK_LENGTH + CROSSWALK_CLEARANCE);
+  const dashCount = Math.floor((laneMarkingLength + DASH_GAP) / (DASH_LENGTH + DASH_GAP));
   const dashesLength = dashCount * DASH_LENGTH + (dashCount - 1) * DASH_GAP;
   const dashStart = (blockSize - dashesLength) / 2;
-  for (let road = 0; road <= blocksPerSide; road++) {
-    const centre = start - roadWidth / 2 + road * spacing;
-    const across = { min: centre - MARKING_WIDTH / 2, max: centre + MARKING_WIDTH / 2 };
-    for (let segment = 0; segment < blocksPerSide; segment++) {
-      for (let dash = 0; dash < dashCount; dash++) {
-        const along = start + segment * spacing + dashStart + dash * (DASH_LENGTH + DASH_GAP);
-        markings.push({ minX: along, minZ: across.min, maxX: along + DASH_LENGTH, maxZ: across.max });
-        markings.push({ minX: across.min, minZ: along, maxX: across.max, maxZ: along + DASH_LENGTH });
-      }
-    }
-  }
+  const junctions = generateJunctions(
+    blocks,
+    blocksPerSide,
+    { layout: columns, avenues: columnAvenues, downtownAvenue: columnDowntownAvenue },
+    { layout: rows, avenues: rowAvenues, downtownAvenue: rowDowntownAvenue },
+  );
+  const junctionAt = (column: number, row: number) => junctions[row * (blocksPerSide + 1) + column];
 
-  // One block deep and unbroken, set back behind a pavement. Each side holds the same set of pieces
+  // Streets get a dashed centre line. Avenues get a solid centre line and a dashed divider in each half: 4 lanes.
+  // `segmentCrosswalks(road, segment)` says whether the segment's start and end get a crosswalk.
+  const addRoadMarkings = (
+    roads: AxisLayout,
+    segments: AxisLayout,
+    avenues: Set<number>,
+    runsAlong: 'x' | 'z',
+    segmentCrosswalks: (road: number, segment: number) => [boolean, boolean],
+  ) => {
+    const line = (centre: number, from: number, to: number, width = MARKING_WIDTH) =>
+      markings.push(
+        runsAlong === 'x'
+          ? { minX: from, minZ: centre - width / 2, maxX: to, maxZ: centre + width / 2 }
+          : { minX: centre - width / 2, minZ: from, maxX: centre + width / 2, maxZ: to },
+      );
+    const dashedLine = (centre: number, segmentStart: number) => {
+      for (let dash = 0; dash < dashCount; dash++) {
+        const along = segmentStart + dashStart + dash * (DASH_LENGTH + DASH_GAP);
+        line(centre, along, along + DASH_LENGTH);
+      }
+    };
+    // As many stripes as fit across the road, centred.
+    const crosswalk = (centre: number, roadWidth: number, from: number) => {
+      const count = Math.floor((roadWidth + CROSSWALK_GAP) / (CROSSWALK_STRIPE + CROSSWALK_GAP));
+      const first = centre - (count * (CROSSWALK_STRIPE + CROSSWALK_GAP) - CROSSWALK_GAP) / 2 + CROSSWALK_STRIPE / 2;
+      for (let stripe = 0; stripe < count; stripe++) {
+        line(first + stripe * (CROSSWALK_STRIPE + CROSSWALK_GAP), from, from + CROSSWALK_LENGTH, CROSSWALK_STRIPE);
+      }
+    };
+    roads.roadCentres.forEach((centre, road) => {
+      segments.blockStarts.forEach((segmentStart, segment) => {
+        const [atStart, atEnd] = segmentCrosswalks(road, segment);
+        if (atStart) crosswalk(centre, roads.roadWidths[road], segmentStart);
+        if (atEnd) crosswalk(centre, roads.roadWidths[road], segmentStart + blockSize - CROSSWALK_LENGTH);
+        if (!avenues.has(road)) {
+          dashedLine(centre, segmentStart);
+          return;
+        }
+        line(centre, segmentStart + dashStart, segmentStart + blockSize - dashStart);
+        dashedLine(centre - avenueWidth / 4, segmentStart);
+        dashedLine(centre + avenueWidth / 4, segmentStart);
+      });
+    });
+  };
+  // A segment runs from the junction with cross road `segment` to the one with `segment + 1`:
+  // it is the east (or south) leg of the first and the west (or north) leg of the second.
+  addRoadMarkings(rows, columns, rowAvenues, 'x', (row, segment) => [
+    junctionAt(segment, row).crosswalks.east,
+    junctionAt(segment + 1, row).crosswalks.west,
+  ]);
+  addRoadMarkings(columns, rows, columnAvenues, 'z', (column, segment) => [
+    junctionAt(column, segment).crosswalks.south,
+    junctionAt(column, segment + 1).crosswalks.north,
+  ]);
+
+  // Half a block deep (WALL_DEPTH) and unbroken, set back behind a pavement. Opposite sides hold the same set of pieces
   // in a shuffled order, so the total length still fits exactly between the corners.
-  const half = size / 2;
-  const inner = half + WALL_SETBACK;
-  const outer = half + blockSize;
+  const halfX = columns.half;
+  const halfZ = rows.half;
+  const innerX = halfX + WALL_SETBACK;
+  const innerZ = halfZ + WALL_SETBACK;
+  const wallDepth = blockSize * WALL_DEPTH;
+  const outerX = halfX + wallDepth;
+  const outerZ = halfZ + wallDepth;
+  const cornerSize = wallDepth - WALL_SETBACK;
   const wall: WallPiece[] = [
-    { minX: -outer, minZ: -outer },
-    { minX: inner, minZ: -outer },
-    { minX: -outer, minZ: inner },
-    { minX: inner, minZ: inner },
+    { minX: -outerX, minZ: -outerZ },
+    { minX: innerX, minZ: -outerZ },
+    { minX: -outerX, minZ: innerZ },
+    { minX: innerX, minZ: innerZ },
   ].map(({ minX, minZ }) => ({
-    rect: { minX, minZ, maxX: minX + outer - inner, maxZ: minZ + outer - inner },
+    rect: { minX, minZ, maxX: minX + cornerSize, maxZ: minZ + cornerSize },
     kind: 'corner',
   }));
 
   // North and south strips run the full length, so they cover the pavement's corners.
   const wallPavement: Rect[] = [
-    { minX: -inner, minZ: -inner, maxX: inner, maxZ: -half },
-    { minX: -inner, minZ: half, maxX: inner, maxZ: inner },
-    { minX: -inner, minZ: -half, maxX: -half, maxZ: half },
-    { minX: half, minZ: -half, maxX: inner, maxZ: half },
+    { minX: -innerX, minZ: -innerZ, maxX: innerX, maxZ: -halfZ },
+    { minX: -innerX, minZ: halfZ, maxX: innerX, maxZ: innerZ },
+    { minX: -innerX, minZ: -halfZ, maxX: -halfX, maxZ: halfZ },
+    { minX: halfX, minZ: -halfZ, maxX: innerX, maxZ: halfZ },
   ];
 
-  // Turns a stretch [from, to] along a side into that side's rectangle.
-  const sides: ((from: number, to: number) => Rect)[] = [
-    (from, to) => ({ minX: from, minZ: -outer, maxX: to, maxZ: -inner }),
-    (from, to) => ({ minX: from, minZ: inner, maxX: to, maxZ: outer }),
-    (from, to) => ({ minX: -outer, minZ: from, maxX: -inner, maxZ: to }),
-    (from, to) => ({ minX: inner, minZ: from, maxX: outer, maxZ: to }),
-  ];
-  // The same counts on every side: equal sets of the three widths, a few extras, and the flex piece.
-  // Needs a side of at least one set (84 m).
-  const sideLength = 2 * inner;
-  let units = Math.floor(sideLength / WALL_UNIT);
-  if (sideLength - units * WALL_UNIT < FLEX_MIN_WIDTH) units -= 1;
-  const flexWidth = sideLength - units * WALL_UNIT;
-  const setUnits = (WALL_WIDTHS.narrow + WALL_WIDTHS.medium + WALL_WIDTHS.wide) / WALL_UNIT;
-  let sets = Math.floor(units / setUnits);
-  let rest = units - sets * setUnits;
-  if (rest === 1 || rest === 2) {
-    sets -= 1;
-    rest += setUnits;
-  }
-  const sideKinds: (WallWidthKind | 'flex')[] = [
-    ...(['narrow', 'medium', 'wide'] as const).flatMap((kind) => Array<WallWidthKind>(sets).fill(kind)),
-    ...WALL_EXTRAS[rest],
-    'flex',
+  // Each side turns a stretch [from, to] along it into its rectangle. North and south run along x.
+  const sides: { inner: number; rect: (from: number, to: number) => Rect }[] = [
+    { inner: innerX, rect: (from, to) => ({ minX: from, minZ: -outerZ, maxX: to, maxZ: -innerZ }) },
+    { inner: innerX, rect: (from, to) => ({ minX: from, minZ: innerZ, maxX: to, maxZ: outerZ }) },
+    { inner: innerZ, rect: (from, to) => ({ minX: -outerX, minZ: from, maxX: -innerX, maxZ: to }) },
+    { inner: innerZ, rect: (from, to) => ({ minX: innerX, minZ: from, maxX: outerX, maxZ: to }) },
   ];
 
   sides.forEach((side, sideIndex) => {
     // Seeds after the block indices, so a side never shares a sequence with a block.
     const sideRandom = createRandom(blockSeed(settings.seed, blocksPerSide * blocksPerSide + sideIndex));
-    const kinds = [...sideKinds];
+    const { kinds, flexWidth } = wallKinds(2 * side.inner);
     shuffle(kinds, sideRandom);
-    let along = -inner;
+    let along = -side.inner;
     for (const kind of kinds) {
       const width = kind === 'flex' ? flexWidth : WALL_WIDTHS[kind];
-      wall.push({ rect: side(along, along + width), kind });
+      wall.push({ rect: side.rect(along, along + width), kind });
       along += width;
     }
   });
 
-  return { bounds: { minX: -half, minZ: -half, maxX: half, maxZ: half }, blocks, markings, wall, wallPavement };
+  return {
+    bounds: { minX: -halfX, minZ: -halfZ, maxX: halfX, maxZ: halfZ },
+    blocks,
+    junctions,
+    avenues: { columns: columnAvenues, rows: rowAvenues },
+    markings,
+    wall,
+    wallPavement,
+  };
 }

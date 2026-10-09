@@ -5,6 +5,10 @@ export const RenderMode = {
   Brightness: 1,
   Scene: 2,
   FullResolution: 3,
+  Normals: 4,
+  NormalTexture: 5,
+  CrtScene: 6,
+  CrtGlyphs: 7,
 } as const;
 export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 
@@ -15,9 +19,11 @@ export interface DevSettings {
   fogStart: number; // fog begins here
   renderMode: RenderMode;
   noclip: boolean; 
+  ambient: number; // light every surface gets, from 0 (black) to 1
+  lightIntensity: number; // strength of the directional light
 }
 
-type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance' | 'fogStart';
+type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance' | 'fogStart' | 'ambient' | 'lightIntensity';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -95,8 +101,15 @@ export function createDevMenu(
     parent.append(row);
   }
 
-  function settingSlider(label: string, key: NumberSetting, min: number, max: number, step: number) {
-    slider(viewPage, label, settings[key], min, max, step, (value) => {
+  function settingSlider(
+    parent: HTMLElement,
+    label: string,
+    key: NumberSetting,
+    min: number,
+    max: number,
+    step: number,
+  ) {
+    slider(parent, label, settings[key], min, max, step, (value) => {
       settings[key] = value;
       onChange(key);
     });
@@ -119,11 +132,14 @@ export function createDevMenu(
   const viewPage = page('View');
   const cityPage = page('City');
   const buildingsPage = page('Buildings');
+  const lightingPage = page('Lighting');
 
-  settingSlider('FOV', 'fovDegrees', 30, 120, 1);
-  settingSlider('Cell width', 'cellWidth', 4, 16, 1);
-  settingSlider('View distance', 'viewDistance', 5, 1000, 1);
-  settingSlider('Fog start', 'fogStart', 0, 1000, 1);
+  settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
+  settingSlider(viewPage, 'Cell width', 'cellWidth', 4, 16, 1);
+  settingSlider(viewPage, 'View distance', 'viewDistance', 5, 1000, 1);
+  settingSlider(viewPage, 'Fog start', 'fogStart', 0, 1000, 1);
+  settingSlider(lightingPage, 'Ambient', 'ambient', 0, 1, 0.01);
+  settingSlider(lightingPage, 'Directional light', 'lightIntensity', 0, 1, 0.01);
 
   const modeRow = document.createElement('label');
   const modeText = document.createElement('span');
@@ -165,6 +181,8 @@ export function createDevMenu(
   citySlider(cityPage, 'Blocks per side', 'blocksPerSide', 3, 14, 1);
   citySlider(cityPage, 'Block size (m)', 'blockSize', 40, 100, 1);
   citySlider(cityPage, 'Road width (m)', 'roadWidth', 8, 20, 1);
+  citySlider(cityPage, 'Avenue width (m)', 'avenueWidth', 8, 40, 1);
+  citySlider(cityPage, 'Avenue density', 'avenueDensity', 0, 1, 0.05);
   citySlider(cityPage, 'Centre density', 'centreDensityChance', 0, 1, 0.05);
   citySlider(cityPage, 'Edge density', 'edgeDensityChance', 0, 1, 0.05);
   citySlider(buildingsPage, 'Wall height ×', 'wallHeight', 0.1, 3, 0.1);
@@ -177,6 +195,7 @@ export function createDevMenu(
   citySlider(buildingsPage, 'Low empty lot chance', 'lowDensityEmptyChance', 0, 1, 0.025);
   citySlider(buildingsPage, 'Low merge chance', 'lowDensityMergeChance', 0, 1, 0.025);
   citySlider(buildingsPage, 'Low strip mall chance', 'lowDensityStripMallChance', 0, 1, 0.025);
+  citySlider(lightingPage, 'Street light spacing (m)', 'streetLightSpacing', 10, 60, 1);
 
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'Backquote') return;
