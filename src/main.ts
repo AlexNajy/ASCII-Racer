@@ -14,9 +14,9 @@ import { multiply, normalize, perspective, rotationY, translation, type Mat4, ty
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
-import { streetLightVertices } from './render/models/streets/streetLight.ts';
-import { stopSignVertices } from './render/models/streets/stopSign.ts';
-import { trafficLightVertices } from './render/models/streets/trafficLight.ts';
+import { streetLightVertices } from './render/models/street/streetLight.ts';
+import { stopSignVertices } from './render/models/street/stopSign.ts';
+import { trafficLightVertices } from './render/models/street/trafficLight.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
