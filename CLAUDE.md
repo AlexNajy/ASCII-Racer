@@ -42,7 +42,7 @@ src/
 ### How it works today
 
 - `main.ts` holds setup and the frame loop: pass 1 draws into the `scene` render target, pass 2 draws the full-screen triangle with `ascii.frag.glsl`.
-- The scene shaders are still named `triangle.vert.glsl` / `triangle.frag.glsl`. Each vertex is `x, y, z, r, g, b, nx, ny, nz, emission` (`render/shapes.ts`: `box()` for axis-aligned boxes, `beam()` for bars at any angle). Matrices and fog are uniforms.
+- The scene shaders are still named `triangle.vert.glsl` / `triangle.frag.glsl`. Each vertex is `x, y, z, r, g, b, nx, ny, nz, emission, id` (`render/shapes.ts`: `box()` for axis-aligned boxes, `beam()` for bars at any angle). Matrices and fog are uniforms.
 - Lighting is a dim ambient plus one directional "moonlight" on the per-vertex normals, so faces at different angles read as different brightnesses. Things that glow (bulbs, later windows and neon) use emission: at 1 the colour shows at full strength whatever the lighting. Glowing things don't light anything around them; per-light lighting for every lamp and window looked bad and doesn't scale. Only headlights (step 9) will be real lights.
 - The ASCII pass draws each glyph in the cell's true colour, so dark surfaces get both sparser and darker glyphs.
 - The scene pass clears with alpha 0 and objects write alpha 1, so the ASCII pass can tell empty cells (drawn as solid background, no glyph) from objects. Material IDs for per-material glyph sets will use this channel later.

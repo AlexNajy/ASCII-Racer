@@ -6,6 +6,7 @@ import { generateBuildings, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { pushOutOfBuildings } from './game/collision.ts';
 import { generateIntersections, type Intersections } from './game/intersections.ts';
+import { signalOffsets, signalPhase } from './game/signals.ts';
 import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
 import { trackKeyboard, trackMouse } from './game/input.ts';
 import { createRenderTarget, resizeRenderTarget } from './gl/framebuffer.ts';
@@ -13,6 +14,7 @@ import { createProgram } from './gl/shader.ts';
 import { multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
+import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
 import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
@@ -40,6 +42,8 @@ const positionLocation = gl.getAttribLocation(program, 'a_position');
 const colorLocation = gl.getAttribLocation(program, 'a_color');
 const normalLocation = gl.getAttribLocation(program, 'a_normal');
 const emissionLocation = gl.getAttribLocation(program, 'a_emission');
+const idLocation = gl.getAttribLocation(program, 'a_id');
+const signalsTextureLocation = gl.getUniformLocation(program, 'u_signals');
 
 interface Mesh {
   vao: WebGLVertexArrayObject;
@@ -64,6 +68,8 @@ function uploadMesh(vertices: number[]): Mesh {
   gl!.vertexAttribPointer(normalLocation, 3, gl!.FLOAT, false, stride, 6 * 4);
   gl!.enableVertexAttribArray(emissionLocation);
   gl!.vertexAttribPointer(emissionLocation, 1, gl!.FLOAT, false, stride, 9 * 4);
+  gl!.enableVertexAttribArray(idLocation);
+  gl!.vertexAttribPointer(idLocation, 1, gl!.FLOAT, false, stride, 10 * 4);
 
   gl!.bindVertexArray(null);
   return { vao, buffer, vertexCount: vertices.length / FLOATS_PER_VERTEX };
@@ -75,9 +81,9 @@ function deleteMesh(mesh: Mesh) {
 }
 
 const triangle = uploadMesh([
-   0.0,  0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0,
-  -0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0,
-   0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0,
+   0.0,  0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0,
+  -0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0,
+   0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0,
 ]);
 
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
@@ -136,6 +142,8 @@ let city = generateCity(citySettings);
 let buildings = generateBuildings(city, citySettings);
 let streetLights = generateStreetLights(city, citySettings);
 let intersections = generateIntersections(city, citySettings);
+let offsets = signalOffsets(city, citySettings.seed);
+let signals = createSignalTexture(gl, city.junctions.length);
 let cityMeshes = buildCityMeshes(city, buildings, streetLights, intersections);
 
 // The data is kept, not just the meshes, so the game can collide with it.
@@ -144,6 +152,9 @@ function regenerateCity() {
   buildings = generateBuildings(city, citySettings);
   streetLights = generateStreetLights(city, citySettings);
   intersections = generateIntersections(city, citySettings);
+  offsets = signalOffsets(city, citySettings.seed);
+  gl!.deleteTexture(signals.texture);
+  signals = createSignalTexture(gl!, city.junctions.length);
   cityMeshes.forEach(deleteMesh);
   cityMeshes = buildCityMeshes(city, buildings, streetLights, intersections);
 }
@@ -279,6 +290,9 @@ function frame(timeMs: number) {
   const aspect = canvas.width / canvas.height;
   const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
+  gl!.activeTexture(gl!.TEXTURE3);
+  updateSignalTexture(gl!, signals, offsets.map((offset) => signalPhase(clock.tick, offset)));
+  gl!.uniform1i(signalsTextureLocation, 3);
   const view = viewMatrix(camera);
 
   for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);

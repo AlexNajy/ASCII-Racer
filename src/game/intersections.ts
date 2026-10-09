@@ -2,6 +2,7 @@ import { CROSSWALK_LENGTH, type City, type CitySettings, type Junction, type Leg
 
 // A traffic light pole on a junction corner. With no heads it is a short pole for crosswalk lights only.
 export interface TrafficLight {
+  junction: number; // index in city.junctions, for its signal phase
   x: number;
   z: number;
   armX: number; // the direction the arm reaches out over the road
@@ -47,6 +48,7 @@ function rightOf([dx, dz]: [number, number]): [number, number] {
 // of each crosswalk, adding a short pole where a corner has no traffic light (T-junctions at the ring).
 function junctionControls(
   junction: Junction,
+  index: number,
   columnAvenue: boolean,
   rowAvenue: boolean,
   settings: CitySettings,
@@ -79,7 +81,7 @@ function junctionControls(
     const key = `${sx},${sz}`;
     let pole = poles.get(key);
     if (!pole) {
-      pole = { ...corner(sx, sz), armX: 0, armZ: 0, facingX: 0, facingZ: 0, heads: [], walkSignals: [] };
+      pole = { junction: index, ...corner(sx, sz), armX: 0, armZ: 0, facingX: 0, facingZ: 0, heads: [], walkSignals: [] };
       poles.set(key, pole);
     }
     return pole;
@@ -118,9 +120,9 @@ function junctionControls(
 
 export function generateIntersections(city: City, settings: CitySettings): Intersections {
   const result: Intersections = { trafficLights: [], stopSigns: [] };
-  for (const junction of city.junctions) {
+  city.junctions.forEach((junction, index) => {
     const { columns, rows } = city.avenues;
-    junctionControls(junction, columns.has(junction.column), rows.has(junction.row), settings, result);
-  }
+    junctionControls(junction, index, columns.has(junction.column), rows.has(junction.row), settings, result);
+  });
   return result;
 }

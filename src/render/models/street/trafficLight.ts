@@ -1,9 +1,18 @@
 import { CURB_HEIGHT } from '../../../game/city.ts';
 import type { TrafficLight } from '../../../game/intersections.ts';
 import type { Vec3 } from '../../../math/mat4.ts';
-import { beam, box, disc, facingBox, pixelArt } from '../../shapes.ts';
+import { beam, box, disc, facingBox, pixelArt, withId } from '../../shapes.ts';
 
-type Signal = 'red' | 'yellow' | 'green';
+// Signal IDs, read by the scene vertex shader: junction * 10 + road * 5 + lamp. Road 0 is the column road
+// (north-south), 1 the row road. Lamps 0-2 are red, yellow, green for that road's traffic; 3 and 4 the walking
+// person and the hand for people walking alongside it. The shader keeps the same numbers.
+const RED = 0;
+const WALKER_LAMP = 3;
+const HAND_LAMP = 4;
+
+function signalId(junction: number, alongZ: boolean, lamp: number): number {
+  return junction * 10 + (alongZ ? 0 : 1) * 5 + lamp;
+}
 
 const POLE_WIDTH = 0.4;
 const POLE_HEIGHT = 6;
@@ -18,14 +27,13 @@ const LAMP_RADIUS = 0.22;
 const LAMP_SPACING = 0.55;
 const LAMP_DEPTH = 0.06; // how far a lamp sticks out of the shell
 const LAMP_SIDES = 12;
-const UNLIT = 0.2; // brightness of the lamps that are off
 const POLE_COLOR: Vec3 = [0.35, 0.35, 0.35];
 const SHELL_COLOR: Vec3 = [0.85, 0.65, 0.1];
-// Top to bottom.
-const LAMPS: [Signal, Vec3][] = [
-  ['red', [1, 0.1, 0.05]],
-  ['yellow', [1, 0.75, 0.1]],
-  ['green', [0.1, 1, 0.4]],
+// Top to bottom: red, yellow, green. Built lit; the shader dims the ones that are off.
+const LAMP_COLORS: Vec3[] = [
+  [1, 0.1, 0.05],
+  [1, 0.75, 0.1],
+  [0.1, 1, 0.4],
 ];
 
 // Crosswalk light, Vancouver style: one box clamped to the pole, with the walking person and the hand
@@ -43,38 +51,29 @@ const WALKER_COLOR: Vec3 = [0.95, 0.95, 0.9];
 const WALKER = ['...##..', '...##..', '..###..', '.#.###.', '#..##.#', '...##..', '..#.#..', '.#...#.', '#.....#'];
 const HAND = ['..#.#.#', '..#.#.#', '#.#.#.#', '#.#####', '#######', '.######', '..#####', '..####.', '..####.'];
 
-function dim(color: Vec3): Vec3 {
-  return [color[0] * UNLIT, color[1] * UNLIT, color[2] * UNLIT];
-}
-
 export function trafficLightVertices(light: TrafficLight): number[] {
-  const { x, z, armX, armZ, facingX, facingZ, heads, walkSignals } = light;
-  // Temporary, until signals change over time: the column road (north-south) has green, so people may walk
-  // across the row road, along it. Lamps facing ±z face column road traffic; walk lights facing ±z stand at
-  // the ends of a crosswalk over the row road.
-  const signal: Signal = facingZ !== 0 ? 'green' : 'red';
+  const { junction, x, z, armX, armZ, facingX, facingZ, heads, walkSignals } = light;
   const pole = POLE_WIDTH / 2;
   const walkY = CURB_HEIGHT + WALK_HEIGHT;
   const top = CURB_HEIGHT + (heads.length > 0 ? POLE_HEIGHT : WALK_POLE_HEIGHT);
   const vertices = box([x - pole, CURB_HEIGHT, z - pole], [x + pole, top, z + pole], POLE_COLOR);
+  // Lamps facing ±z face traffic on the column road. Walk lights facing ±z stand at the ends of a crosswalk
+  // over the row road, so the people using them walk alongside the column road.
   for (const { facingX: walkX, facingZ: walkZ } of walkSignals) {
-    const walk = walkZ !== 0;
     const direction: Vec3 = [walkX, 0, walkZ];
     const out = (distance: number): Vec3 => [x + walkX * distance, walkY, z + walkZ * distance];
     const front = pole + WALK_DEPTH;
     vertices.push(
       ...facingBox(out(pole + WALK_DEPTH / 2), direction, WALK_SIZE, WALK_SIZE, WALK_DEPTH, WALK_BOX_COLOR),
       ...facingBox(out(front + WALK_PANEL_DEPTH / 2), direction, WALK_PANEL, WALK_PANEL, WALK_PANEL_DEPTH, WALK_PANEL_COLOR),
-      ...pixelArt(
-        walk ? WALKER : HAND,
-        out(front + WALK_PANEL_DEPTH),
-        direction,
-        WALK_PIXEL,
-        WALK_PANEL_DEPTH,
-        walk ? WALKER_COLOR : HAND_COLOR,
-        1,
-      ),
     );
+    // Both symbols in the same spot; the shader hides the one that is off.
+    const symbol = (rows: string[], color: Vec3, lamp: number) =>
+      withId(
+        pixelArt(rows, out(front + WALK_PANEL_DEPTH), direction, WALK_PIXEL, WALK_PANEL_DEPTH, color, 1),
+        signalId(junction, walkZ !== 0, lamp),
+      );
+    vertices.push(...symbol(WALKER, WALKER_COLOR, WALKER_LAMP), ...symbol(HAND, HAND_COLOR, HAND_LAMP));
   }
   if (heads.length === 0) return vertices;
 
@@ -98,12 +97,10 @@ export function trafficLightVertices(light: TrafficLight): number[] {
     vertices.push(...facingBox([centreX, centreY, centreZ], facing, HEAD_WIDTH, HEAD_HEIGHT, HEAD_DEPTH, SHELL_COLOR));
     const frontX = centreX + (facingX * HEAD_DEPTH) / 2;
     const frontZ = centreZ + (facingZ * HEAD_DEPTH) / 2;
-    LAMPS.forEach(([lamp, color], i) => {
-      const lit = lamp === signal;
+    LAMP_COLORS.forEach((color, i) => {
       const lampY = centreY + (1 - i) * LAMP_SPACING;
-      vertices.push(
-        ...disc([frontX, lampY, frontZ], facing, LAMP_RADIUS, 2 * LAMP_DEPTH, LAMP_SIDES, lit ? color : dim(color), lit ? 1 : 0),
-      );
+      const lamp = disc([frontX, lampY, frontZ], facing, LAMP_RADIUS, 2 * LAMP_DEPTH, LAMP_SIDES, color, 1);
+      vertices.push(...withId(lamp, signalId(junction, facingZ !== 0, RED + i)));
     });
   }
 

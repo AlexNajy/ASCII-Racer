@@ -1,8 +1,17 @@
 import type { Vec3 } from '../math/mat4.ts';
 
-// Vertex layout: x, y, z, r, g, b, nx, ny, nz, emission.
+// Vertex layout: x, y, z, r, g, b, nx, ny, nz, emission, id.
 // Emission 1 shows the colour at full strength whatever the lighting, for things that glow.
-export const FLOATS_PER_VERTEX = 10;
+// Id says what a vertex belongs to, for things the shader treats specially: for now only traffic signal lamps
+// (0 and up), later material IDs. NO_ID for everything else.
+export const FLOATS_PER_VERTEX = 11;
+export const NO_ID = -1;
+
+// Marks every vertex with the given id.
+export function withId(vertices: number[], id: number): number[] {
+  for (let i = FLOATS_PER_VERTEX - 1; i < vertices.length; i += FLOATS_PER_VERTEX) vertices[i] = id;
+  return vertices;
+}
 
 export function box(min: Vec3, max: Vec3, color: Vec3, emission = 0): number[] {
   const [x0, y0, z0] = min;
@@ -17,7 +26,7 @@ export function box(min: Vec3, max: Vec3, color: Vec3, emission = 0): number[] {
   ];
   const vertices: number[] = [];
   for (const [a, b, c, d, normal] of faces) {
-    for (const corner of [a, b, c, a, c, d]) vertices.push(...corner, ...color, ...normal, emission);
+    for (const corner of [a, b, c, a, c, d]) vertices.push(...corner, ...color, ...normal, emission, NO_ID);
   }
   return vertices;
 }
@@ -39,14 +48,15 @@ export function facingBox(
   return box([x - halfX, y - height / 2, z - halfZ], [x + halfX, y + height / 2, z + halfZ], color, emission);
 }
 
-// Pixel art from rows of '#' (top to bottom), standing out of a flat face by `depth`, centred on `centre`.
-// `facing` is the face's direction (±x or ±z). One box per run of '#' in a row.
+// Pixel art from rows of '#' (top to bottom), centred on `centre` on a flat face and floating `offset` in front
+// of it, so it never fights the face for depth. `facing` is the face's direction (±x or ±z).
+// One flat rectangle per run of '#' in a row: only the front is ever seen, so no box sides.
 export function pixelArt(
   rows: string[],
   centre: Vec3,
   facing: Vec3,
   pixel: number,
-  depth: number,
+  offset: number,
   color: Vec3,
   emission = 0,
 ): number[] {
@@ -63,11 +73,12 @@ export function pixelArt(
   const vertices: number[] = [];
   rows.forEach((row, r) => {
     for (const run of row.matchAll(/#+/g)) {
-      const a = position(left + run.index * pixel, top - (r + 1) * pixel, 0);
-      const b = position(left + (run.index + run[0].length) * pixel, top - r * pixel, depth);
-      const min: Vec3 = [Math.min(a[0], b[0]), a[1], Math.min(a[2], b[2])];
-      const max: Vec3 = [Math.max(a[0], b[0]), b[1], Math.max(a[2], b[2])];
-      vertices.push(...box(min, max, color, emission));
+      const u0 = left + run.index * pixel;
+      const u1 = u0 + run[0].length * pixel;
+      const v0 = top - (r + 1) * pixel;
+      const v1 = top - r * pixel;
+      const corners = [position(u0, v0, offset), position(u1, v0, offset), position(u1, v1, offset), position(u0, v1, offset)];
+      for (const i of [0, 1, 2, 0, 2, 3]) vertices.push(...corners[i], ...color, ...facing, emission, NO_ID);
     }
   });
   return vertices;
@@ -108,7 +119,7 @@ export function disc(
     along(centre, [right, Math.cos(angle(corner)) * radius], [up, Math.sin(angle(corner)) * radius], [facing, offset]);
   const vertices: number[] = [];
   const triangle = (a: Vec3, b: Vec3, c: Vec3, normal: Vec3) => {
-    for (const point of [a, b, c]) vertices.push(...point, ...color, ...normal, emission);
+    for (const point of [a, b, c]) vertices.push(...point, ...color, ...normal, emission, NO_ID);
   };
   for (let corner = 0; corner < sides; corner++) {
     triangle(along(centre, [facing, half]), rim(corner, half), rim(corner + 1, half), facing);
@@ -141,7 +152,7 @@ export function beam(from: Vec3, to: Vec3, thickness: number, color: Vec3, emiss
   ];
   const vertices: number[] = [];
   for (const [a, b, c, d, normal] of faces) {
-    for (const point of [a, b, c, a, c, d]) vertices.push(...point, ...color, ...normal, emission);
+    for (const point of [a, b, c, a, c, d]) vertices.push(...point, ...color, ...normal, emission, NO_ID);
   }
   return vertices;
 }
