@@ -3,6 +3,7 @@ import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/men
 import { advanceClock, createClock } from './game/clock.ts';
 import { createCar, stepCar } from './game/car.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
+import { updateChaseCamera } from './game/chaseCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { cityColliders, pushOutOfColliders } from './game/collision.ts';
@@ -18,7 +19,7 @@ import {
   type ColorTarget,
 } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
-import { multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
+import { identity, multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
@@ -26,6 +27,7 @@ import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
+import { carVertices } from './render/models/car.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
@@ -38,6 +40,7 @@ if (!gl) throw new Error('WebGL2 not supported');
 
 const program = createProgram(gl, vertexSource, fragmentSource);
 const modelViewLocation = gl.getUniformLocation(program, 'u_modelView');
+const normalMatrixLocation = gl.getUniformLocation(program, 'u_normalMatrix');
 const projectionLocation = gl.getUniformLocation(program, 'u_projection');
 const fogColorLocation = gl.getUniformLocation(program, 'u_fogColor');
 const fogStartLocation = gl.getUniformLocation(program, 'u_fogStart');
@@ -88,11 +91,7 @@ function deleteMesh(mesh: Mesh) {
   gl!.deleteVertexArray(mesh.vao);
 }
 
-const triangle = uploadMesh([
-   0.0,  0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0,
-  -0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0,
-   0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0,
-]);
+const carMesh = uploadMesh(carVertices());
 
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
   return box([rect.minX, bottom, rect.minZ], [rect.maxX, top, rect.maxZ], color);
@@ -270,8 +269,12 @@ const CAMERA_RADIUS = 0.5;
 // A fixed light high up, from +x and +z, until the night lights replace it.
 const LIGHT_DIRECTION = normalize([0.5, 1, 0.3]);
 
-function draw(mesh: Mesh, mode: GLenum, modelView: Mat4) {
-  gl!.uniformMatrix4fv(modelViewLocation, false, modelView);
+// `model` places the mesh in the world; city meshes are built in world position and skip it.
+function draw(mesh: Mesh, mode: GLenum, view: Mat4, model?: Mat4) {
+  gl!.uniformMatrix4fv(modelViewLocation, false, model ? multiply(view, model) : view);
+  // The model's rotation is its top-left 3×3; it has no scaling, so normals can use it as is.
+  const m = model ?? identity();
+  gl!.uniformMatrix3fv(normalMatrixLocation, false, [m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]]);
   gl!.bindVertexArray(mesh.vao);
   gl!.drawArrays(mode, 0, mesh.vertexCount);
 }
@@ -289,14 +292,17 @@ let previousTimeMs = 0;
 
 function frame(timeMs: number) {
   requestAnimationFrame(frame);
-  const t = timeMs / 1000;
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
   advanceClock(clock, dt, () => {
     stepCar(car);
   });
-  if (settings.movement === Movement.FlyCamera) updateFlyCamera(camera, dt);
-  if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, colliders);
+  if (settings.movement === Movement.FlyCamera) {
+    updateFlyCamera(camera, dt);
+    if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, colliders);
+  } else {
+    updateChaseCamera(camera, car);
+  }
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(
@@ -335,7 +341,7 @@ function frame(timeMs: number) {
   const view = viewMatrix(camera);
 
   for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
-  draw(triangle, gl!.TRIANGLES, multiply(view, multiply(translation(0, 0.5, 0), rotationY(t))));
+  draw(carMesh, gl!.TRIANGLES, view, multiply(translation(car.x, 0, car.z), rotationY(car.heading)));
   if (fullResolution) return;
 
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, crtImage ? crtImage.framebuffer : null);
