@@ -124,7 +124,7 @@ function buildCityMeshes(
   streetLights: StreetLight[],
   { trafficLights, stopSigns }: Intersections,
 ): Mesh[] {
-  const road = uploadMesh(slab(city.bounds, -0.1, 0, [0.25, 0.25, 0.25]));
+  const road = uploadMesh(slab(city.bounds, -0.1, 0, [0.2, 0.2, 0.2]));
   // Raised slightly so the paint doesn't fight the road surface for depth.
   const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02, [1, 1, 1])));
   const pavements = uploadMesh(city.blocks.flatMap(({ rect, zone }) => slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone])));
@@ -176,6 +176,7 @@ const glyphsLocation = gl.getUniformLocation(asciiProgram, 'u_glyphs');
 const rampLengthLocation = gl.getUniformLocation(asciiProgram, 'u_rampLength');
 const backgroundLocation = gl.getUniformLocation(asciiProgram, 'u_background');
 const renderModeLocation = gl.getUniformLocation(asciiProgram, 'u_renderMode');
+const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
 const fullscreenVao = gl.createVertexArray();
 const crtProgram = createProgram(gl, fullscreenVertexSource, crtFragmentSource);
 const crtImageLocation = gl.getUniformLocation(crtProgram, 'u_image');
@@ -203,6 +204,7 @@ const settings: DevSettings = {
   noclip: false,
   ambient: 0.3,
   lightIntensity: 0.8,
+  glyphShade: 0.5,
 };
 
 const dpr = window.devicePixelRatio || 1;
@@ -347,6 +349,7 @@ function frame(timeMs: number) {
   gl!.uniform1i(normalTextureLocation, 2);
   gl!.uniform1i(rampLengthLocation, [...GLYPH_RAMPS[0]].length);
   gl!.uniform3fv(backgroundLocation, background);
+  gl!.uniform1f(glyphShadeLocation, settings.glyphShade);
   gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);

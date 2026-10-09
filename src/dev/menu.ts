@@ -21,9 +21,10 @@ export interface DevSettings {
   noclip: boolean; 
   ambient: number; // light every surface gets, from 0 (black) to 1
   lightIntensity: number; // strength of the directional light
+  glyphShade: number; // how much of the cell's shade goes into the glyph colour, 0 to 1
 }
 
-type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance' | 'fogStart' | 'ambient' | 'lightIntensity';
+type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance' | 'fogStart' | 'ambient' | 'lightIntensity' | 'glyphShade';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -141,6 +142,7 @@ export function createDevMenu(
   settingSlider(viewPage, 'Fog start', 'fogStart', 0, 1000, 1);
   settingSlider(lightingPage, 'Ambient', 'ambient', 0, 1, 0.01);
   settingSlider(lightingPage, 'Directional light', 'lightIntensity', 0, 1, 0.01);
+  settingSlider(lightingPage, 'Glyph shade', 'glyphShade', 0, 1, 0.01);
 
   const modeRow = document.createElement('label');
   const modeText = document.createElement('span');
