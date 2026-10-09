@@ -25,11 +25,12 @@ const BEND_RISE = 0.8;
 const HEAD_WIDTH = 0.6;
 const HEAD_HEIGHT = 1.7;
 const HEAD_DEPTH = 0.45;
+const HEAD_ABOVE_ARM = 0.25; // share of the head's height that sticks up over the arm
 const LAMP_RADIUS = 0.22;
 const LAMP_SPACING = 0.55;
 const LAMP_DEPTH = 0.06; // how far a lamp sticks out of the shell
 const LAMP_SIDES = 12;
-const POLE_COLOR: Vec3 = [0.35, 0.35, 0.35];
+const POLE_COLOR: Vec3 = [0.6, 0.62, 0.64];
 const SHELL_COLOR: Vec3 = [0.85, 0.65, 0.1];
 // Top to bottom: red, yellow, green. Built lit; the shader dims the ones that are off.
 const LAMP_COLORS: Vec3[] = [
@@ -90,12 +91,13 @@ export function trafficLightVertices(light: TrafficLight): number[] {
     ...beam([x + armX * flatStart, armY, z + armZ * flatStart], [x + armX * armEnd, armY, z + armZ * armEnd], ARM_THICKNESS, POLE_COLOR),
   );
 
-  // Heads hang from the underside of the arm.
+  // Heads are mounted on the front of the arm, with a quarter of their height above it.
   const facing: Vec3 = [facingX, 0, facingZ];
-  const centreY = armY - ARM_THICKNESS / 2 - HEAD_HEIGHT / 2;
+  const centreY = armY + ARM_THICKNESS / 2 + HEAD_HEIGHT * HEAD_ABOVE_ARM - HEAD_HEIGHT / 2;
+  const headOffset = ARM_THICKNESS / 2 + HEAD_DEPTH / 2;
   for (const distance of heads) {
-    const centreX = x + armX * distance;
-    const centreZ = z + armZ * distance;
+    const centreX = x + armX * distance + facingX * headOffset;
+    const centreZ = z + armZ * distance + facingZ * headOffset;
     vertices.push(...facingBox([centreX, centreY, centreZ], facing, HEAD_WIDTH, HEAD_HEIGHT, HEAD_DEPTH, SHELL_COLOR));
     const frontX = centreX + (facingX * HEAD_DEPTH) / 2;
     const frontZ = centreZ + (facingZ * HEAD_DEPTH) / 2;
