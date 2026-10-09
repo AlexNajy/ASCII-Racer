@@ -34,6 +34,7 @@ export function createDevMenu(
   citySettings: CitySettings,
   onChange: (setting: keyof DevSettings) => void,
   onCityChange: () => void,
+  onToggle: (open: boolean) => void,
 ): DevMenu {
   const panel = document.createElement('div');
   panel.id = 'dev-menu';
@@ -200,6 +201,7 @@ export function createDevMenu(
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'Backquote') return;
     panel.hidden = !panel.hidden;
+    onToggle(!panel.hidden);
     event.preventDefault();
   });
 

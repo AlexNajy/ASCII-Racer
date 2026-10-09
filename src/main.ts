@@ -8,7 +8,7 @@ import { cityColliders, pushOutOfColliders } from './game/collision.ts';
 import { generateIntersections, type Intersections } from './game/intersections.ts';
 import { signalOffsets, signalPhase } from './game/signals.ts';
 import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
-import { trackKeyboard, trackMouse } from './game/input.ts';
+import { trackFullscreenKey, trackKeyboard, trackMouse } from './game/input.ts';
 import {
   createColorTarget,
   createRenderTarget,
@@ -246,10 +246,15 @@ const devMenu = createDevMenu(
     }
   },
   regenerateCity,
+  (open) => {
+    if (open) document.exitPointerLock();
+    else canvas.requestPointerLock().catch(() => {});
+  },
 );
 
 trackKeyboard();
 trackMouse(canvas);
+trackFullscreenKey(document.body);
 
 const camera: Camera = {
   position: [0, 1.5, 4],

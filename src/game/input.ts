@@ -26,6 +26,14 @@ export function trackMouse(element: HTMLElement): void {
   });
 }
 
+export function trackFullscreenKey(element: HTMLElement): void {
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== 'KeyF') return;
+    if (document.fullscreenElement) document.exitFullscreen();
+    else element.requestFullscreen().catch(() => {});
+  });
+}
+
 // Returns the mouse movement in pixels since the last call, then resets it.
 export function takeMouseMovement(): [number, number] {
   const movement: [number, number] = [mouseX, mouseY];
