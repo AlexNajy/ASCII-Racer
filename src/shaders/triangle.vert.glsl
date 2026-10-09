@@ -8,7 +8,6 @@ in float a_id; // -1 for nothing special; 0 and up for traffic signal lamps
 
 uniform mat4 u_modelView;
 uniform mat4 u_projection;
-// Turns the normals with the model, so lighting stays right on things that rotate (the car).
 uniform mat3 u_normalMatrix;
 // One texel per junction: r and g = column and row road lights (0 red, 1 yellow, 2 green),
 // b and a = crosswalk lights alongside each road (0 walking person, 1 hand, 2 off).

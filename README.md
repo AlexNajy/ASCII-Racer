@@ -82,7 +82,7 @@ npm run preview   # serve the production build locally
   - [ ] Car state: position, heading and velocity as plain data, stepped once per 60 Hz tick
   - [ ] Car model: a simple body and wheels drawn from the car state
   - [ ] Chase camera: in Car movement mode the camera follows behind the car at driving height
-  - [ ] Driving input: throttle, brake and steering read once per tick into an input record, so a drive can be replayed from its inputs
+  - [ ] Driving input: throttle, brake and steering read once per tick into an input record, so every tick gets exactly one input at any frame rate
   - [ ] Acceleration and braking: engine force, drag, rolling resistance, top speed and reverse
   - [ ] Steering: front wheels turn the car (bicycle model), less steering angle at speed
   - [ ] Grip: tyres push against sideways sliding, up to a limit

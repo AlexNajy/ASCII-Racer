@@ -25,7 +25,7 @@ const BEND_RISE = 0.8;
 const HEAD_WIDTH = 0.6;
 const HEAD_HEIGHT = 1.7;
 const HEAD_DEPTH = 0.45;
-const HEAD_ABOVE_ARM = 0.25; // share of the head's height that sticks up over the arm
+const HEAD_ABOVE_ARM = 0.25; // share of the head's height above the arm
 const LAMP_RADIUS = 0.22;
 const LAMP_SPACING = 0.55;
 const LAMP_DEPTH = 0.06; // how far a lamp sticks out of the shell
@@ -91,7 +91,6 @@ export function trafficLightVertices(light: TrafficLight): number[] {
     ...beam([x + armX * flatStart, armY, z + armZ * flatStart], [x + armX * armEnd, armY, z + armZ * armEnd], ARM_THICKNESS, POLE_COLOR),
   );
 
-  // Heads are mounted on the front of the arm, with a quarter of their height above it.
   const facing: Vec3 = [facingX, 0, facingZ];
   const centreY = armY + ARM_THICKNESS / 2 + HEAD_HEIGHT * HEAD_ABOVE_ARM - HEAD_HEIGHT / 2;
   const headOffset = ARM_THICKNESS / 2 + HEAD_DEPTH / 2;

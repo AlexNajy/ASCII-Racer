@@ -2,6 +2,7 @@ import './style.css';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, createClock } from './game/clock.ts';
 import { createCar, stepCar } from './game/car.ts';
+import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { updateChaseCamera } from './game/chaseCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
@@ -269,10 +270,9 @@ const CAMERA_RADIUS = 0.5;
 // A fixed light high up, from +x and +z, until the night lights replace it.
 const LIGHT_DIRECTION = normalize([0.5, 1, 0.3]);
 
-// `model` places the mesh in the world; city meshes are built in world position and skip it.
 function draw(mesh: Mesh, mode: GLenum, view: Mat4, model?: Mat4) {
   gl!.uniformMatrix4fv(modelViewLocation, false, model ? multiply(view, model) : view);
-  // The model's rotation is its top-left 3×3; it has no scaling, so normals can use it as is.
+  // Only valid while models have no scaling.
   const m = model ?? identity();
   gl!.uniformMatrix3fv(normalMatrixLocation, false, [m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]]);
   gl!.bindVertexArray(mesh.vao);
@@ -280,8 +280,8 @@ function draw(mesh: Mesh, mode: GLenum, view: Mat4, model?: Mat4) {
 }
 
 const clock = createClock();
-// Starts in the middle of the centre intersection, facing north.
 const car = createCar(0, 0, 0);
+let carInput = NO_INPUT;
 
 // Longest step allowed, so returning to a background tab doesn't teleport the camera
 // or run a burst of simulation ticks.
@@ -295,7 +295,8 @@ function frame(timeMs: number) {
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
   advanceClock(clock, dt, () => {
-    stepCar(car);
+    carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
+    stepCar(car, carInput);
   });
   if (settings.movement === Movement.FlyCamera) {
     updateFlyCamera(camera, dt);
@@ -309,7 +310,8 @@ function frame(timeMs: number) {
     `camera ${cameraX.toFixed(1)}, ${cameraY.toFixed(1)}, ${cameraZ.toFixed(1)}` +
       `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}` +
       `\ncar ${car.x.toFixed(1)}, ${car.z.toFixed(1)}  heading ${degrees(car.heading)}°` +
-      `  velocity ${car.velocityX.toFixed(1)}, ${car.velocityZ.toFixed(1)}`,
+      `  ${(Math.hypot(car.velocityX, car.velocityZ) * 3.6).toFixed(0)} km/h` +
+      `\ninput throttle ${carInput.throttle}  brake ${carInput.brake}  steer ${carInput.steer}`,
   );
 
   const crtImage = updateGlyphImage(settings.renderMode === RenderMode.CrtGlyphs);

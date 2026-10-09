@@ -7,8 +7,7 @@ uniform sampler2D u_glyphs;
 uniform ivec2 u_cellSize;
 uniform int u_rampLength;
 uniform vec3 u_background;
-// How much of the cell's shade goes into the glyph colour: 0 full-strength hue (density alone shows
-// brightness), 1 true colour (dark cells get both sparser and darker glyphs).
+// 0 = full-strength hue, 1 = the cell's true colour.
 uniform float u_glyphShade;
 uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene, 5 normal texture, 6 CRT scene
 

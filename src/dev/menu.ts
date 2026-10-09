@@ -55,7 +55,7 @@ export function createDevMenu(
   panel.append(title);
 
   const info = document.createElement('div');
-  info.style.whiteSpace = 'pre-line'; // keep the line breaks in the info text
+  info.style.whiteSpace = 'pre-line';
   panel.append(info);
 
   // Each page is a div; the page dropdown shows one and hides the rest.
@@ -153,7 +153,6 @@ export function createDevMenu(
   settingSlider(lightingPage, 'Directional light', 'lightIntensity', 0, 1, 0.01);
   settingSlider(lightingPage, 'Glyph shade', 'glyphShade', 0, 1, 0.01);
 
-  // A dropdown for a setting whose values are a name-to-number table like RenderMode.
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,
     label: string,
