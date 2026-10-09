@@ -12,12 +12,20 @@ export const RenderMode = {
 } as const;
 export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 
+// What the movement keys and mouse control.
+export const Movement = {
+  FlyCamera: 0,
+  Car: 1,
+} as const;
+export type Movement = (typeof Movement)[keyof typeof Movement];
+
 export interface DevSettings {
   fovDegrees: number;
   cellWidth: number; // in CSS pixels; the height follows from the character shape
   viewDistance: number; // fog is complete here, and the far plane
   fogStart: number; // fog begins here
   renderMode: RenderMode;
+  movement: Movement;
   noclip: boolean; 
   ambient: number; // light every surface gets, from 0 (black) to 1
   lightIntensity: number; // strength of the directional light
@@ -47,6 +55,7 @@ export function createDevMenu(
   panel.append(title);
 
   const info = document.createElement('div');
+  info.style.whiteSpace = 'pre-line'; // keep the line breaks in the info text
   panel.append(info);
 
   // Each page is a div; the page dropdown shows one and hides the rest.
@@ -144,25 +153,36 @@ export function createDevMenu(
   settingSlider(lightingPage, 'Directional light', 'lightIntensity', 0, 1, 0.01);
   settingSlider(lightingPage, 'Glyph shade', 'glyphShade', 0, 1, 0.01);
 
-  const modeRow = document.createElement('label');
-  const modeText = document.createElement('span');
-  modeText.textContent = 'Render mode';
-  const select = document.createElement('select');
-  for (const [name, value] of Object.entries(RenderMode)) {
-    const option = document.createElement('option');
-    option.textContent = name;
-    option.value = String(value);
-    option.selected = value === settings.renderMode;
-    select.append(option);
+  // A dropdown for a setting whose values are a name-to-number table like RenderMode.
+  function dropdown<K extends 'renderMode' | 'movement'>(
+    parent: HTMLElement,
+    label: string,
+    key: K,
+    values: Record<string, DevSettings[K]>,
+  ) {
+    const row = document.createElement('label');
+    const text = document.createElement('span');
+    text.textContent = label;
+    const select = document.createElement('select');
+    for (const [name, value] of Object.entries(values)) {
+      const option = document.createElement('option');
+      option.textContent = name;
+      option.value = String(value);
+      option.selected = value === settings[key];
+      select.append(option);
+    }
+    select.addEventListener('change', () => {
+      settings[key] = Number(select.value) as DevSettings[K];
+      onChange(key);
+      // Release keyboard focus so flying keys don't pick options by their first letter.
+      select.blur();
+    });
+    row.append(text, select);
+    parent.append(row);
   }
-  select.addEventListener('change', () => {
-    settings.renderMode = Number(select.value) as RenderMode;
-    onChange('renderMode');
-    // Release keyboard focus so flying keys don't pick options by their first letter.
-    select.blur();
-  });
-  modeRow.append(modeText, select);
-  viewPage.append(modeRow);
+
+  dropdown(viewPage, 'Render mode', 'renderMode', RenderMode);
+  dropdown(viewPage, 'Movement', 'movement', Movement);
 
   const noclipRow = document.createElement('label');
   noclipRow.className = 'checkbox';

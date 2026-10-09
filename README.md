@@ -16,12 +16,13 @@ npm run preview   # serve the production build locally
 ## Controls
 
 - Click: capture the mouse to look around (`Esc` releases it)
+- `F`: toggle fullscreen
 - `W` / `S`: fly forward / back along the view direction
 - `A` / `D`: fly left / right
 - `Space` / `Shift`: fly up / down
 - `Q` (hold): fly 5× faster
 - `E` (hold): fly 10× faster
-- `` ` `` (backtick): toggle the dev menu (camera position, FOV, cell size, view distance, fog start, render mode; city and building sliders on their own pages)
+- `` ` `` (backtick): toggle the dev menu, which frees the mouse while open (camera position, FOV, cell size, view distance, fog start, render mode, movement; city and building sliders on their own pages)
 
 ## Roadmap
 
@@ -78,6 +79,19 @@ npm run preview   # serve the production build locally
   - [x] Signal phases: a fixed 60 Hz world tick, a deterministic phase cycle (green, yellow, all red, walk and flashing hand), seeded offsets with green waves along avenues, switched on the GPU from a per-frame signal texture
   - [x] Pole collisions: street lights, traffic lights and stop signs collide like buildings
 - [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer, headlights (the only real lights: a few cones that light what they hit)
+  - [ ] Car state: position, heading and velocity as plain data, stepped once per 60 Hz tick
+  - [ ] Car model: a simple body and wheels drawn from the car state
+  - [ ] Chase camera: in Car movement mode the camera follows behind the car at driving height
+  - [ ] Driving input: throttle, brake and steering read once per tick into an input record, so a drive can be replayed from its inputs
+  - [ ] Acceleration and braking: engine force, drag, rolling resistance, top speed and reverse
+  - [ ] Steering: front wheels turn the car (bicycle model), less steering angle at speed
+  - [ ] Grip: tyres push against sideways sliding, up to a limit
+  - [ ] Drift: past the grip limit the rear slides out, plus a handbrake
+  - [ ] Weight transfer: braking moves grip to the front axle, accelerating to the rear
+  - [ ] Car collisions: the car's footprint against buildings and poles
+  - [ ] Deterministic maths: own sin and cos for the simulation, so every browser drives the same
+  - [ ] Car page in the dev menu: sliders for engine, grip and steering
+  - [ ] Headlights: two cones that light what they hit in the scene shader
 - [ ] **10. Per-material glyph sets**: each material gets its own characters, settled before building models are tuned against them
   - [ ] Material IDs: the vertex `id` slot carries a material, the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell
   - [ ] Glyph sets per material: one atlas row per set; a set can repeat one or two characters to force them (signal lamps `( ) 0` as the first test, then neon and windows)

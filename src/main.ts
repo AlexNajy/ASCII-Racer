@@ -1,6 +1,7 @@
 import './style.css';
-import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
+import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, createClock } from './game/clock.ts';
+import { createCar, stepCar } from './game/car.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
@@ -201,6 +202,7 @@ const settings: DevSettings = {
   viewDistance: 1000,
   fogStart: 150,
   renderMode: RenderMode.Glyphs,
+  movement: Movement.FlyCamera,
   noclip: false,
   ambient: 0.3,
   lightIntensity: 0.8,
@@ -275,6 +277,8 @@ function draw(mesh: Mesh, mode: GLenum, modelView: Mat4) {
 }
 
 const clock = createClock();
+// Starts in the middle of the centre intersection, facing north.
+const car = createCar(0, 0, 0);
 
 // Longest step allowed, so returning to a background tab doesn't teleport the camera
 // or run a burst of simulation ticks.
@@ -289,15 +293,17 @@ function frame(timeMs: number) {
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
   advanceClock(clock, dt, () => {
-    // Simulation steps go here.
+    stepCar(car);
   });
-  updateFlyCamera(camera, dt);
+  if (settings.movement === Movement.FlyCamera) updateFlyCamera(camera, dt);
   if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, colliders);
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(
     `camera ${cameraX.toFixed(1)}, ${cameraY.toFixed(1)}, ${cameraZ.toFixed(1)}` +
-      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}`,
+      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}` +
+      `\ncar ${car.x.toFixed(1)}, ${car.z.toFixed(1)}  heading ${degrees(car.heading)}°` +
+      `  velocity ${car.velocityX.toFixed(1)}, ${car.velocityZ.toFixed(1)}`,
   );
 
   const crtImage = updateGlyphImage(settings.renderMode === RenderMode.CrtGlyphs);
