@@ -76,10 +76,9 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
   let [forwardX, forwardZ] = forward(car.heading);
   let speed = car.velocityX * forwardX + car.velocityZ * forwardZ; // negative when reversing
 
-  // Traction eases towards the drift button, so every switch between gripping and sliding blends.
-  // It follows the button, not the slide, or steering into a slide would keep it sliding forever.
+  // Traction eases towards the drift state, so every switch between gripping and sliding blends.
   const tractionStep = TICK_SECONDS / settings.tractionTime;
-  const tractionTarget = input.drift ? 0 : 1;
+  const tractionTarget = car.drifting ? 0 : 1;
   car.traction += Math.max(-tractionStep, Math.min(tractionStep, tractionTarget - car.traction));
   const mix = (sliding: number, gripping: number) => sliding + (gripping - sliding) * car.traction;
 
@@ -103,23 +102,26 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
   speed = car.velocityX * forwardX + car.velocityZ * forwardZ;
   let sideways = car.velocityX * rightX + car.velocityZ * rightZ;
 
+  const before = Math.hypot(speed, sideways);
+  const slip = before > 0 ? (Math.abs(sideways) / before) * (1 - car.traction) : 0; // 0 gripping or straight, 1 fully sideways
+
   const pedal = input.throttle - input.brake; // -1 to 1
   if (pedal === 0) speed = slowDown(speed, settings.coastDecel);
   else {
     // Fades to 0 as the car nears top speed in the pedal's direction.
     const falloff = 1 - (pedal * speed) / settings.topSpeed;
-    speed += pedal * settings.acceleration * falloff * TICK_SECONDS;
+    // Sliding tyres can't put all the power down, so the rubber always wins and the slide dies out.
+    speed += pedal * settings.acceleration * falloff * (1 - slip) * TICK_SECONDS;
   }
 
   const total = Math.hypot(speed, sideways);
   if (total > 0) {
-    const slip = Math.abs(sideways) / total; // 0 straight, 1 fully sideways
-    const scale = slowDown(total, settings.slipDecel * slip * (1 - car.traction)) / total;
+    const scale = slowDown(total, settings.slipDecel * slip) / total;
     speed *= scale;
     sideways *= scale;
   }
 
-  // Only shown in the dev menu: pressing drift starts it at once; releasing ends it once the slide has died down.
+  // Pressing drift starts it at once; releasing only ends it once the slide has died down.
   if (input.drift) car.drifting = true;
   else if (Math.abs(sideways) < settings.regripSpeed) car.drifting = false;
 
