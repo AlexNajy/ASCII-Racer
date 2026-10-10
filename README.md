@@ -79,20 +79,18 @@ npm run preview   # serve the production build locally
   - [x] Intersections: traffic lights on avenues, all-way or two-way stop signs on streets depending on how many corner blocks are busy, and crosswalks
   - [x] Signal phases: a fixed 60 Hz world tick, a deterministic phase cycle (green, yellow, all red, walk and flashing hand), seeded offsets with green waves along avenues, switched on the GPU from a per-frame signal texture
   - [x] Pole collisions: street lights, traffic lights and stop signs collide like buildings
-- [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer, headlights (the only real lights: a few cones that light what they hit)
+- [ ] **9. Drivable car**: keyboard input, arcade acceleration, steering and drift, headlights (the only real lights: a few cones that light what they hit)
   - [x] Car state: position, heading and velocity as plain data, stepped once per 60 Hz tick
   - [x] Car model: the collision box drawn from the car state (a real model later)
   - [x] Chase camera: in Car movement mode the camera follows behind the car at driving height
-  - [x] Driving input: throttle, brake and steering read once per tick into an input record, so every tick gets exactly one input at any frame rate
-  - [x] Acceleration and braking: engine force, drag, rolling resistance, top speed and reverse
-  - [x] Steering: front wheels turn the car (bicycle model), less steering angle at speed
-  - [x] Grip: tyres push against sideways sliding, up to a limit
-  - [ ] Drift: past the grip limit the rear slides out, plus a handbrake
-  - [ ] Dynamic chase camera: pulls back with speed, swings with turns and slides
-  - [ ] Weight transfer: braking moves grip to the front axle, accelerating to the rear
+  - [x] Driving input: throttle, brake, steering and drift read once per tick into an input record, so every tick gets exactly one input at any frame rate
+  - [x] Acceleration and braking: acceleration fading towards top speed, coasting, the opposite pedal brakes then reverses
+  - [x] Steering: arcade style, A/D turn the nose and the velocity catches up with it
+  - [x] Drift: holding Space turns harder while the velocity lags behind (Mario Kart style), sliding scrubs speed, traction blends back once the slide dies down
+  - [ ] Dynamic chase camera: pulls back with speed, swings with turns and slides, a small lag and snap back on lane changes
   - [ ] Car collisions: the car's footprint against buildings and poles
   - [ ] Deterministic maths: own sin and cos for the simulation, so every browser drives the same
-  - [x] Car page in the dev menu: sliders for engine, grip and steering
+  - [x] Car page in the dev menu: sliders for acceleration, steering and drift
   - [ ] Headlights: two cones that light what they hit in the scene shader
 - [ ] **10. Per-material glyph sets**: each material gets its own characters, settled before building models are tuned against them
   - [ ] Material IDs: the vertex `id` slot carries a material, the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell

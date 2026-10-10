@@ -107,7 +107,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 6. A city: street grid, zoning and an outer wall, as plain seeded data
 7. Buildings: placeholder boxes on every block, batched into one mesh, collisions with buildings
 8. Lighting: a dim moonlight base that shapes buildings, and things that glow (emission) instead of real lights
-9. A drivable car: keyboard input, acceleration, steering, grip, drift, weight transfer, headlights
+9. A drivable car: keyboard input, arcade acceleration, steering and drift (Mario Kart style), headlights
 10. Per-material glyph sets: material IDs in the scene buffer pick an atlas row per cell
 11. HUD: a text layer drawn in the glyph grid (speedometer first)
 12. Building models: parametric styles and fixed prefabs in place of the boxes, with seeded spawning rules per zone, lot and neighbourhood

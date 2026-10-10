@@ -20,6 +20,7 @@ export interface CarSettings {
   regripSpeed: number; // m/s
   // Rubber sliding on asphalt slows the whole car, at full strength when fully sideways.
   slipDecel: number; // m/s²
+  fullTurnSpeed: number; // m/s, turning grows from nothing at standstill to full at this speed
 }
 
 export const DEFAULT_CAR_SETTINGS: CarSettings = {
@@ -33,6 +34,7 @@ export const DEFAULT_CAR_SETTINGS: CarSettings = {
   tractionTime: 0.3,
   regripSpeed: 1.5,
   slipDecel: 16,
+  fullTurnSpeed: 5,
 };
 
 // Heading uses the camera's yaw convention: 0 faces -Z, positive turns left. Radians.
@@ -59,7 +61,7 @@ function forward(heading: number): [number, number] {
   return [-Math.sin(heading), -Math.cos(heading)];
 }
 
-function wrapAngle(angle: number): number {
+export function wrapAngle(angle: number): number {
   return angle - 2 * Math.PI * Math.round(angle / (2 * Math.PI));
 }
 
@@ -74,15 +76,18 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
   let [forwardX, forwardZ] = forward(car.heading);
   let speed = car.velocityX * forwardX + car.velocityZ * forwardZ; // negative when reversing
 
-  // Traction eases towards the drift state, so every switch between gripping and sliding blends.
+  // Traction eases towards the drift button, so every switch between gripping and sliding blends.
+  // It follows the button, not the slide, or steering into a slide would keep it sliding forever.
   const tractionStep = TICK_SECONDS / settings.tractionTime;
-  const tractionTarget = car.drifting ? 0 : 1;
+  const tractionTarget = input.drift ? 0 : 1;
   car.traction += Math.max(-tractionStep, Math.min(tractionStep, tractionTarget - car.traction));
   const mix = (sliding: number, gripping: number) => sliding + (gripping - sliding) * car.traction;
 
   // Only the nose turns here; the velocity catches up below.
   const turnSpeed = mix(settings.driftTurnSpeed, settings.turnSpeed);
-  car.heading += input.steer * turnSpeed * Math.sign(speed) * TICK_SECONDS;
+  // Negative when reversing, which flips the steering like a real car.
+  const turnFactor = Math.max(-1, Math.min(1, speed / settings.fullTurnSpeed));
+  car.heading += input.steer * turnSpeed * turnFactor * TICK_SECONDS;
 
   // Rotate the velocity part of the way towards the nose (or the tail when reversing), keeping its speed.
   const travelHeading = Math.atan2(-car.velocityX, -car.velocityZ);
@@ -114,7 +119,7 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
     sideways *= scale;
   }
 
-  // Pressing drift starts it at once; releasing only ends it once the slide has died down.
+  // Only shown in the dev menu: pressing drift starts it at once; releasing ends it once the slide has died down.
   if (input.drift) car.drifting = true;
   else if (Math.abs(sideways) < settings.regripSpeed) car.drifting = false;
 

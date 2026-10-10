@@ -1,4 +1,5 @@
 import type { CarSettings } from '../game/car.ts';
+import type { ChaseCameraSettings } from '../game/chaseCamera.ts';
 import type { CitySettings } from '../game/city.ts';
 
 export const RenderMode = {
@@ -43,6 +44,7 @@ export function createDevMenu(
   settings: DevSettings,
   citySettings: CitySettings,
   carSettings: CarSettings,
+  chaseSettings: ChaseCameraSettings,
   onChange: (setting: keyof DevSettings) => void,
   onCityChange: () => void,
   onToggle: (open: boolean) => void,
@@ -154,11 +156,24 @@ export function createDevMenu(
     slider(parent, label, carSettings[key], min, max, step, (value) => (carSettings[key] = value));
   }
 
+  // Read by the chase camera every frame, so no callback is needed.
+  function chaseSlider(
+    parent: HTMLElement,
+    label: string,
+    key: keyof ChaseCameraSettings,
+    min: number,
+    max: number,
+    step: number,
+  ) {
+    slider(parent, label, chaseSettings[key], min, max, step, (value) => (chaseSettings[key] = value));
+  }
+
   const viewPage = page('View');
   const cityPage = page('City');
   const buildingsPage = page('Buildings');
   const lightingPage = page('Lighting');
   const carPage = page('Car');
+  const cameraPage = page('Camera');
 
   settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
   settingSlider(viewPage, 'Cell width', 'cellWidth', 4, 16, 1);
@@ -177,6 +192,14 @@ export function createDevMenu(
   carSlider(carPage, 'Traction time (s)', 'tractionTime', 0.05, 2, 0.05);
   carSlider(carPage, 'Regrip speed (m/s)', 'regripSpeed', 0.1, 10, 0.1);
   carSlider(carPage, 'Slip decel (m/s²)', 'slipDecel', 0, 40, 0.5);
+  carSlider(carPage, 'Full turn speed (m/s)', 'fullTurnSpeed', 0.5, 20, 0.5);
+  chaseSlider(cameraPage, 'Distance (m)', 'distance', 2, 15, 0.1);
+  chaseSlider(cameraPage, 'Height (m)', 'height', 0.5, 8, 0.1);
+  chaseSlider(cameraPage, 'Look height (m)', 'lookHeight', 0, 3, 0.1);
+  chaseSlider(cameraPage, 'Yaw follow (/s)', 'yawFollow', 0.5, 20, 0.5);
+  chaseSlider(cameraPage, 'Speed pull back (m)', 'speedPullBack', 0, 6, 0.1);
+  chaseSlider(cameraPage, 'Speed FOV boost (°)', 'speedFovBoost', 0, 40, 1);
+  chaseSlider(cameraPage, 'Drift travel blend', 'driftTravelBlend', 0, 1, 0.05);
 
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,

@@ -4,7 +4,7 @@ import { advanceClock, createClock } from './game/clock.ts';
 import { createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
-import { updateChaseCamera } from './game/chaseCamera.ts';
+import { DEFAULT_CHASE_CAMERA_SETTINGS, updateChaseCamera, type ChaseCameraSettings } from './game/chaseCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { cityColliders, pushOutOfColliders } from './game/collision.ts';
@@ -147,6 +147,7 @@ function buildCityMeshes(
 
 const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
 const carSettings: CarSettings = { ...DEFAULT_CAR_SETTINGS };
+const chaseSettings: ChaseCameraSettings = { ...DEFAULT_CHASE_CAMERA_SETTINGS };
 let city = generateCity(citySettings);
 let buildings = generateBuildings(city, citySettings);
 let streetLights = generateStreetLights(city, citySettings);
@@ -245,6 +246,7 @@ const devMenu = createDevMenu(
   settings,
   citySettings,
   carSettings,
+  chaseSettings,
   (setting) => {
     if (setting === 'cellWidth') {
       buildCells();
@@ -300,11 +302,12 @@ function frame(timeMs: number) {
     carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
     stepCar(car, carInput, carSettings);
   });
+  let fovBoost = 0;
   if (settings.movement === Movement.FlyCamera) {
     updateFlyCamera(camera, dt);
     if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, colliders);
   } else {
-    updateChaseCamera(camera, car);
+    fovBoost = updateChaseCamera(camera, car, carSettings, chaseSettings, dt);
   }
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
@@ -337,7 +340,7 @@ function frame(timeMs: number) {
   gl!.uniform1f(ambientLocation, settings.ambient);
   gl!.uniform1f(lightIntensityLocation, settings.lightIntensity);
   const aspect = canvas.width / canvas.height;
-  const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
+  const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
   gl!.activeTexture(gl!.TEXTURE3);
   updateSignalTexture(gl!, signals, offsets.map((offset) => signalPhase(clock.tick, offset)));
