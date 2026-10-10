@@ -1,7 +1,7 @@
 import './style.css';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, createClock } from './game/clock.ts';
-import { createCar, DEFAULT_CAR_SETTINGS, slideSpeed, stepCar, type CarSettings } from './game/car.ts';
+import { createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { updateChaseCamera } from './game/chaseCamera.ts';
@@ -312,9 +312,8 @@ function frame(timeMs: number) {
     `camera ${cameraX.toFixed(1)}, ${cameraY.toFixed(1)}, ${cameraZ.toFixed(1)}` +
       `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}` +
       `\ncar ${car.x.toFixed(1)}, ${car.z.toFixed(1)}  heading ${degrees(car.heading)}°` +
-      `  ${(Math.hypot(car.velocityX, car.velocityZ) * 3.6).toFixed(0)} km/h` +
-      `  slide ${(slideSpeed(car) * 3.6).toFixed(0)} km/h  steer ${car.steer.toFixed(2)}${car.drifting ? '  DRIFT' : ''}` +
-      `\ninput throttle ${carInput.throttle}  brake ${carInput.brake}  steer ${carInput.steer}`,
+      `  ${(Math.hypot(car.velocityX, car.velocityZ) * 3.6).toFixed(0)} km/h${car.drifting ? '  DRIFT' : ''}  traction ${car.traction.toFixed(2)}` +
+      `\ninput throttle ${carInput.throttle}  brake ${carInput.brake}  steer ${carInput.steer}  drift ${carInput.drift}`,
   );
 
   const crtImage = updateGlyphImage(settings.renderMode === RenderMode.CrtGlyphs);

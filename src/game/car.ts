@@ -7,49 +7,33 @@ export const CAR_WIDTH = 1.8;
 export const CAR_HEIGHT = 1.4;
 
 export interface CarSettings {
-  mass: number; // kg
-  engineForce: number; // N
-  reverseForce: number; // N
-  brakeForce: number; // N
-  // Sets the top speed (~180 km/h), where drag and rolling resistance cancel the engine.
-  drag: number; // N per (m/s)²
-  rollingResistance: number; // N, ~1.5% of the car's weight
-  engineBraking: number; // N, with the drive pedal released
-  wheelbase: number; // m
-  maxSteerAngle: number; // radians
-  // Steering angle halves at this speed, so full keyboard steering stays controllable when fast.
-  steerFalloffSpeed: number; // m/s
-  steerSpeed: number; // per second; 4 = full lock from centre in 0.25 s
-  steerReturnSpeed: number; // per second, back towards centre
-  grip: number; // g, the most sideways acceleration the tyres can give
-  // Asking for more than `grip` breaks into a drift, which only ends when the slide slows below driftExitSpeed.
-  driftGrip: number; // g
-  driftExitSpeed: number; // m/s of sideways speed
-  // Skidding tyres slowing the whole car while drifting, at full strength when fully sideways.
-  driftScrub: number; // g
+  acceleration: number; // m/s², from standstill
+  topSpeed: number; // m/s
+  coastDecel: number; // m/s², no pedal
+  turnSpeed: number; // radians/s at full steer, not drifting
+  driftTurnSpeed: number; // radians/s at full steer
+  // How fast the velocity's direction catches up with the nose, per second (higher is tighter).
+  driftFollow: number; // while drifting, so the car slides
+  gripFollow: number; // otherwise
+  tractionTime: number; // s, to blend fully between gripping and sliding
+  // After the drift button is released the car slides on until its sideways speed drops below this.
+  regripSpeed: number; // m/s
+  // Rubber sliding on asphalt slows the whole car, at full strength when fully sideways.
+  slipDecel: number; // m/s²
 }
 
 export const DEFAULT_CAR_SETTINGS: CarSettings = {
-  mass: 1200,
-  engineForce: 11000,
-  reverseForce: 5000,
-  brakeForce: 22000,
-  drag: 4.3,
-  rollingResistance: 180,
-  engineBraking: 2500,
-  wheelbase: 2.6,
-  maxSteerAngle: 0.6,
-  steerFalloffSpeed: 6,
-  steerSpeed: 12,
-  steerReturnSpeed: 16,
-  grip: 1.6,
-  driftGrip: 0.9,
-  driftExitSpeed: 1,
-  driftScrub: 1,
+  acceleration: 10,
+  topSpeed: 32,
+  coastDecel: 4,
+  turnSpeed: 0.6,
+  driftTurnSpeed: 2,
+  driftFollow: 2,
+  gripFollow: 20,
+  tractionTime: 0.3,
+  regripSpeed: 1.5,
+  slipDecel: 16,
 };
-
-const STOPPED_SPEED = 0.5; // m/s; below this the brake key reverses
-const GRAVITY = 9.81; // m/s²
 
 // Heading uses the camera's yaw convention: 0 faces -Z, positive turns left. Radians.
 export interface Car {
@@ -58,85 +42,84 @@ export interface Car {
   heading: number;
   velocityX: number; // m/s, world space
   velocityZ: number;
-  steer: number; // -1 (right) to 1 (left), where the wheels actually are
   drifting: boolean;
+  traction: number; // 0 sliding to 1 gripping, eases towards the drift state
 }
 
 export function createCar(x: number, z: number, heading: number): Car {
-  return { x, z, heading, velocityX: 0, velocityZ: 0, steer: 0, drifting: false };
+  return { x, z, heading, velocityX: 0, velocityZ: 0, drifting: false, traction: 1 };
+}
+
+// Clamped at 0 so slowing down never pushes the other way.
+function slowDown(speed: number, decel: number): number {
+  return Math.sign(speed) * Math.max(0, Math.abs(speed) - decel * TICK_SECONDS);
 }
 
 function forward(heading: number): [number, number] {
   return [-Math.sin(heading), -Math.cos(heading)];
 }
 
-// Velocity split into along the heading (negative when reversing) and across it (positive to the right).
-function split(car: Car): [number, number] {
-  const [forwardX, forwardZ] = forward(car.heading);
-  return [
-    car.velocityX * forwardX + car.velocityZ * forwardZ,
-    car.velocityX * -forwardZ + car.velocityZ * forwardX,
-  ];
+function wrapAngle(angle: number): number {
+  return angle - 2 * Math.PI * Math.round(angle / (2 * Math.PI));
 }
 
-function setVelocity(car: Car, speed: number, sideways: number): void {
-  const [forwardX, forwardZ] = forward(car.heading);
-  car.velocityX = forwardX * speed - forwardZ * sideways;
-  car.velocityZ = forwardZ * speed + forwardX * sideways;
-}
-
-export function slideSpeed(car: Car): number {
-  return split(car)[1];
+// Same turn as adding `angle` to a heading.
+function rotate(x: number, z: number, angle: number): [number, number] {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [x * cos + z * sin, z * cos - x * sin];
 }
 
 export function stepCar(car: Car, input: CarInput, settings: CarSettings): void {
-  let [speed, sideways] = split(car);
+  let [forwardX, forwardZ] = forward(car.heading);
+  let speed = car.velocityX * forwardX + car.velocityZ * forwardZ; // negative when reversing
 
-  let drive: number;
-  let brake: number;
-  let drivePedal: number;
-  if (speed > STOPPED_SPEED) {
-    drive = input.throttle * settings.engineForce;
-    brake = input.brake * settings.brakeForce;
-    drivePedal = input.throttle;
-  } else if (speed < -STOPPED_SPEED) {
-    drive = -input.brake * settings.reverseForce;
-    brake = input.throttle * settings.brakeForce;
-    drivePedal = input.brake;
-  } else {
-    drive = input.throttle * settings.engineForce - input.brake * settings.reverseForce;
-    brake = 0;
-    drivePedal = Math.max(input.throttle, input.brake);
+  // Traction eases towards the drift state, so every switch between gripping and sliding blends.
+  const tractionStep = TICK_SECONDS / settings.tractionTime;
+  const tractionTarget = car.drifting ? 0 : 1;
+  car.traction += Math.max(-tractionStep, Math.min(tractionStep, tractionTarget - car.traction));
+  const mix = (sliding: number, gripping: number) => sliding + (gripping - sliding) * car.traction;
+
+  // Only the nose turns here; the velocity catches up below.
+  const turnSpeed = mix(settings.driftTurnSpeed, settings.turnSpeed);
+  car.heading += input.steer * turnSpeed * Math.sign(speed) * TICK_SECONDS;
+
+  // Rotate the velocity part of the way towards the nose (or the tail when reversing), keeping its speed.
+  const travelHeading = Math.atan2(-car.velocityX, -car.velocityZ);
+  const targetHeading = speed < 0 ? car.heading + Math.PI : car.heading;
+  const follow = mix(settings.driftFollow, settings.gripFollow);
+  const lag = wrapAngle(targetHeading - travelHeading);
+  [car.velocityX, car.velocityZ] = rotate(car.velocityX, car.velocityZ, lag * Math.min(1, follow * TICK_SECONDS));
+
+  // The pedals only change the forward part of the velocity; the sideways part is the slide.
+  [forwardX, forwardZ] = forward(car.heading);
+  const rightX = -forwardZ; // forward turned a quarter clockwise seen from above
+  const rightZ = forwardX;
+  speed = car.velocityX * forwardX + car.velocityZ * forwardZ;
+  let sideways = car.velocityX * rightX + car.velocityZ * rightZ;
+
+  const pedal = input.throttle - input.brake; // -1 to 1
+  if (pedal === 0) speed = slowDown(speed, settings.coastDecel);
+  else {
+    // Fades to 0 as the car nears top speed in the pedal's direction.
+    const falloff = 1 - (pedal * speed) / settings.topSpeed;
+    speed += pedal * settings.acceleration * falloff * TICK_SECONDS;
   }
 
-  speed += ((drive - settings.drag * speed * Math.abs(speed)) / settings.mass) * TICK_SECONDS;
-  // Clamped so these never push the car backwards; this is also what brings it to a full stop.
-  const slowing = brake + settings.rollingResistance + settings.engineBraking * (1 - drivePedal);
-  speed = Math.sign(speed) * Math.max(0, Math.abs(speed) - (slowing / settings.mass) * TICK_SECONDS);
-  setVelocity(car, speed, sideways);
-
-  // Bicycle model. Turning the car doesn't turn its velocity; that is left to the tyres.
-  const returning = Math.abs(input.steer) < Math.abs(car.steer) || input.steer * car.steer < 0;
-  const steerStep = (returning ? settings.steerReturnSpeed : settings.steerSpeed) * TICK_SECONDS;
-  car.steer += Math.max(-steerStep, Math.min(steerStep, input.steer - car.steer));
-  const steerAngle = (car.steer * settings.maxSteerAngle) / (1 + Math.abs(speed) / settings.steerFalloffSpeed);
-  const turnRate = (speed * Math.tan(steerAngle)) / settings.wheelbase; // radians/s
-  car.heading += turnRate * TICK_SECONDS;
-
-  [speed, sideways] = split(car);
-  const grip = (car.drifting ? settings.driftGrip : settings.grip) * GRAVITY * TICK_SECONDS;
-  if (Math.abs(sideways) > grip) car.drifting = true;
-  // Clamped like the brakes; whatever is left over is the slide.
-  sideways = Math.sign(sideways) * Math.max(0, Math.abs(sideways) - grip);
-  if (Math.abs(sideways) < settings.driftExitSpeed) car.drifting = false;
-  if (car.drifting) {
-    const total = Math.hypot(speed, sideways);
+  const total = Math.hypot(speed, sideways);
+  if (total > 0) {
     const slip = Math.abs(sideways) / total; // 0 straight, 1 fully sideways
-    const scrubbed = Math.max(0, total - settings.driftScrub * slip * GRAVITY * TICK_SECONDS);
-    speed *= scrubbed / total;
-    sideways *= scrubbed / total;
+    const scale = slowDown(total, settings.slipDecel * slip * (1 - car.traction)) / total;
+    speed *= scale;
+    sideways *= scale;
   }
-  setVelocity(car, speed, sideways);
+
+  // Pressing drift starts it at once; releasing only ends it once the slide has died down.
+  if (input.drift) car.drifting = true;
+  else if (Math.abs(sideways) < settings.regripSpeed) car.drifting = false;
+
+  car.velocityX = forwardX * speed + rightX * sideways;
+  car.velocityZ = forwardZ * speed + rightZ * sideways;
   car.x += car.velocityX * TICK_SECONDS;
   car.z += car.velocityZ * TICK_SECONDS;
 }

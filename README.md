@@ -92,7 +92,7 @@ npm run preview   # serve the production build locally
   - [ ] Weight transfer: braking moves grip to the front axle, accelerating to the rear
   - [ ] Car collisions: the car's footprint against buildings and poles
   - [ ] Deterministic maths: own sin and cos for the simulation, so every browser drives the same
-  - [ ] Car page in the dev menu: sliders for engine, grip and steering
+  - [x] Car page in the dev menu: sliders for engine, grip and steering
   - [ ] Headlights: two cones that light what they hit in the scene shader
 - [ ] **10. Per-material glyph sets**: each material gets its own characters, settled before building models are tuned against them
   - [ ] Material IDs: the vertex `id` slot carries a material, the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell

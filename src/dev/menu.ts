@@ -167,22 +167,16 @@ export function createDevMenu(
   settingSlider(lightingPage, 'Ambient', 'ambient', 0, 1, 0.01);
   settingSlider(lightingPage, 'Directional light', 'lightIntensity', 0, 1, 0.01);
   settingSlider(lightingPage, 'Glyph shade', 'glyphShade', 0, 1, 0.01);
-  carSlider(carPage, 'Mass (kg)', 'mass', 500, 3000, 50);
-  carSlider(carPage, 'Engine force (N)', 'engineForce', 1000, 20000, 100);
-  carSlider(carPage, 'Reverse force (N)', 'reverseForce', 500, 10000, 100);
-  carSlider(carPage, 'Brake force (N)', 'brakeForce', 1000, 30000, 100);
-  carSlider(carPage, 'Drag', 'drag', 0, 10, 0.1);
-  carSlider(carPage, 'Rolling resistance (N)', 'rollingResistance', 0, 1000, 10);
-  carSlider(carPage, 'Engine braking (N)', 'engineBraking', 0, 8000, 100);
-  carSlider(carPage, 'Wheelbase (m)', 'wheelbase', 1.5, 4, 0.05);
-  carSlider(carPage, 'Max steer angle (rad)', 'maxSteerAngle', 0.1, 1, 0.01);
-  carSlider(carPage, 'Steer falloff speed (m/s)', 'steerFalloffSpeed', 1, 40, 0.5);
-  carSlider(carPage, 'Steer speed (/s)', 'steerSpeed', 0.5, 20, 0.5);
-  carSlider(carPage, 'Steer return speed (/s)', 'steerReturnSpeed', 0.5, 20, 0.5);
-  carSlider(carPage, 'Grip (g)', 'grip', 0.1, 3, 0.05);
-  carSlider(carPage, 'Drift grip (g)', 'driftGrip', 0.1, 3, 0.05);
-  carSlider(carPage, 'Drift exit speed (m/s)', 'driftExitSpeed', 0.1, 5, 0.1);
-  carSlider(carPage, 'Drift scrub (g)', 'driftScrub', 0, 3, 0.05);
+  carSlider(carPage, 'Acceleration (m/s²)', 'acceleration', 0, 20, 0.5);
+  carSlider(carPage, 'Top speed (m/s)', 'topSpeed', 5, 60, 0.5);
+  carSlider(carPage, 'Coast decel (m/s²)', 'coastDecel', 0, 10, 0.1);
+  carSlider(carPage, 'Turn speed (rad/s)', 'turnSpeed', 0.05, 3, 0.05);
+  carSlider(carPage, 'Drift turn speed (rad/s)', 'driftTurnSpeed', 0.1, 6, 0.1);
+  carSlider(carPage, 'Drift follow (/s)', 'driftFollow', 0.1, 10, 0.1);
+  carSlider(carPage, 'Grip follow (/s)', 'gripFollow', 1, 60, 1);
+  carSlider(carPage, 'Traction time (s)', 'tractionTime', 0.05, 2, 0.05);
+  carSlider(carPage, 'Regrip speed (m/s)', 'regripSpeed', 0.1, 10, 0.1);
+  carSlider(carPage, 'Slip decel (m/s²)', 'slipDecel', 0, 40, 0.5);
 
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,
