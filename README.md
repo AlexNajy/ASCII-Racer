@@ -88,9 +88,10 @@ npm run preview   # serve the production build locally
   - [x] Steering: arcade style, A/D turn the nose and the velocity catches up with it
   - [x] Drift: holding Space turns harder while the velocity lags behind (Mario Kart style), sliding scrubs speed, traction blends back once the slide dies down
   - [x] Dynamic chase camera: lags behind the car's turns, follows the slide while drifting, pulls back and widens the FOV with speed, tunable on a Camera page in the dev menu
-  - [ ] Camera out of walls: a ray from the car to the camera pulls it in front of anything in the way, snapping in and easing back out
-  - [ ] Car collisions: the car's footprint against buildings and poles
-  - [ ] Deterministic maths: own sin and cos for the simulation, so every browser drives the same
+  - [x] Camera out of walls: a ray from the car to the camera pulls it in front of anything in the way, snapping in and easing back out
+  - [x] Car collisions: the car (a row of circles) is pushed out of buildings and poles, loses its speed into the wall and bounces back a little
+  - [x] Smoothing between ticks: the car and camera are drawn between the last two ticks, so they don't jerk on screens faster than 60 Hz
+  - [x] Deterministic maths: own sin and cos for the simulation, so every browser drives the same
   - [x] Car page in the dev menu: sliders for acceleration, steering and drift
   - [ ] Headlights: two cones that light what they hit in the scene shader
 - [ ] **10. Per-material glyph sets**: each material gets its own characters, settled before building models are tuned against them

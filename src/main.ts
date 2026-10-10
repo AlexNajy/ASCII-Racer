@@ -1,7 +1,7 @@
 import './style.css';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
-import { advanceClock, createClock } from './game/clock.ts';
-import { collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
+import { advanceClock, createClock, TICK_SECONDS } from './game/clock.ts';
+import { blendCars, collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import {
@@ -290,6 +290,7 @@ function draw(mesh: Mesh, mode: GLenum, view: Mat4, model?: Mat4) {
 
 const clock = createClock();
 const car = createCar(0, 0, 0);
+let previousCar = car;
 const chase = createChaseCamera();
 let carInput = NO_INPUT;
 
@@ -305,16 +306,19 @@ function frame(timeMs: number) {
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
   advanceClock(clock, dt, () => {
+    previousCar = { ...car };
     carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
     stepCar(car, carInput, carSettings);
     collideCar(car, colliders, carSettings);
   });
+  // Drawn between the last two ticks by the time left over, so motion is smooth on any refresh rate.
+  const drawnCar = blendCars(previousCar, car, clock.leftover / TICK_SECONDS);
   let fovBoost = 0;
   if (settings.movement === Movement.FlyCamera) {
     updateFlyCamera(camera, dt);
     if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, colliders);
   } else {
-    fovBoost = updateChaseCamera(camera, chase, car, carSettings, chaseSettings, colliders, dt);
+    fovBoost = updateChaseCamera(camera, chase, drawnCar, carSettings, chaseSettings, colliders, dt);
   }
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
@@ -355,7 +359,7 @@ function frame(timeMs: number) {
   const view = viewMatrix(camera);
 
   for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
-  draw(carMesh, gl!.TRIANGLES, view, multiply(translation(car.x, 0, car.z), rotationY(car.heading)));
+  draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
   if (fullResolution) return;
 
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, crtImage ? crtImage.framebuffer : null);

@@ -1,6 +1,7 @@
 import type { CarInput } from './carInput.ts';
 import { TICK_SECONDS } from './clock.ts';
 import { pushOutOfRect, type Collider } from './collision.ts';
+import { atan2, cos, hypot, sin } from '../math/deterministic.ts';
 
 // Collision box, metres.
 export const CAR_LENGTH = 4.5;
@@ -55,13 +56,26 @@ export function createCar(x: number, z: number, heading: number): Car {
   return { x, z, heading, velocityX: 0, velocityZ: 0, drifting: false, traction: 1 };
 }
 
+// The car part of the way (0 to 1) from `from` to `to`, for drawing between two ticks.
+export function blendCars(from: Car, to: Car, share: number): Car {
+  const blend = (a: number, b: number) => a + (b - a) * share;
+  return {
+    ...to,
+    x: blend(from.x, to.x),
+    z: blend(from.z, to.z),
+    heading: from.heading + wrapAngle(to.heading - from.heading) * share,
+    velocityX: blend(from.velocityX, to.velocityX),
+    velocityZ: blend(from.velocityZ, to.velocityZ),
+  };
+}
+
 // Clamped at 0 so slowing down never pushes the other way.
 function slowDown(speed: number, decel: number): number {
   return Math.sign(speed) * Math.max(0, Math.abs(speed) - decel * TICK_SECONDS);
 }
 
 function forward(heading: number): [number, number] {
-  return [-Math.sin(heading), -Math.cos(heading)];
+  return [-sin(heading), -cos(heading)];
 }
 
 export function wrapAngle(angle: number): number {
@@ -70,9 +84,9 @@ export function wrapAngle(angle: number): number {
 
 // Same turn as adding `angle` to a heading.
 function rotate(x: number, z: number, angle: number): [number, number] {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  return [x * cos + z * sin, z * cos - x * sin];
+  const c = cos(angle);
+  const s = sin(angle);
+  return [x * c + z * s, z * c - x * s];
 }
 
 export function stepCar(car: Car, input: CarInput, settings: CarSettings): void {
@@ -92,7 +106,7 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
   car.heading += input.steer * turnSpeed * turnFactor * TICK_SECONDS;
 
   // Rotate the velocity part of the way towards the nose (or the tail when reversing), keeping its speed.
-  const travelHeading = Math.atan2(-car.velocityX, -car.velocityZ);
+  const travelHeading = atan2(-car.velocityX, -car.velocityZ);
   const targetHeading = speed < 0 ? car.heading + Math.PI : car.heading;
   const follow = mix(settings.driftFollow, settings.gripFollow);
   const lag = wrapAngle(targetHeading - travelHeading);
@@ -105,7 +119,7 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
   speed = car.velocityX * forwardX + car.velocityZ * forwardZ;
   let sideways = car.velocityX * rightX + car.velocityZ * rightZ;
 
-  const before = Math.hypot(speed, sideways);
+  const before = hypot(speed, sideways);
   const slip = before > 0 ? (Math.abs(sideways) / before) * (1 - car.traction) : 0; // 0 gripping or straight, 1 fully sideways
 
   const pedal = input.throttle - input.brake; // -1 to 1
@@ -117,7 +131,7 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
     speed += pedal * settings.acceleration * falloff * (1 - slip) * TICK_SECONDS;
   }
 
-  const total = Math.hypot(speed, sideways);
+  const total = hypot(speed, sideways);
   if (total > 0) {
     const scale = slowDown(total, settings.slipDecel * slip) / total;
     speed *= scale;
@@ -159,7 +173,7 @@ export function collideCar(car: Car, colliders: Collider[], settings: CarSetting
   // The tick's whole push points out of the wall, so it gives the wall's direction.
   const pushX = car.x - startX;
   const pushZ = car.z - startZ;
-  const push = Math.hypot(pushX, pushZ);
+  const push = hypot(pushX, pushZ);
   if (push === 0) return;
   const normalX = pushX / push;
   const normalZ = pushZ / push;
