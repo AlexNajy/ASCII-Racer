@@ -193,6 +193,7 @@ export function createDevMenu(
   carSlider(carPage, 'Regrip speed (m/s)', 'regripSpeed', 0.1, 10, 0.1);
   carSlider(carPage, 'Slip decel (m/s²)', 'slipDecel', 0, 40, 0.5);
   carSlider(carPage, 'Full turn speed (m/s)', 'fullTurnSpeed', 0.5, 20, 0.5);
+  carSlider(carPage, 'Wall bounce', 'wallBounce', 0, 1, 0.05);
   chaseSlider(cameraPage, 'Distance (m)', 'distance', 2, 15, 0.1);
   chaseSlider(cameraPage, 'Height (m)', 'height', 0.5, 8, 0.1);
   chaseSlider(cameraPage, 'Look height (m)', 'lookHeight', 0, 3, 0.1);

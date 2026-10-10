@@ -1,5 +1,6 @@
 import type { CarInput } from './carInput.ts';
 import { TICK_SECONDS } from './clock.ts';
+import { pushOutOfRect, type Collider } from './collision.ts';
 
 // Collision box, metres.
 export const CAR_LENGTH = 4.5;
@@ -21,6 +22,7 @@ export interface CarSettings {
   // Rubber sliding on asphalt slows the whole car, at full strength when fully sideways.
   slipDecel: number; // m/s²
   fullTurnSpeed: number; // m/s, turning grows from nothing at standstill to full at this speed
+  wallBounce: number; // share of the speed into a wall that comes back out, 0 to 1
 }
 
 export const DEFAULT_CAR_SETTINGS: CarSettings = {
@@ -35,6 +37,7 @@ export const DEFAULT_CAR_SETTINGS: CarSettings = {
   regripSpeed: 1.5,
   slipDecel: 16,
   fullTurnSpeed: 5,
+  wallBounce: 0.2,
 };
 
 // Heading uses the camera's yaw convention: 0 faces -Z, positive turns left. Radians.
@@ -129,4 +132,40 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
   car.velocityZ = forwardZ * speed + rightZ * sideways;
   car.x += car.velocityX * TICK_SECONDS;
   car.z += car.velocityZ * TICK_SECONDS;
+}
+
+// Seen from above the car is a row of circles as wide as it, the end ones reaching its nose and tail.
+// Round ends glance off corners instead of catching on them.
+const COLLISION_CIRCLES = 3;
+
+// Everything solid is taller than the car, so `top` is ignored.
+export function collideCar(car: Car, colliders: Collider[], settings: CarSettings): void {
+  const startX = car.x;
+  const startZ = car.z;
+  const radius = CAR_WIDTH / 2;
+  const reach = (CAR_LENGTH - CAR_WIDTH) / 2; // from the centre to the end circles' centres
+  const [forwardX, forwardZ] = forward(car.heading);
+  for (let i = 0; i < COLLISION_CIRCLES; i++) {
+    const offset = reach * ((2 * i) / (COLLISION_CIRCLES - 1) - 1);
+    for (const { rect } of colliders) {
+      const x = car.x + forwardX * offset;
+      const z = car.z + forwardZ * offset;
+      const [pushedX, pushedZ] = pushOutOfRect(x, z, radius, rect);
+      car.x += pushedX - x;
+      car.z += pushedZ - z;
+    }
+  }
+
+  // The tick's whole push points out of the wall, so it gives the wall's direction.
+  const pushX = car.x - startX;
+  const pushZ = car.z - startZ;
+  const push = Math.hypot(pushX, pushZ);
+  if (push === 0) return;
+  const normalX = pushX / push;
+  const normalZ = pushZ / push;
+  const into = car.velocityX * normalX + car.velocityZ * normalZ; // negative when moving into the wall
+  if (into >= 0) return;
+  // Remove the speed into the wall and send some of it back; the speed along the wall is kept, so the car scrapes along.
+  car.velocityX -= (1 + settings.wallBounce) * into * normalX;
+  car.velocityZ -= (1 + settings.wallBounce) * into * normalZ;
 }

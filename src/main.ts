@@ -1,7 +1,7 @@
 import './style.css';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, createClock } from './game/clock.ts';
-import { createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
+import { collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { DEFAULT_CHASE_CAMERA_SETTINGS, updateChaseCamera, type ChaseCameraSettings } from './game/chaseCamera.ts';
@@ -301,6 +301,7 @@ function frame(timeMs: number) {
   advanceClock(clock, dt, () => {
     carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
     stepCar(car, carInput, carSettings);
+    collideCar(car, colliders, carSettings);
   });
   let fovBoost = 0;
   if (settings.movement === Movement.FlyCamera) {
