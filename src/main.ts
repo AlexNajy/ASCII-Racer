@@ -1,7 +1,7 @@
 import './style.css';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, createClock } from './game/clock.ts';
-import { createCar, stepCar } from './game/car.ts';
+import { createCar, slideSpeed, stepCar } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { updateChaseCamera } from './game/chaseCamera.ts';
@@ -311,6 +311,7 @@ function frame(timeMs: number) {
       `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}` +
       `\ncar ${car.x.toFixed(1)}, ${car.z.toFixed(1)}  heading ${degrees(car.heading)}°` +
       `  ${(Math.hypot(car.velocityX, car.velocityZ) * 3.6).toFixed(0)} km/h` +
+      `  slide ${(slideSpeed(car) * 3.6).toFixed(0)} km/h  steer ${car.steer.toFixed(2)}` +
       `\ninput throttle ${carInput.throttle}  brake ${carInput.brake}  steer ${carInput.steer}`,
   );
 
