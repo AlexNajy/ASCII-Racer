@@ -201,6 +201,7 @@ export function createDevMenu(
   chaseSlider(cameraPage, 'Speed pull back (m)', 'speedPullBack', 0, 6, 0.1);
   chaseSlider(cameraPage, 'Speed FOV boost (°)', 'speedFovBoost', 0, 40, 1);
   chaseSlider(cameraPage, 'Drift travel blend', 'driftTravelBlend', 0, 1, 0.05);
+  chaseSlider(cameraPage, 'Wall return (/s)', 'wallReturn', 0.2, 10, 0.1);
 
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,

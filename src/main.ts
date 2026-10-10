@@ -4,7 +4,12 @@ import { advanceClock, createClock } from './game/clock.ts';
 import { collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
-import { DEFAULT_CHASE_CAMERA_SETTINGS, updateChaseCamera, type ChaseCameraSettings } from './game/chaseCamera.ts';
+import {
+  createChaseCamera,
+  DEFAULT_CHASE_CAMERA_SETTINGS,
+  updateChaseCamera,
+  type ChaseCameraSettings,
+} from './game/chaseCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { cityColliders, pushOutOfColliders } from './game/collision.ts';
@@ -285,6 +290,7 @@ function draw(mesh: Mesh, mode: GLenum, view: Mat4, model?: Mat4) {
 
 const clock = createClock();
 const car = createCar(0, 0, 0);
+const chase = createChaseCamera();
 let carInput = NO_INPUT;
 
 // Longest step allowed, so returning to a background tab doesn't teleport the camera
@@ -308,7 +314,7 @@ function frame(timeMs: number) {
     updateFlyCamera(camera, dt);
     if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, colliders);
   } else {
-    fovBoost = updateChaseCamera(camera, car, carSettings, chaseSettings, dt);
+    fovBoost = updateChaseCamera(camera, chase, car, carSettings, chaseSettings, colliders, dt);
   }
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);

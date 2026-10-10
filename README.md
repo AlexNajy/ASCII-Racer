@@ -88,6 +88,7 @@ npm run preview   # serve the production build locally
   - [x] Steering: arcade style, A/D turn the nose and the velocity catches up with it
   - [x] Drift: holding Space turns harder while the velocity lags behind (Mario Kart style), sliding scrubs speed, traction blends back once the slide dies down
   - [x] Dynamic chase camera: lags behind the car's turns, follows the slide while drifting, pulls back and widens the FOV with speed, tunable on a Camera page in the dev menu
+  - [ ] Camera out of walls: a ray from the car to the camera pulls it in front of anything in the way, snapping in and easing back out
   - [ ] Car collisions: the car's footprint against buildings and poles
   - [ ] Deterministic maths: own sin and cos for the simulation, so every browser drives the same
   - [x] Car page in the dev menu: sliders for acceleration, steering and drift
