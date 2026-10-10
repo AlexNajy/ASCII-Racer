@@ -17,6 +17,7 @@ npm run preview   # serve the production build locally
 
 - Click: capture the mouse to look around (`Esc` releases it)
 - `F`: toggle fullscreen
+- `C`: switch between the fly camera and driving the car
 - `W` / `S`: fly forward / back along the view direction
 - `A` / `D`: fly left / right
 - `Space` / `Shift`: fly up / down
@@ -87,6 +88,7 @@ npm run preview   # serve the production build locally
   - [x] Steering: front wheels turn the car (bicycle model), less steering angle at speed
   - [x] Grip: tyres push against sideways sliding, up to a limit
   - [ ] Drift: past the grip limit the rear slides out, plus a handbrake
+  - [ ] Dynamic chase camera: pulls back with speed, swings with turns and slides
   - [ ] Weight transfer: braking moves grip to the front axle, accelerating to the rear
   - [ ] Car collisions: the car's footprint against buildings and poles
   - [ ] Deterministic maths: own sin and cos for the simulation, so every browser drives the same

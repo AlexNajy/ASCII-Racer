@@ -1,7 +1,7 @@
 import './style.css';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, createClock } from './game/clock.ts';
-import { createCar, slideSpeed, stepCar } from './game/car.ts';
+import { createCar, DEFAULT_CAR_SETTINGS, slideSpeed, stepCar, type CarSettings } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import { updateChaseCamera } from './game/chaseCamera.ts';
@@ -146,6 +146,7 @@ function buildCityMeshes(
 }
 
 const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
+const carSettings: CarSettings = { ...DEFAULT_CAR_SETTINGS };
 let city = generateCity(citySettings);
 let buildings = generateBuildings(city, citySettings);
 let streetLights = generateStreetLights(city, citySettings);
@@ -243,6 +244,7 @@ window.addEventListener('resize', resize);
 const devMenu = createDevMenu(
   settings,
   citySettings,
+  carSettings,
   (setting) => {
     if (setting === 'cellWidth') {
       buildCells();
@@ -296,7 +298,7 @@ function frame(timeMs: number) {
   previousTimeMs = timeMs;
   advanceClock(clock, dt, () => {
     carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
-    stepCar(car, carInput);
+    stepCar(car, carInput, carSettings);
   });
   if (settings.movement === Movement.FlyCamera) {
     updateFlyCamera(camera, dt);
@@ -311,7 +313,7 @@ function frame(timeMs: number) {
       `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}` +
       `\ncar ${car.x.toFixed(1)}, ${car.z.toFixed(1)}  heading ${degrees(car.heading)}°` +
       `  ${(Math.hypot(car.velocityX, car.velocityZ) * 3.6).toFixed(0)} km/h` +
-      `  slide ${(slideSpeed(car) * 3.6).toFixed(0)} km/h  steer ${car.steer.toFixed(2)}` +
+      `  slide ${(slideSpeed(car) * 3.6).toFixed(0)} km/h  steer ${car.steer.toFixed(2)}${car.drifting ? '  DRIFT' : ''}` +
       `\ninput throttle ${carInput.throttle}  brake ${carInput.brake}  steer ${carInput.steer}`,
   );
 

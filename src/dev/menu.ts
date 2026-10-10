@@ -1,3 +1,4 @@
+import type { CarSettings } from '../game/car.ts';
 import type { CitySettings } from '../game/city.ts';
 
 export const RenderMode = {
@@ -41,6 +42,7 @@ export interface DevMenu {
 export function createDevMenu(
   settings: DevSettings,
   citySettings: CitySettings,
+  carSettings: CarSettings,
   onChange: (setting: keyof DevSettings) => void,
   onCityChange: () => void,
   onToggle: (open: boolean) => void,
@@ -140,10 +142,23 @@ export function createDevMenu(
     });
   }
 
+  // Read by the car every tick, so no callback is needed.
+  function carSlider(
+    parent: HTMLElement,
+    label: string,
+    key: keyof CarSettings,
+    min: number,
+    max: number,
+    step: number,
+  ) {
+    slider(parent, label, carSettings[key], min, max, step, (value) => (carSettings[key] = value));
+  }
+
   const viewPage = page('View');
   const cityPage = page('City');
   const buildingsPage = page('Buildings');
   const lightingPage = page('Lighting');
+  const carPage = page('Car');
 
   settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
   settingSlider(viewPage, 'Cell width', 'cellWidth', 4, 16, 1);
@@ -152,13 +167,29 @@ export function createDevMenu(
   settingSlider(lightingPage, 'Ambient', 'ambient', 0, 1, 0.01);
   settingSlider(lightingPage, 'Directional light', 'lightIntensity', 0, 1, 0.01);
   settingSlider(lightingPage, 'Glyph shade', 'glyphShade', 0, 1, 0.01);
+  carSlider(carPage, 'Mass (kg)', 'mass', 500, 3000, 50);
+  carSlider(carPage, 'Engine force (N)', 'engineForce', 1000, 20000, 100);
+  carSlider(carPage, 'Reverse force (N)', 'reverseForce', 500, 10000, 100);
+  carSlider(carPage, 'Brake force (N)', 'brakeForce', 1000, 30000, 100);
+  carSlider(carPage, 'Drag', 'drag', 0, 10, 0.1);
+  carSlider(carPage, 'Rolling resistance (N)', 'rollingResistance', 0, 1000, 10);
+  carSlider(carPage, 'Engine braking (N)', 'engineBraking', 0, 8000, 100);
+  carSlider(carPage, 'Wheelbase (m)', 'wheelbase', 1.5, 4, 0.05);
+  carSlider(carPage, 'Max steer angle (rad)', 'maxSteerAngle', 0.1, 1, 0.01);
+  carSlider(carPage, 'Steer falloff speed (m/s)', 'steerFalloffSpeed', 1, 40, 0.5);
+  carSlider(carPage, 'Steer speed (/s)', 'steerSpeed', 0.5, 20, 0.5);
+  carSlider(carPage, 'Steer return speed (/s)', 'steerReturnSpeed', 0.5, 20, 0.5);
+  carSlider(carPage, 'Grip (g)', 'grip', 0.1, 3, 0.05);
+  carSlider(carPage, 'Drift grip (g)', 'driftGrip', 0.1, 3, 0.05);
+  carSlider(carPage, 'Drift exit speed (m/s)', 'driftExitSpeed', 0.1, 5, 0.1);
+  carSlider(carPage, 'Drift scrub (g)', 'driftScrub', 0, 3, 0.05);
 
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,
     label: string,
     key: K,
     values: Record<string, DevSettings[K]>,
-  ) {
+  ): HTMLSelectElement {
     const row = document.createElement('label');
     const text = document.createElement('span');
     text.textContent = label;
@@ -178,10 +209,17 @@ export function createDevMenu(
     });
     row.append(text, select);
     parent.append(row);
+    return select;
   }
 
   dropdown(viewPage, 'Render mode', 'renderMode', RenderMode);
-  dropdown(viewPage, 'Movement', 'movement', Movement);
+  const movementSelect = dropdown(viewPage, 'Movement', 'movement', Movement);
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== 'KeyC') return;
+    settings.movement = settings.movement === Movement.FlyCamera ? Movement.Car : Movement.FlyCamera;
+    movementSelect.value = String(settings.movement);
+    onChange('movement');
+  });
 
   const noclipRow = document.createElement('label');
   noclipRow.className = 'checkbox';
