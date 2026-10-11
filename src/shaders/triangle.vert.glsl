@@ -5,6 +5,7 @@ in vec3 a_color;
 in vec3 a_normal;
 in float a_emission;
 in float a_id; // -1 for nothing special; 0 and up for traffic signal lamps
+in float a_material; // 1-255, picks the glyph set
 
 uniform mat4 u_model;
 uniform mat4 u_modelView;
@@ -19,6 +20,7 @@ out vec3 v_viewPosition;
 out vec3 v_worldPosition;
 out vec3 v_normal;
 out float v_emission;
+flat out float v_material;
 
 const float UNLIT = 0.2; // brightness of a lamp that is off
 
@@ -26,6 +28,7 @@ void main() {
   v_color = a_color;
   v_normal = u_normalMatrix * a_normal;
   v_emission = a_emission;
+  v_material = a_material;
 
   // Signal lamps: id = junction * 10 + road * 5 + lamp, as built in trafficLight.ts.
   if (a_id >= 0.0) {

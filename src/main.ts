@@ -68,6 +68,7 @@ const colorLocation = gl.getAttribLocation(program, 'a_color');
 const normalLocation = gl.getAttribLocation(program, 'a_normal');
 const emissionLocation = gl.getAttribLocation(program, 'a_emission');
 const idLocation = gl.getAttribLocation(program, 'a_id');
+const materialLocation = gl.getAttribLocation(program, 'a_material');
 const signalsTextureLocation = gl.getUniformLocation(program, 'u_signals');
 
 interface Mesh {
@@ -95,6 +96,8 @@ function uploadMesh(vertices: number[]): Mesh {
   gl!.vertexAttribPointer(emissionLocation, 1, gl!.FLOAT, false, stride, 9 * 4);
   gl!.enableVertexAttribArray(idLocation);
   gl!.vertexAttribPointer(idLocation, 1, gl!.FLOAT, false, stride, 10 * 4);
+  gl!.enableVertexAttribArray(materialLocation);
+  gl!.vertexAttribPointer(materialLocation, 1, gl!.FLOAT, false, stride, 11 * 4);
 
   gl!.bindVertexArray(null);
   return { vao, buffer, vertexCount: vertices.length / FLOATS_PER_VERTEX };

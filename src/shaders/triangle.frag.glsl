@@ -6,6 +6,7 @@ in vec3 v_viewPosition;
 in vec3 v_worldPosition;
 in vec3 v_normal;
 in float v_emission;
+flat in float v_material;
 
 uniform vec3 u_fogColor;
 uniform float u_fogStart;
@@ -32,7 +33,7 @@ void main() {
 
   // Debug view: normals run from -1 to 1, colours from 0 to 1, so each axis is remapped.
   if (u_showNormals) {
-    outColor = vec4(normal * 0.5 + 0.5, 1.0);
+    outColor = vec4(normal * 0.5 + 0.5, v_material / 255.0);
     return;
   }
 
@@ -58,5 +59,6 @@ void main() {
   // Clear up to u_fogStart, then a straight fade to the fog colour at u_fogEnd.
   // max() avoids dividing by zero when the start is at or past the end.
   float fog = clamp((distance - u_fogStart) / max(u_fogEnd - u_fogStart, 0.001), 0.0, 1.0);
-  outColor = vec4(mix(lit, u_fogColor, fog), 1.0);
+  // Alpha holds the material: 8 bits, so the ASCII pass reads it back as round(a * 255).
+  outColor = vec4(mix(lit, u_fogColor, fog), v_material / 255.0);
 }
