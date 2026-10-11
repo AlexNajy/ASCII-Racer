@@ -16,12 +16,14 @@ npm run preview   # serve the production build locally
 ## Controls
 
 - Click: capture the mouse to look around (`Esc` releases it)
+- `F`: toggle fullscreen
+- `C`: switch between the fly camera and driving the car
 - `W` / `S`: fly forward / back along the view direction
 - `A` / `D`: fly left / right
 - `Space` / `Shift`: fly up / down
 - `Q` (hold): fly 5× faster
 - `E` (hold): fly 10× faster
-- `` ` `` (backtick): toggle the dev menu (camera position, FOV, cell size, view distance, fog start, render mode; city and building sliders on their own pages)
+- `` ` `` (backtick): toggle the dev menu, which frees the mouse while open (camera position, FOV, cell size, view distance, fog start, render mode, movement; city and building sliders on their own pages)
 
 ## Roadmap
 
@@ -77,25 +79,42 @@ npm run preview   # serve the production build locally
   - [x] Intersections: traffic lights on avenues, all-way or two-way stop signs on streets depending on how many corner blocks are busy, and crosswalks
   - [x] Signal phases: a fixed 60 Hz world tick, a deterministic phase cycle (green, yellow, all red, walk and flashing hand), seeded offsets with green waves along avenues, switched on the GPU from a per-frame signal texture
   - [x] Pole collisions: street lights, traffic lights and stop signs collide like buildings
-- [ ] **9. Drivable car**: keyboard input, acceleration, steering, grip, drift, weight transfer, headlights (the only real lights: a few cones that light what they hit)
-- [ ] **10. Building models**: real shapes in place of the boxes, with seeded spawning rules for which model goes where
+- [ ] **9. Drivable car**: keyboard input, arcade acceleration, steering and drift, headlights (the only real lights: a few cones that light what they hit)
+  - [x] Car state: position, heading and velocity as plain data, stepped once per 60 Hz tick
+  - [x] Car model: the collision box drawn from the car state (a real model later)
+  - [x] Chase camera: in Car movement mode the camera follows behind the car at driving height
+  - [x] Driving input: throttle, brake, steering and drift read once per tick into an input record, so every tick gets exactly one input at any frame rate
+  - [x] Acceleration and braking: acceleration fading towards top speed, coasting, the opposite pedal brakes then reverses
+  - [x] Steering: arcade style, A/D turn the nose and the velocity catches up with it
+  - [x] Drift: holding Space turns harder while the velocity lags behind (Mario Kart style), sliding scrubs speed, traction blends back once the slide dies down
+  - [x] Dynamic chase camera: lags behind the car's turns, follows the slide while drifting, pulls back and widens the FOV with speed, tunable on a Camera page in the dev menu
+  - [x] Camera out of walls: a ray from the car to the camera pulls it in front of anything in the way, snapping in and easing back out
+  - [x] Car collisions: the car (a row of circles) is pushed out of buildings and poles, loses its speed into the wall and bounces back a little
+  - [x] Smoothing between ticks: the car and camera are drawn between the last two ticks, so they don't jerk on screens faster than 60 Hz
+  - [x] Deterministic maths: own sin and cos for the simulation, so every browser drives the same
+  - [x] Car page in the dev menu: sliders for acceleration, steering and drift
+  - [x] Headlights: a cone that lights what it hits in the scene shader
+- [ ] **10. Per-material glyph sets**: each material gets its own characters, settled before building models are tuned against them
+  - [ ] Material IDs: the vertex `id` slot carries a material, the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell
+  - [ ] Glyph sets per material: one atlas row per set; a set can repeat one or two characters to force them (signal lamps `( ) 0` as the first test, then neon and windows)
+  - [ ] Animated sets: glyph picked from time and cell position as well as brightness, so things like fire flicker between `(` and `)` on their own
+  - [ ] Orientation sets: separate ramps for walls and for ground and roofs, from the normals target
+- [ ] **11. HUD**: drawn in the glyph grid, not as HTML
+  - [ ] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass
+  - [ ] Speedometer
+  - [ ] Timers and a minimap
+- [ ] **12. Building models**: real shapes in place of the boxes, with seeded spawning rules for which model goes where
   - [ ] Floors: building heights snapped to whole floors
   - [ ] Parametric styles: several shape functions per zone (setbacks, roofs, shopfronts), each a function of footprint and height
   - [ ] Prefabs: fixed-size models (houses, kiosks, dumpsters) placed and rotated by the seed
   - [ ] Spawn rules: which styles and prefabs each zone, lot and neighbourhood can get, and how often
   - [ ] Colour palettes: a hand-picked palette per style, one colour per building from the seed
   - [ ] Lit windows and neon: emissive faces in the models, seeded per building
-- [ ] **11. Visual identity**: per-material glyph sets, flicker-free glyphs at speed, speed streaks
-  - [ ] Material IDs: the vertex `id` slot carries a material, the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell
-  - [ ] Glyph sets per material: one atlas row per set; a set can repeat one or two characters to force them (signal lamps `( ) 0` as the first test, then neon and windows)
-  - [ ] Animated sets: glyph picked from time and cell position as well as brightness, so things like fire flicker between `(` and `)` on their own
-  - [ ] Orientation sets: separate ramps for walls and for ground and roofs, from the normals target
+- [ ] **13. Visual identity**: flicker-free glyphs at speed, speed streaks, particles
   - [ ] Particles: GL points of size 1 in the one-pixel-per-cell scene target, so each particle is exactly one glyph (crash debris as flying `#`); visual only, so they don't need to be deterministic
   - [ ] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
   - [ ] Speed streaks
-- [ ] **12. Menu + game modes**
-  - [ ] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded each frame and drawn over the scene by the ASCII pass
-  - [ ] HUD: speed, timers and a minimap drawn with the text layer
-  - [ ] Menus drawn with the text layer
+- [ ] **14. Menu + game modes**
+  - [ ] Menus drawn with the HUD's text layer
   - [ ] Game modes
-- [ ] **13. Multiplayer**: a small server to connect players, other players' cars, rollback netcode
+- [ ] **15. Multiplayer**: a small server to connect players, other players' cars, rollback netcode

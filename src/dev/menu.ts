@@ -1,3 +1,5 @@
+import type { CarSettings } from '../game/car.ts';
+import type { ChaseCameraSettings } from '../game/chaseCamera.ts';
 import type { CitySettings } from '../game/city.ts';
 
 export const RenderMode = {
@@ -12,18 +14,40 @@ export const RenderMode = {
 } as const;
 export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 
+// What the movement keys and mouse control.
+export const Movement = {
+  FlyCamera: 0,
+  Car: 1,
+} as const;
+export type Movement = (typeof Movement)[keyof typeof Movement];
+
 export interface DevSettings {
   fovDegrees: number;
   cellWidth: number; // in CSS pixels; the height follows from the character shape
   viewDistance: number; // fog is complete here, and the far plane
   fogStart: number; // fog begins here
   renderMode: RenderMode;
+  movement: Movement;
   noclip: boolean; 
   ambient: number; // light every surface gets, from 0 (black) to 1
   lightIntensity: number; // strength of the directional light
+  glyphShade: number; // how much of the cell's shade goes into the glyph colour, 0 to 1
+  headlightAngle: number; // degrees, the cone's full width
+  headlightRange: number; // m
+  headlightIntensity: number;
 }
 
-type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance' | 'fogStart' | 'ambient' | 'lightIntensity';
+type NumberSetting =
+  | 'fovDegrees'
+  | 'cellWidth'
+  | 'viewDistance'
+  | 'fogStart'
+  | 'ambient'
+  | 'lightIntensity'
+  | 'glyphShade'
+  | 'headlightAngle'
+  | 'headlightRange'
+  | 'headlightIntensity';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -32,8 +56,11 @@ export interface DevMenu {
 export function createDevMenu(
   settings: DevSettings,
   citySettings: CitySettings,
+  carSettings: CarSettings,
+  chaseSettings: ChaseCameraSettings,
   onChange: (setting: keyof DevSettings) => void,
   onCityChange: () => void,
+  onToggle: (open: boolean) => void,
 ): DevMenu {
   const panel = document.createElement('div');
   panel.id = 'dev-menu';
@@ -45,6 +72,7 @@ export function createDevMenu(
   panel.append(title);
 
   const info = document.createElement('div');
+  info.style.whiteSpace = 'pre-line';
   panel.append(info);
 
   // Each page is a div; the page dropdown shows one and hides the rest.
@@ -129,10 +157,36 @@ export function createDevMenu(
     });
   }
 
+  // Read by the car every tick, so no callback is needed.
+  function carSlider(
+    parent: HTMLElement,
+    label: string,
+    key: keyof CarSettings,
+    min: number,
+    max: number,
+    step: number,
+  ) {
+    slider(parent, label, carSettings[key], min, max, step, (value) => (carSettings[key] = value));
+  }
+
+  // Read by the chase camera every frame, so no callback is needed.
+  function chaseSlider(
+    parent: HTMLElement,
+    label: string,
+    key: keyof ChaseCameraSettings,
+    min: number,
+    max: number,
+    step: number,
+  ) {
+    slider(parent, label, chaseSettings[key], min, max, step, (value) => (chaseSettings[key] = value));
+  }
+
   const viewPage = page('View');
   const cityPage = page('City');
   const buildingsPage = page('Buildings');
   const lightingPage = page('Lighting');
+  const carPage = page('Car');
+  const cameraPage = page('Camera');
 
   settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
   settingSlider(viewPage, 'Cell width', 'cellWidth', 4, 16, 1);
@@ -140,26 +194,67 @@ export function createDevMenu(
   settingSlider(viewPage, 'Fog start', 'fogStart', 0, 1000, 1);
   settingSlider(lightingPage, 'Ambient', 'ambient', 0, 1, 0.01);
   settingSlider(lightingPage, 'Directional light', 'lightIntensity', 0, 1, 0.01);
+  settingSlider(lightingPage, 'Glyph shade', 'glyphShade', 0, 1, 0.01);
+  settingSlider(lightingPage, 'Headlight cone angle (°)', 'headlightAngle', 5, 120, 1);
+  settingSlider(lightingPage, 'Headlight range (m)', 'headlightRange', 5, 150, 1);
+  settingSlider(lightingPage, 'Headlight intensity', 'headlightIntensity', 0, 5, 0.1);
+  carSlider(carPage, 'Acceleration (m/s²)', 'acceleration', 0, 20, 0.5);
+  carSlider(carPage, 'Top speed (m/s)', 'topSpeed', 5, 60, 0.5);
+  carSlider(carPage, 'Coast decel (m/s²)', 'coastDecel', 0, 10, 0.1);
+  carSlider(carPage, 'Turn speed (rad/s)', 'turnSpeed', 0.05, 3, 0.05);
+  carSlider(carPage, 'Drift turn speed (rad/s)', 'driftTurnSpeed', 0.1, 6, 0.1);
+  carSlider(carPage, 'Drift follow (/s)', 'driftFollow', 0.1, 10, 0.1);
+  carSlider(carPage, 'Grip follow (/s)', 'gripFollow', 1, 60, 1);
+  carSlider(carPage, 'Traction time (s)', 'tractionTime', 0.05, 2, 0.05);
+  carSlider(carPage, 'Regrip speed (m/s)', 'regripSpeed', 0.1, 10, 0.1);
+  carSlider(carPage, 'Slip decel (m/s²)', 'slipDecel', 0, 40, 0.5);
+  carSlider(carPage, 'Full turn speed (m/s)', 'fullTurnSpeed', 0.5, 20, 0.5);
+  carSlider(carPage, 'Wall bounce', 'wallBounce', 0, 1, 0.05);
+  chaseSlider(cameraPage, 'Distance (m)', 'distance', 2, 15, 0.1);
+  chaseSlider(cameraPage, 'Height (m)', 'height', 0.5, 8, 0.1);
+  chaseSlider(cameraPage, 'Look height (m)', 'lookHeight', 0, 3, 0.1);
+  chaseSlider(cameraPage, 'Yaw follow (/s)', 'yawFollow', 0.5, 20, 0.5);
+  chaseSlider(cameraPage, 'Speed pull back (m)', 'speedPullBack', 0, 6, 0.1);
+  chaseSlider(cameraPage, 'Speed FOV boost (°)', 'speedFovBoost', 0, 40, 1);
+  chaseSlider(cameraPage, 'Drift travel blend', 'driftTravelBlend', 0, 1, 0.05);
+  chaseSlider(cameraPage, 'Wall return (/s)', 'wallReturn', 0.2, 10, 0.1);
 
-  const modeRow = document.createElement('label');
-  const modeText = document.createElement('span');
-  modeText.textContent = 'Render mode';
-  const select = document.createElement('select');
-  for (const [name, value] of Object.entries(RenderMode)) {
-    const option = document.createElement('option');
-    option.textContent = name;
-    option.value = String(value);
-    option.selected = value === settings.renderMode;
-    select.append(option);
+  function dropdown<K extends 'renderMode' | 'movement'>(
+    parent: HTMLElement,
+    label: string,
+    key: K,
+    values: Record<string, DevSettings[K]>,
+  ): HTMLSelectElement {
+    const row = document.createElement('label');
+    const text = document.createElement('span');
+    text.textContent = label;
+    const select = document.createElement('select');
+    for (const [name, value] of Object.entries(values)) {
+      const option = document.createElement('option');
+      option.textContent = name;
+      option.value = String(value);
+      option.selected = value === settings[key];
+      select.append(option);
+    }
+    select.addEventListener('change', () => {
+      settings[key] = Number(select.value) as DevSettings[K];
+      onChange(key);
+      // Release keyboard focus so flying keys don't pick options by their first letter.
+      select.blur();
+    });
+    row.append(text, select);
+    parent.append(row);
+    return select;
   }
-  select.addEventListener('change', () => {
-    settings.renderMode = Number(select.value) as RenderMode;
-    onChange('renderMode');
-    // Release keyboard focus so flying keys don't pick options by their first letter.
-    select.blur();
+
+  dropdown(viewPage, 'Render mode', 'renderMode', RenderMode);
+  const movementSelect = dropdown(viewPage, 'Movement', 'movement', Movement);
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== 'KeyC') return;
+    settings.movement = settings.movement === Movement.FlyCamera ? Movement.Car : Movement.FlyCamera;
+    movementSelect.value = String(settings.movement);
+    onChange('movement');
   });
-  modeRow.append(modeText, select);
-  viewPage.append(modeRow);
 
   const noclipRow = document.createElement('label');
   noclipRow.className = 'checkbox';
@@ -200,6 +295,7 @@ export function createDevMenu(
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'Backquote') return;
     panel.hidden = !panel.hidden;
+    onToggle(!panel.hidden);
     event.preventDefault();
   });
 

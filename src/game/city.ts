@@ -1,4 +1,5 @@
 import { blockSeed, createRandom, shuffle } from '../math/random.ts';
+import { hypot } from '../math/deterministic.ts';
 
 // A rectangle on the ground plane, seen from above. Units are metres.
 export interface Rect {
@@ -339,7 +340,7 @@ export function generateCity(settings: CitySettings): City {
     for (let column = 0; column < blocksPerSide; column++) {
       const minX = columns.blockStarts[column];
       const minZ = rows.blockStarts[row];
-      const distance = Math.hypot(column - downtownColumn, row - downtownRow) / blocksPerSide;
+      const distance = hypot(column - downtownColumn, row - downtownRow) / blocksPerSide;
       const t = Math.min(distance / DOWNTOWN_RADIUS, 1);
       const midDensityChance = centreDensityChance + (edgeDensityChance - centreDensityChance) * t;
       blocks.push({

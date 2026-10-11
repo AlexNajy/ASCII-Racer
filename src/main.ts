@@ -1,14 +1,22 @@
 import './style.css';
-import { createDevMenu, RenderMode, type DevSettings } from './dev/menu.ts';
-import { advanceClock, createClock } from './game/clock.ts';
+import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
+import { advanceClock, createClock, TICK_SECONDS } from './game/clock.ts';
+import { blendCars, collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
+import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
+import {
+  createChaseCamera,
+  DEFAULT_CHASE_CAMERA_SETTINGS,
+  updateChaseCamera,
+  type ChaseCameraSettings,
+} from './game/chaseCamera.ts';
 import { generateBuildings, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { cityColliders, pushOutOfColliders } from './game/collision.ts';
 import { generateIntersections, type Intersections } from './game/intersections.ts';
 import { signalOffsets, signalPhase } from './game/signals.ts';
 import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
-import { trackKeyboard, trackMouse } from './game/input.ts';
+import { trackFullscreenKey, trackKeyboard, trackMouse } from './game/input.ts';
 import {
   createColorTarget,
   createRenderTarget,
@@ -17,7 +25,7 @@ import {
   type ColorTarget,
 } from './gl/framebuffer.ts';
 import { createProgram } from './gl/shader.ts';
-import { multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
+import { identity, multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
@@ -25,6 +33,8 @@ import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
+import { carVertices } from './render/models/car.ts';
+import { headlight, HEADLIGHT_SOFT_EDGE } from './render/headlights.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
@@ -37,6 +47,7 @@ if (!gl) throw new Error('WebGL2 not supported');
 
 const program = createProgram(gl, vertexSource, fragmentSource);
 const modelViewLocation = gl.getUniformLocation(program, 'u_modelView');
+const normalMatrixLocation = gl.getUniformLocation(program, 'u_normalMatrix');
 const projectionLocation = gl.getUniformLocation(program, 'u_projection');
 const fogColorLocation = gl.getUniformLocation(program, 'u_fogColor');
 const fogStartLocation = gl.getUniformLocation(program, 'u_fogStart');
@@ -45,6 +56,13 @@ const showNormalsLocation = gl.getUniformLocation(program, 'u_showNormals');
 const lightDirectionLocation = gl.getUniformLocation(program, 'u_lightDirection');
 const lightIntensityLocation = gl.getUniformLocation(program, 'u_lightIntensity');
 const ambientLocation = gl.getUniformLocation(program, 'u_ambient');
+const modelLocation = gl.getUniformLocation(program, 'u_model');
+const headlightPositionLocation = gl.getUniformLocation(program, 'u_headlightPosition');
+const headlightDirectionLocation = gl.getUniformLocation(program, 'u_headlightDirection');
+const headlightOuterCosLocation = gl.getUniformLocation(program, 'u_headlightOuterCos');
+const headlightInnerCosLocation = gl.getUniformLocation(program, 'u_headlightInnerCos');
+const headlightRangeLocation = gl.getUniformLocation(program, 'u_headlightRange');
+const headlightIntensityLocation = gl.getUniformLocation(program, 'u_headlightIntensity');
 const positionLocation = gl.getAttribLocation(program, 'a_position');
 const colorLocation = gl.getAttribLocation(program, 'a_color');
 const normalLocation = gl.getAttribLocation(program, 'a_normal');
@@ -87,11 +105,7 @@ function deleteMesh(mesh: Mesh) {
   gl!.deleteVertexArray(mesh.vao);
 }
 
-const triangle = uploadMesh([
-   0.0,  0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0,
-  -0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0,
-   0.5, -0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0,
-]);
+const carMesh = uploadMesh(carVertices());
 
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
   return box([rect.minX, bottom, rect.minZ], [rect.maxX, top, rect.maxZ], color);
@@ -124,7 +138,7 @@ function buildCityMeshes(
   streetLights: StreetLight[],
   { trafficLights, stopSigns }: Intersections,
 ): Mesh[] {
-  const road = uploadMesh(slab(city.bounds, -0.1, 0, [0.25, 0.25, 0.25]));
+  const road = uploadMesh(slab(city.bounds, -0.1, 0, [0.2, 0.2, 0.2]));
   // Raised slightly so the paint doesn't fight the road surface for depth.
   const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02, [1, 1, 1])));
   const pavements = uploadMesh(city.blocks.flatMap(({ rect, zone }) => slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone])));
@@ -145,6 +159,8 @@ function buildCityMeshes(
 }
 
 const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
+const carSettings: CarSettings = { ...DEFAULT_CAR_SETTINGS };
+const chaseSettings: ChaseCameraSettings = { ...DEFAULT_CHASE_CAMERA_SETTINGS };
 let city = generateCity(citySettings);
 let buildings = generateBuildings(city, citySettings);
 let streetLights = generateStreetLights(city, citySettings);
@@ -176,6 +192,7 @@ const glyphsLocation = gl.getUniformLocation(asciiProgram, 'u_glyphs');
 const rampLengthLocation = gl.getUniformLocation(asciiProgram, 'u_rampLength');
 const backgroundLocation = gl.getUniformLocation(asciiProgram, 'u_background');
 const renderModeLocation = gl.getUniformLocation(asciiProgram, 'u_renderMode');
+const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
 const fullscreenVao = gl.createVertexArray();
 const crtProgram = createProgram(gl, fullscreenVertexSource, crtFragmentSource);
 const crtImageLocation = gl.getUniformLocation(crtProgram, 'u_image');
@@ -200,9 +217,14 @@ const settings: DevSettings = {
   viewDistance: 1000,
   fogStart: 150,
   renderMode: RenderMode.Glyphs,
+  movement: Movement.FlyCamera,
   noclip: false,
   ambient: 0.3,
   lightIntensity: 0.8,
+  glyphShade: 0.5,
+  headlightAngle: 70,
+  headlightRange: 50,
+  headlightIntensity: 1,
 };
 
 const dpr = window.devicePixelRatio || 1;
@@ -239,6 +261,8 @@ window.addEventListener('resize', resize);
 const devMenu = createDevMenu(
   settings,
   citySettings,
+  carSettings,
+  chaseSettings,
   (setting) => {
     if (setting === 'cellWidth') {
       buildCells();
@@ -246,10 +270,15 @@ const devMenu = createDevMenu(
     }
   },
   regenerateCity,
+  (open) => {
+    if (open) document.exitPointerLock();
+    else canvas.requestPointerLock().catch(() => {});
+  },
 );
 
 trackKeyboard();
 trackMouse(canvas);
+trackFullscreenKey(document.body);
 
 const camera: Camera = {
   position: [0, 1.5, 4],
@@ -261,13 +290,21 @@ const CAMERA_RADIUS = 0.5;
 // A fixed light high up, from +x and +z, until the night lights replace it.
 const LIGHT_DIRECTION = normalize([0.5, 1, 0.3]);
 
-function draw(mesh: Mesh, mode: GLenum, modelView: Mat4) {
-  gl!.uniformMatrix4fv(modelViewLocation, false, modelView);
+function draw(mesh: Mesh, mode: GLenum, view: Mat4, model?: Mat4) {
+  gl!.uniformMatrix4fv(modelViewLocation, false, model ? multiply(view, model) : view);
+  // Only valid while models have no scaling.
+  const m = model ?? identity();
+  gl!.uniformMatrix4fv(modelLocation, false, m);
+  gl!.uniformMatrix3fv(normalMatrixLocation, false, [m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]]);
   gl!.bindVertexArray(mesh.vao);
   gl!.drawArrays(mode, 0, mesh.vertexCount);
 }
 
 const clock = createClock();
+const car = createCar(0, 0, 0);
+let previousCar = car;
+const chase = createChaseCamera();
+let carInput = NO_INPUT;
 
 // Longest step allowed, so returning to a background tab doesn't teleport the camera
 // or run a burst of simulation ticks.
@@ -278,19 +315,31 @@ let previousTimeMs = 0;
 
 function frame(timeMs: number) {
   requestAnimationFrame(frame);
-  const t = timeMs / 1000;
   const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
   previousTimeMs = timeMs;
   advanceClock(clock, dt, () => {
-    // Simulation steps go here.
+    previousCar = { ...car };
+    carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
+    stepCar(car, carInput, carSettings);
+    collideCar(car, colliders, carSettings);
   });
-  updateFlyCamera(camera, dt);
-  if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, colliders);
+  // Drawn between the last two ticks by the time left over, so motion is smooth on any refresh rate.
+  const drawnCar = blendCars(previousCar, car, clock.leftover / TICK_SECONDS);
+  let fovBoost = 0;
+  if (settings.movement === Movement.FlyCamera) {
+    updateFlyCamera(camera, dt);
+    if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, colliders);
+  } else {
+    fovBoost = updateChaseCamera(camera, chase, drawnCar, carSettings, chaseSettings, colliders, dt);
+  }
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(
     `camera ${cameraX.toFixed(1)}, ${cameraY.toFixed(1)}, ${cameraZ.toFixed(1)}` +
-      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}`,
+      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}` +
+      `\ncar ${car.x.toFixed(1)}, ${car.z.toFixed(1)}  heading ${degrees(car.heading)}°` +
+      `  ${(Math.hypot(car.velocityX, car.velocityZ) * 3.6).toFixed(0)} km/h${car.drifting ? '  DRIFT' : ''}  traction ${car.traction.toFixed(2)}` +
+      `\ninput throttle ${carInput.throttle}  brake ${carInput.brake}  steer ${carInput.steer}  drift ${carInput.drift}`,
   );
 
   const crtImage = updateGlyphImage(settings.renderMode === RenderMode.CrtGlyphs);
@@ -313,8 +362,16 @@ function frame(timeMs: number) {
   gl!.uniform3fv(lightDirectionLocation, LIGHT_DIRECTION);
   gl!.uniform1f(ambientLocation, settings.ambient);
   gl!.uniform1f(lightIntensityLocation, settings.lightIntensity);
+  const light = headlight(drawnCar);
+  const halfAngle = (settings.headlightAngle * Math.PI) / 360;
+  gl!.uniform3fv(headlightPositionLocation, light.position);
+  gl!.uniform3fv(headlightDirectionLocation, light.direction);
+  gl!.uniform1f(headlightOuterCosLocation, Math.cos(halfAngle));
+  gl!.uniform1f(headlightInnerCosLocation, Math.cos(halfAngle * (1 - HEADLIGHT_SOFT_EDGE)));
+  gl!.uniform1f(headlightRangeLocation, settings.headlightRange);
+  gl!.uniform1f(headlightIntensityLocation, settings.headlightIntensity);
   const aspect = canvas.width / canvas.height;
-  const projection = perspective((settings.fovDegrees * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
+  const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
   gl!.activeTexture(gl!.TEXTURE3);
   updateSignalTexture(gl!, signals, offsets.map((offset) => signalPhase(clock.tick, offset)));
@@ -322,7 +379,7 @@ function frame(timeMs: number) {
   const view = viewMatrix(camera);
 
   for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
-  draw(triangle, gl!.TRIANGLES, multiply(view, multiply(translation(0, 0.5, 0), rotationY(t))));
+  draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
   if (fullResolution) return;
 
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, crtImage ? crtImage.framebuffer : null);
@@ -342,6 +399,7 @@ function frame(timeMs: number) {
   gl!.uniform1i(normalTextureLocation, 2);
   gl!.uniform1i(rampLengthLocation, [...GLYPH_RAMPS[0]].length);
   gl!.uniform3fv(backgroundLocation, background);
+  gl!.uniform1f(glyphShadeLocation, settings.glyphShade);
   gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);

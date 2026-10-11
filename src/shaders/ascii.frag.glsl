@@ -7,6 +7,8 @@ uniform sampler2D u_glyphs;
 uniform ivec2 u_cellSize;
 uniform int u_rampLength;
 uniform vec3 u_background;
+// 0 = full-strength hue, 1 = the cell's true colour.
+uniform float u_glyphShade;
 uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene, 5 normal texture, 6 CRT scene
 
 out vec4 outColor;
@@ -101,5 +103,6 @@ void main() {
   );
   float glyph = texelFetch(u_glyphs, atlasPixel, 0).r;
 
-  outColor = vec4(mix(u_background, color, glyph), 1.0);
+  vec3 hue = color / max(max(color.r, color.g), max(color.b, 0.001));
+  outColor = vec4(mix(u_background, mix(hue, color, u_glyphShade), glyph), 1.0);
 }

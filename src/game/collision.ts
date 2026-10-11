@@ -71,3 +71,32 @@ export function pushOutOfColliders(position: Vec3, radius: number, colliders: Co
     [position[0], position[2]] = pushOutOfRect(position[0], position[2], radius, rect);
   }
 }
+
+// How far along the segment from `from` to `to` it first enters a collider, from 0 to 1; 1 if it hits nothing.
+// Colliders are boxes from the ground (y 0) up to `top`. Ones the segment starts inside are skipped.
+export function segmentHit(from: Vec3, to: Vec3, colliders: Collider[]): number {
+  let nearest = 1;
+  for (const { rect, top } of colliders) {
+    // Slab test: on each axis the segment is between the box's two faces for one stretch of t;
+    // it is inside the box where all three stretches overlap.
+    let enter = 0;
+    let exit = nearest;
+    const mins = [rect.minX, 0, rect.minZ];
+    const maxes = [rect.maxX, top, rect.maxZ];
+    for (let axis = 0; axis < 3 && enter <= exit; axis++) {
+      const start = from[axis];
+      const delta = to[axis] - start;
+      if (delta === 0) {
+        if (start < mins[axis] || start > maxes[axis]) exit = -1;
+        continue;
+      }
+      const t1 = (mins[axis] - start) / delta;
+      const t2 = (maxes[axis] - start) / delta;
+      enter = Math.max(enter, Math.min(t1, t2));
+      exit = Math.min(exit, Math.max(t1, t2));
+    }
+    const startsInside = enter === 0;
+    if (enter <= exit && !startsInside) nearest = enter;
+  }
+  return nearest;
+}
