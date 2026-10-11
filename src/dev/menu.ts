@@ -32,9 +32,22 @@ export interface DevSettings {
   ambient: number; // light every surface gets, from 0 (black) to 1
   lightIntensity: number; // strength of the directional light
   glyphShade: number; // how much of the cell's shade goes into the glyph colour, 0 to 1
+  headlightAngle: number; // degrees, the cone's full width
+  headlightRange: number; // m
+  headlightIntensity: number;
 }
 
-type NumberSetting = 'fovDegrees' | 'cellWidth' | 'viewDistance' | 'fogStart' | 'ambient' | 'lightIntensity' | 'glyphShade';
+type NumberSetting =
+  | 'fovDegrees'
+  | 'cellWidth'
+  | 'viewDistance'
+  | 'fogStart'
+  | 'ambient'
+  | 'lightIntensity'
+  | 'glyphShade'
+  | 'headlightAngle'
+  | 'headlightRange'
+  | 'headlightIntensity';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -182,6 +195,9 @@ export function createDevMenu(
   settingSlider(lightingPage, 'Ambient', 'ambient', 0, 1, 0.01);
   settingSlider(lightingPage, 'Directional light', 'lightIntensity', 0, 1, 0.01);
   settingSlider(lightingPage, 'Glyph shade', 'glyphShade', 0, 1, 0.01);
+  settingSlider(lightingPage, 'Headlight cone angle (°)', 'headlightAngle', 5, 120, 1);
+  settingSlider(lightingPage, 'Headlight range (m)', 'headlightRange', 5, 150, 1);
+  settingSlider(lightingPage, 'Headlight intensity', 'headlightIntensity', 0, 5, 0.1);
   carSlider(carPage, 'Acceleration (m/s²)', 'acceleration', 0, 20, 0.5);
   carSlider(carPage, 'Top speed (m/s)', 'topSpeed', 5, 60, 0.5);
   carSlider(carPage, 'Coast decel (m/s²)', 'coastDecel', 0, 10, 0.1);

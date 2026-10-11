@@ -6,6 +6,7 @@ in vec3 a_normal;
 in float a_emission;
 in float a_id; // -1 for nothing special; 0 and up for traffic signal lamps
 
+uniform mat4 u_model;
 uniform mat4 u_modelView;
 uniform mat4 u_projection;
 uniform mat3 u_normalMatrix;
@@ -15,6 +16,7 @@ uniform highp usampler2D u_signals;
 
 out vec3 v_color;
 out vec3 v_viewPosition;
+out vec3 v_worldPosition;
 out vec3 v_normal;
 out float v_emission;
 
@@ -48,4 +50,5 @@ void main() {
   vec4 viewPosition = u_modelView * vec4(a_position, 1.0);
   gl_Position = u_projection * viewPosition;
   v_viewPosition = viewPosition.xyz;
+  v_worldPosition = (u_model * vec4(a_position, 1.0)).xyz;
 }

@@ -34,6 +34,7 @@ import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
 import { carVertices } from './render/models/car.ts';
+import { headlight, HEADLIGHT_SOFT_EDGE } from './render/headlights.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
@@ -55,6 +56,13 @@ const showNormalsLocation = gl.getUniformLocation(program, 'u_showNormals');
 const lightDirectionLocation = gl.getUniformLocation(program, 'u_lightDirection');
 const lightIntensityLocation = gl.getUniformLocation(program, 'u_lightIntensity');
 const ambientLocation = gl.getUniformLocation(program, 'u_ambient');
+const modelLocation = gl.getUniformLocation(program, 'u_model');
+const headlightPositionLocation = gl.getUniformLocation(program, 'u_headlightPosition');
+const headlightDirectionLocation = gl.getUniformLocation(program, 'u_headlightDirection');
+const headlightOuterCosLocation = gl.getUniformLocation(program, 'u_headlightOuterCos');
+const headlightInnerCosLocation = gl.getUniformLocation(program, 'u_headlightInnerCos');
+const headlightRangeLocation = gl.getUniformLocation(program, 'u_headlightRange');
+const headlightIntensityLocation = gl.getUniformLocation(program, 'u_headlightIntensity');
 const positionLocation = gl.getAttribLocation(program, 'a_position');
 const colorLocation = gl.getAttribLocation(program, 'a_color');
 const normalLocation = gl.getAttribLocation(program, 'a_normal');
@@ -214,6 +222,9 @@ const settings: DevSettings = {
   ambient: 0.3,
   lightIntensity: 0.8,
   glyphShade: 0.5,
+  headlightAngle: 70,
+  headlightRange: 50,
+  headlightIntensity: 1,
 };
 
 const dpr = window.devicePixelRatio || 1;
@@ -283,6 +294,7 @@ function draw(mesh: Mesh, mode: GLenum, view: Mat4, model?: Mat4) {
   gl!.uniformMatrix4fv(modelViewLocation, false, model ? multiply(view, model) : view);
   // Only valid while models have no scaling.
   const m = model ?? identity();
+  gl!.uniformMatrix4fv(modelLocation, false, m);
   gl!.uniformMatrix3fv(normalMatrixLocation, false, [m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]]);
   gl!.bindVertexArray(mesh.vao);
   gl!.drawArrays(mode, 0, mesh.vertexCount);
@@ -350,6 +362,14 @@ function frame(timeMs: number) {
   gl!.uniform3fv(lightDirectionLocation, LIGHT_DIRECTION);
   gl!.uniform1f(ambientLocation, settings.ambient);
   gl!.uniform1f(lightIntensityLocation, settings.lightIntensity);
+  const light = headlight(drawnCar);
+  const halfAngle = (settings.headlightAngle * Math.PI) / 360;
+  gl!.uniform3fv(headlightPositionLocation, light.position);
+  gl!.uniform3fv(headlightDirectionLocation, light.direction);
+  gl!.uniform1f(headlightOuterCosLocation, Math.cos(halfAngle));
+  gl!.uniform1f(headlightInnerCosLocation, Math.cos(halfAngle * (1 - HEADLIGHT_SOFT_EDGE)));
+  gl!.uniform1f(headlightRangeLocation, settings.headlightRange);
+  gl!.uniform1f(headlightIntensityLocation, settings.headlightIntensity);
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
