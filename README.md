@@ -93,7 +93,7 @@ npm run preview   # serve the production build locally
   - [x] Smoothing between ticks: the car and camera are drawn between the last two ticks, so they don't jerk on screens faster than 60 Hz
   - [x] Deterministic maths: own sin and cos for the simulation, so every browser drives the same
   - [x] Car page in the dev menu: sliders for acceleration, steering and drift
-  - [ ] Headlights: two cones that light what they hit in the scene shader
+  - [x] Headlights: a cone that lights what it hits in the scene shader
 - [ ] **10. Per-material glyph sets**: each material gets its own characters, settled before building models are tuned against them
   - [ ] Material IDs: the vertex `id` slot carries a material, the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell
   - [ ] Glyph sets per material: one atlas row per set; a set can repeat one or two characters to force them (signal lamps `( ) 0` as the first test, then neon and windows)
