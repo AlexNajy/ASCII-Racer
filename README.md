@@ -95,8 +95,8 @@ npm run preview   # serve the production build locally
   - [x] Car page in the dev menu: sliders for acceleration, steering and drift
   - [x] Headlights: a cone that lights what it hits in the scene shader
 - [ ] **10. Per-material glyph sets**: each material gets its own characters, settled before building models are tuned against them
-  - [ ] Material IDs: the vertex `id` slot carries a material, the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell
-  - [ ] Glyph sets per material: one atlas row per set; a set can repeat one or two characters to force them (signal lamps `( ) 0` as the first test, then neon and windows)
+  - [x] Material IDs: the vertex `id` slot carries a material, the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell
+  - [x] Glyph sets per material: one atlas row per set (building, road, curb); a set can repeat characters to force them. Buildings get `[` / `]` edge glyphs on the left and right of each face, skipped behind objects in front
   - [ ] Animated sets: glyph picked from time and cell position as well as brightness, so things like fire flicker between `(` and `)` on their own
   - [ ] Orientation sets: separate ramps for walls and for ground and roofs, from the normals target
   - [ ] Screen direction glyphs: strokes follow a surface's direction as seen on screen, so they change as you move around it: the normal for slopes (a 45° roof goes `\` → `|` → `/`), a tangent for flat things with a grain (road direction, car forward, so a hood goes from `[||||]` to `=----=`)
