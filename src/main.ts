@@ -30,7 +30,7 @@ import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { EDGE_MATERIALS, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
-import { box, FLOATS_PER_VERTEX, withMaterial } from './render/shapes.ts';
+import { box, FLOATS_PER_VERTEX, withMaterial, withSideMaterial } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
@@ -144,18 +144,17 @@ function buildCityMeshes(
 ): Mesh[] {
   const road = uploadMesh(withMaterial(slab(city.bounds, -0.1, 0, [0.2, 0.2, 0.2]), MATERIAL.defaultRoad));
   // Raised slightly so the paint doesn't fight the road surface for depth.
-  const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02, [1, 1, 1])));
-  const pavements = uploadMesh(
-    withMaterial(city.blocks.flatMap(({ rect, zone }) => slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone])), MATERIAL.defaultCurb),
+  const markings = uploadMesh(
+    withMaterial(city.markings.flatMap((marking) => slab(marking, 0, 0.02, [1, 1, 1])), MATERIAL.roadMarkings),
   );
+  const curb = (vertices: number[]) =>
+    withSideMaterial(withMaterial(vertices, MATERIAL.defaultCurb), MATERIAL.defaultCurbSide);
+  const pavements = uploadMesh(curb(city.blocks.flatMap(({ rect, zone }) => slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone]))));
   const wall = uploadMesh(
-    withMaterial(
-      [
-        ...city.wallPavement.flatMap((strip) => slab(strip, 0, CURB_HEIGHT, WALL_COLORS.corner)),
-        ...city.wall.flatMap(({ rect, kind }) => slab(rect, 0, CURB_HEIGHT, WALL_COLORS[kind])),
-      ],
-      MATERIAL.defaultCurb,
-    ),
+    curb([
+      ...city.wallPavement.flatMap((strip) => slab(strip, 0, CURB_HEIGHT, WALL_COLORS.corner)),
+      ...city.wall.flatMap(({ rect, kind }) => slab(rect, 0, CURB_HEIGHT, WALL_COLORS[kind])),
+    ]),
   );
   // All buildings in one mesh, with corners already in world position, so they draw in a single call.
   const buildingMesh = uploadMesh(

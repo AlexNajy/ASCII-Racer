@@ -1,7 +1,8 @@
 import { CURB_HEIGHT } from '../../../game/city.ts';
 import { STOP_SIGN_HEIGHT, STOP_SIGN_POLE_WIDTH, type StopSign } from '../../../game/intersections.ts';
 import type { Vec3 } from '../../../math/mat4.ts';
-import { box, disc, pixelArt } from '../../shapes.ts';
+import { MATERIAL } from '../../materials.ts';
+import { box, disc, pixelArt, withMaterial } from '../../shapes.ts';
 
 // Bigger than a real sign (0.75 m across) so the octagon still reads as one at a distance.
 const SIGN_RADIUS = 0.55;
@@ -34,10 +35,15 @@ export function stopSignVertices({ x, z, facingX, facingZ }: StopSign): number[]
     return [x + facingX * offset, centreY, z + facingZ * offset];
   };
   return [
-    ...box([x - pole, CURB_HEIGHT, z - pole], [x + pole, centreY, z + pole], POLE_COLOR),
-    ...disc(plate, facing, SIGN_RADIUS, PLATE_DEPTH, 8, POLE_COLOR),
-    ...disc(layer(1), facing, SIGN_RADIUS, LAYER_DEPTH, 8, BORDER_COLOR),
-    ...disc(layer(2), facing, SIGN_RADIUS - BORDER, LAYER_DEPTH, 8, FACE_COLOR),
-    ...pixelArt(WORD, layer(2.5), facing, TEXT_PIXEL, LAYER_DEPTH, TEXT_COLOR),
+    ...withMaterial(box([x - pole, CURB_HEIGHT, z - pole], [x + pole, centreY, z + pole], POLE_COLOR), MATERIAL.stopSignPole),
+    ...withMaterial(
+      [
+        ...disc(plate, facing, SIGN_RADIUS, PLATE_DEPTH, 8, POLE_COLOR),
+        ...disc(layer(1), facing, SIGN_RADIUS, LAYER_DEPTH, 8, BORDER_COLOR),
+        ...disc(layer(2), facing, SIGN_RADIUS - BORDER, LAYER_DEPTH, 8, FACE_COLOR),
+        ...pixelArt(WORD, layer(2.5), facing, TEXT_PIXEL, LAYER_DEPTH, TEXT_COLOR),
+      ],
+      MATERIAL.stopSign,
+    ),
   ];
 }
