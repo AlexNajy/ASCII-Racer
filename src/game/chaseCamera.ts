@@ -19,8 +19,8 @@ export interface ChaseCameraSettings {
 
 export const DEFAULT_CHASE_CAMERA_SETTINGS: ChaseCameraSettings = {
   distance: 6.5,
-  height: 2.2,
-  lookHeight: 1.5,
+  height: 2,
+  lookHeight: 1.6,
   yawFollow: 10,
   speedPullBack: 1.5,
   speedFovBoost: 10,

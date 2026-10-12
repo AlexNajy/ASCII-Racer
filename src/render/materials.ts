@@ -11,7 +11,7 @@ const EDGE_GLYPHS = 3;
 
 const SETS = {
   default: { ramp: ' .-:=+*%#@' },
-  defaultBuilding: { ramp: ' .,:;||IH#', edges: '|[]' },
+  defaultBuilding: { ramp: ' .:!|I%&#H', edges: '|[]' },
   defaultRoad: { ramp: ' ...,,,---' },
   defaultCurb: { ramp: ' :::--=*##' },
   defaultCurbSide: { ramp: ' :::==**##' },

@@ -34,6 +34,13 @@ export function trackFullscreenKey(element: HTMLElement): void {
   });
 }
 
+// Calls onPress once per press; holding the key down doesn't repeat it.
+export function trackKeyPress(code: string, onPress: () => void): void {
+  window.addEventListener('keydown', (event) => {
+    if (event.code === code && !event.repeat) onPress();
+  });
+}
+
 // Returns the mouse movement in pixels since the last call, then resets it.
 export function takeMouseMovement(): [number, number] {
   const movement: [number, number] = [mouseX, mouseY];

@@ -16,7 +16,7 @@ import { cityColliders, pushOutOfColliders } from './game/collision.ts';
 import { generateIntersections, type Intersections } from './game/intersections.ts';
 import { signalOffsets, signalPhase } from './game/signals.ts';
 import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
-import { trackFullscreenKey, trackKeyboard, trackMouse } from './game/input.ts';
+import { trackFullscreenKey, trackKeyboard, trackKeyPress, trackMouse } from './game/input.ts';
 import {
   createColorTarget,
   createRenderTarget,
@@ -260,7 +260,7 @@ const settings: DevSettings = {
   viewDistance: 1000,
   fogStart: 150,
   renderMode: RenderMode.Glyphs,
-  movement: Movement.FlyCamera,
+  movement: Movement.Car,
   noclip: false,
   ambient: 0.5,
   lightIntensity: 0.4,
@@ -323,6 +323,8 @@ const devMenu = createDevMenu(
 trackKeyboard();
 trackMouse(canvas);
 trackFullscreenKey(document.body);
+let headlightsOn = true;
+trackKeyPress('KeyH', () => (headlightsOn = !headlightsOn));
 
 const camera: Camera = {
   position: [0, 1.5, 4],
@@ -413,7 +415,7 @@ function frame(timeMs: number) {
   gl!.uniform1f(headlightOuterCosLocation, Math.cos(halfAngle));
   gl!.uniform1f(headlightInnerCosLocation, Math.cos(halfAngle * (1 - HEADLIGHT_SOFT_EDGE)));
   gl!.uniform1f(headlightRangeLocation, settings.headlightRange);
-  gl!.uniform1f(headlightIntensityLocation, settings.headlightIntensity);
+  gl!.uniform1f(headlightIntensityLocation, headlightsOn ? settings.headlightIntensity : 0);
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
