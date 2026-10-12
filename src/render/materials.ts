@@ -13,17 +13,18 @@ const SETS = {
   default: { ramp: ' .-:=+*%#@' },
   defaultBuilding: { ramp: ' .,:;||IH#', edges: '|[]' },
   defaultRoad: { ramp: ' ...,,,---' },
-  defaultCurb: { ramp: ' ___---===' },
-  defaultCurbSide: { ramp: ' ..::|||||' },
+  defaultCurb: { ramp: ' :::--=*##' },
+  defaultCurbSide: { ramp: ' :::==**##' },
   // Placeholders
-  streetLightPole: { ramp: ' .-:=+*%#@' },
+  streetLightPole: { ramp: ' :|THH####' },
   streetLight: { ramp: ' .-:=+*%#@' },
   trafficLightPole: { ramp: ' .-:=+*%#@' },
   trafficLight: { ramp: ' .-:=+*%#@' },
-  walkSign: { ramp: ' .-:=+*%#@' },
+  walkSign: { ramp: ' .-:=+*%#*' },
   stopSignPole: { ramp: ' .-:=+*%#@' },
   stopSign: { ramp: ' .-:=+*%#@' },
   roadMarkings: { ramp: ' .-:=+*%#@' },
+  star: { ramp: ' ..::+++**' },
 } satisfies Record<string, GlyphSet>;
 
 export type Material = keyof typeof SETS;

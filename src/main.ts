@@ -35,12 +35,15 @@ import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
 import { carVertices } from './render/models/car.ts';
+import { DEFAULT_SKY_SETTINGS, FLOATS_PER_STAR, starVertices, type SkySettings } from './render/sky.ts';
 import { headlight, HEADLIGHT_SOFT_EDGE } from './render/headlights.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
 import asciiFragmentSource from './shaders/ascii.frag.glsl?raw';
 import crtFragmentSource from './shaders/crt.frag.glsl?raw';
+import skyVertexSource from './shaders/sky.vert.glsl?raw';
+import skyFragmentSource from './shaders/sky.frag.glsl?raw';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const gl = canvas.getContext('webgl2', { antialias: false });
@@ -110,6 +113,32 @@ function deleteMesh(mesh: Mesh) {
 }
 
 const carMesh = uploadMesh(carVertices());
+
+const skyProgram = createProgram(gl, skyVertexSource, skyFragmentSource);
+const skyViewRotationLocation = gl.getUniformLocation(skyProgram, 'u_viewRotation');
+const skyProjectionLocation = gl.getUniformLocation(skyProgram, 'u_projection');
+const skyMaterialLocation = gl.getUniformLocation(skyProgram, 'u_material');
+const skySettings: SkySettings = { ...DEFAULT_SKY_SETTINGS };
+let starCount = 0;
+const starBuffer = gl.createBuffer();
+const starVao = gl.createVertexArray();
+gl.bindVertexArray(starVao);
+gl.bindBuffer(gl.ARRAY_BUFFER, starBuffer);
+const starDirectionLocation = gl.getAttribLocation(skyProgram, 'a_direction');
+const starColorLocation = gl.getAttribLocation(skyProgram, 'a_color');
+gl.enableVertexAttribArray(starDirectionLocation);
+gl.vertexAttribPointer(starDirectionLocation, 3, gl.FLOAT, false, FLOATS_PER_STAR * 4, 0);
+gl.enableVertexAttribArray(starColorLocation);
+gl.vertexAttribPointer(starColorLocation, 3, gl.FLOAT, false, FLOATS_PER_STAR * 4, 3 * 4);
+gl.bindVertexArray(null);
+
+function uploadStars() {
+  const stars = starVertices(skySettings);
+  starCount = stars.length / FLOATS_PER_STAR;
+  gl!.bindBuffer(gl!.ARRAY_BUFFER, starBuffer);
+  gl!.bufferData(gl!.ARRAY_BUFFER, new Float32Array(stars), gl!.STATIC_DRAW);
+}
+uploadStars();
 
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
   return box([rect.minX, bottom, rect.minZ], [rect.maxX, top, rect.maxZ], color);
@@ -276,6 +305,7 @@ const devMenu = createDevMenu(
   citySettings,
   carSettings,
   chaseSettings,
+  skySettings,
   (setting) => {
     if (setting === 'cellWidth') {
       buildCells();
@@ -283,6 +313,7 @@ const devMenu = createDevMenu(
     }
   },
   regenerateCity,
+  uploadStars,
   (open) => {
     if (open) document.exitPointerLock();
     else canvas.requestPointerLock().catch(() => {});
@@ -390,6 +421,17 @@ function frame(timeMs: number) {
   updateSignalTexture(gl!, signals, offsets.map((offset) => signalPhase(clock.tick, offset)));
   gl!.uniform1i(signalsTextureLocation, 3);
   const view = viewMatrix(camera);
+
+  // Stars first and without depth, so anything in the city covers them.
+  gl!.useProgram(skyProgram);
+  gl!.uniformMatrix4fv(skyViewRotationLocation, false, viewMatrix({ ...camera, position: [0, 0, 0] }));
+  gl!.uniformMatrix4fv(skyProjectionLocation, false, projection);
+  gl!.uniform1f(skyMaterialLocation, MATERIAL.star);
+  gl!.disable(gl!.DEPTH_TEST);
+  gl!.bindVertexArray(starVao);
+  gl!.drawArrays(gl!.POINTS, 0, starCount);
+  gl!.enable(gl!.DEPTH_TEST);
+  gl!.useProgram(program);
 
   for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
   draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
