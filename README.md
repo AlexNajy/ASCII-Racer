@@ -99,6 +99,7 @@ npm run preview   # serve the production build locally
   - [ ] Glyph sets per material: one atlas row per set; a set can repeat one or two characters to force them (signal lamps `( ) 0` as the first test, then neon and windows)
   - [ ] Animated sets: glyph picked from time and cell position as well as brightness, so things like fire flicker between `(` and `)` on their own
   - [ ] Orientation sets: separate ramps for walls and for ground and roofs, from the normals target
+  - [ ] Screen direction glyphs: strokes follow a surface's direction as seen on screen, so they change as you move around it: the normal for slopes (a 45° roof goes `\` → `|` → `/`), a tangent for flat things with a grain (road direction, car forward, so a hood goes from `[||||]` to `=----=`)
 - [ ] **11. HUD**: drawn in the glyph grid, not as HTML
   - [ ] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass
   - [ ] Speedometer

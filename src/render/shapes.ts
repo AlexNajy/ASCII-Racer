@@ -1,13 +1,13 @@
 import type { Vec3 } from '../math/mat4.ts';
+import { MATERIAL } from './materials.ts';
 
 // Vertex layout: x, y, z, r, g, b, nx, ny, nz, emission, id, material.
 // Emission 1 shows the colour at full strength whatever the lighting, for things that glow.
 // Id says which one a vertex belongs to, for things whose state changes: for now only traffic signal lamps
 // (0 and up). NO_ID for everything else.
-// Material (1-255) picks the glyph set; the scene pass writes it into the colour target's alpha, 0 = empty.
+// Material (1-255, see materials.ts) picks the glyph set; the scene pass writes it into the colour target's alpha, 0 = empty.
 export const FLOATS_PER_VERTEX = 12;
 export const NO_ID = -1;
-export const DEFAULT_MATERIAL = 1;
 const ID_OFFSET = 10;
 const MATERIAL_OFFSET = 11;
 
@@ -36,7 +36,7 @@ export function box(min: Vec3, max: Vec3, color: Vec3, emission = 0): number[] {
   ];
   const vertices: number[] = [];
   for (const [a, b, c, d, normal] of faces) {
-    for (const corner of [a, b, c, a, c, d]) vertices.push(...corner, ...color, ...normal, emission, NO_ID, DEFAULT_MATERIAL);
+    for (const corner of [a, b, c, a, c, d]) vertices.push(...corner, ...color, ...normal, emission, NO_ID, MATERIAL.default);
   }
   return vertices;
 }
@@ -88,7 +88,7 @@ export function pixelArt(
       const v0 = top - (r + 1) * pixel;
       const v1 = top - r * pixel;
       const corners = [position(u0, v0, offset), position(u1, v0, offset), position(u1, v1, offset), position(u0, v1, offset)];
-      for (const i of [0, 1, 2, 0, 2, 3]) vertices.push(...corners[i], ...color, ...facing, emission, NO_ID, DEFAULT_MATERIAL);
+      for (const i of [0, 1, 2, 0, 2, 3]) vertices.push(...corners[i], ...color, ...facing, emission, NO_ID, MATERIAL.default);
     }
   });
   return vertices;
@@ -129,7 +129,7 @@ export function disc(
     along(centre, [right, Math.cos(angle(corner)) * radius], [up, Math.sin(angle(corner)) * radius], [facing, offset]);
   const vertices: number[] = [];
   const triangle = (a: Vec3, b: Vec3, c: Vec3, normal: Vec3) => {
-    for (const point of [a, b, c]) vertices.push(...point, ...color, ...normal, emission, NO_ID, DEFAULT_MATERIAL);
+    for (const point of [a, b, c]) vertices.push(...point, ...color, ...normal, emission, NO_ID, MATERIAL.default);
   };
   for (let corner = 0; corner < sides; corner++) {
     triangle(along(centre, [facing, half]), rim(corner, half), rim(corner + 1, half), facing);
@@ -162,7 +162,7 @@ export function beam(from: Vec3, to: Vec3, thickness: number, color: Vec3, emiss
   ];
   const vertices: number[] = [];
   for (const [a, b, c, d, normal] of faces) {
-    for (const point of [a, b, c, a, c, d]) vertices.push(...point, ...color, ...normal, emission, NO_ID, DEFAULT_MATERIAL);
+    for (const point of [a, b, c, a, c, d]) vertices.push(...point, ...color, ...normal, emission, NO_ID, MATERIAL.default);
   }
   return vertices;
 }

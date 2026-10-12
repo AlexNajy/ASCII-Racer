@@ -6,6 +6,7 @@ uniform sampler2D u_normals;
 uniform sampler2D u_glyphs;
 uniform ivec2 u_cellSize;
 uniform int u_rampLength;
+uniform int u_edgeMaterials; // bit n set: material n has edge glyphs after its ramp
 uniform vec3 u_background;
 // 0 = full-strength hue, 1 = the cell's true colour.
 uniform float u_glyphShade;
@@ -15,6 +16,13 @@ out vec4 outColor;
 
 // Neighbouring faces whose normals are further apart than this (about 25°) form an edge.
 const float EDGE_THRESHOLD = 0.9;
+// Edges darker than this level use their ramp glyph, so fogged, far buildings don't turn into rows of edges.
+const int EDGE_MIN_LEVEL = 2;
+// Edges darker than this level use the dim edge glyph instead of the left and right ones.
+const int EDGE_BRIGHT_LEVEL = 4;
+// A neighbour this many distance steps closer (normals alpha, 1/255 each) is in front, so it hides the
+// face instead of ending it. 1 step is ~0.3 m at 2 m, ~0.6 m at 10 m, ~2 m at 100 m.
+const float EDGE_DEPTH_STEPS = 1.5;
 
 vec4 normalAt(ivec2 cell) {
   ivec2 last = textureSize(u_normals, 0) - 1;
@@ -25,15 +33,14 @@ bool facesDiffer(vec4 a, vec4 b) {
   return dot(a.rgb * 2.0 - 1.0, b.rgb * 2.0 - 1.0) < EDGE_THRESHOLD;
 }
 
-// Both cells at an edge count, so it still shows when one side is black (e.g. the road).
-bool isEdge(ivec2 cell, vec4 normal) {
-  const ivec2 neighbours[4] = ivec2[4](ivec2(1, 0), ivec2(-1, 0), ivec2(0, 1), ivec2(0, -1));
-  for (int i = 0; i < 4; i++) {
-    vec4 neighbour = normalAt(cell + neighbours[i]);
-    // An empty neighbour is a silhouette.
-    if (neighbour.a == 0.0 || facesDiffer(normal, neighbour)) return true;
-  }
-  return false;
+// The cell is at the edge of its face on that side: the neighbour is empty (a silhouette), or faces another
+// way without standing in front of it.
+bool edgeTowards(ivec2 cell, vec4 normal, ivec2 offset) {
+  ivec2 other = clamp(cell + offset, ivec2(0), textureSize(u_normals, 0) - 1);
+  if (texelFetch(u_scene, other, 0).a == 0.0) return true;
+  vec4 neighbour = texelFetch(u_normals, other, 0);
+  bool inFront = (normal.a - neighbour.a) * 255.0 > EDGE_DEPTH_STEPS;
+  return facesDiffer(normal, neighbour) && !inFront;
 }
 
 // Dev view, like an old TV: each scene pixel is a soft blob that bleeds into its neighbours (wider
@@ -95,11 +102,24 @@ void main() {
     return;
   }
 
+  // Alpha holds the material (1-255) in 8 bits; material 1 is atlas row 0.
+  int material = int(round(scene.a * 255.0));
+  int row = material - 1;
+
+  int column = level;
+  if (level >= EDGE_MIN_LEVEL && (u_edgeMaterials & (1 << material)) != 0) {
+    vec4 normal = normalAt(cell);
+    bool left = edgeTowards(cell, normal, ivec2(-1, 0));
+    bool right = edgeTowards(cell, normal, ivec2(1, 0));
+    // Edge glyphs follow the ramp: dim, left, right. A face one cell wide is both, so it gets the dim one.
+    if (left || right) column = u_rampLength + (level < EDGE_BRIGHT_LEVEL || left == right ? 0 : left ? 1 : 2);
+  }
+
   // Atlas rows run top-down, screen rows bottom-up, hence the flipped y.
   ivec2 inCell = ivec2(gl_FragCoord.xy) - cell * u_cellSize;
   ivec2 atlasPixel = ivec2(
-    level * u_cellSize.x + inCell.x,
-    u_cellSize.y - 1 - inCell.y
+    column * u_cellSize.x + inCell.x,
+    row * u_cellSize.y + u_cellSize.y - 1 - inCell.y
   );
   float glyph = texelFetch(u_glyphs, atlasPixel, 0).r;
 

@@ -28,8 +28,11 @@ layout(location = 1) out vec4 outNormal;
 
 void main() {
   vec3 normal = normalize(v_normal);
-  // Alpha 1 marks the cell as covered, like the colour texture.
-  outNormal = vec4(normal * 0.5 + 0.5, 1.0);
+  // The camera is at the origin of view space, so this is the true distance, giving a circle of fog.
+  // Positions interpolate correctly across a triangle; distances don't, so the length is taken here.
+  float distance = length(v_viewPosition);
+  // Alpha holds the distance for the ASCII pass's edges. Square root, so its 8 bits are finer up close.
+  outNormal = vec4(normal * 0.5 + 0.5, sqrt(clamp(distance / u_fogEnd, 0.0, 1.0)));
 
   // Debug view: normals run from -1 to 1, colours from 0 to 1, so each axis is remapped.
   if (u_showNormals) {
@@ -53,9 +56,6 @@ void main() {
   vec3 lit = v_color * (u_ambient + u_lightIntensity * diffuse + headlight);
   lit = mix(lit, v_color, v_emission);
 
-  // The camera is at the origin of view space, so this is the true distance, giving a circle of fog.
-  // Positions interpolate correctly across a triangle; distances don't, so the length is taken here.
-  float distance = length(v_viewPosition);
   // Clear up to u_fogStart, then a straight fade to the fog colour at u_fogEnd.
   // max() avoids dividing by zero when the start is at or past the end.
   float fog = clamp((distance - u_fogStart) / max(u_fogEnd - u_fogStart, 0.001), 0.0, 1.0);

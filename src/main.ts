@@ -28,8 +28,9 @@ import { createProgram } from './gl/shader.ts';
 import { identity, multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
+import { EDGE_MATERIALS, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
-import { box, FLOATS_PER_VERTEX } from './render/shapes.ts';
+import { box, FLOATS_PER_VERTEX, withMaterial } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
@@ -141,17 +142,27 @@ function buildCityMeshes(
   streetLights: StreetLight[],
   { trafficLights, stopSigns }: Intersections,
 ): Mesh[] {
-  const road = uploadMesh(slab(city.bounds, -0.1, 0, [0.2, 0.2, 0.2]));
+  const road = uploadMesh(withMaterial(slab(city.bounds, -0.1, 0, [0.2, 0.2, 0.2]), MATERIAL.defaultRoad));
   // Raised slightly so the paint doesn't fight the road surface for depth.
   const markings = uploadMesh(city.markings.flatMap((marking) => slab(marking, 0, 0.02, [1, 1, 1])));
-  const pavements = uploadMesh(city.blocks.flatMap(({ rect, zone }) => slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone])));
-  const wall = uploadMesh([
-    ...city.wallPavement.flatMap((strip) => slab(strip, 0, CURB_HEIGHT, WALL_COLORS.corner)),
-    ...city.wall.flatMap(({ rect, kind }) => slab(rect, 0, CURB_HEIGHT, WALL_COLORS[kind])),
-  ]);
+  const pavements = uploadMesh(
+    withMaterial(city.blocks.flatMap(({ rect, zone }) => slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone])), MATERIAL.defaultCurb),
+  );
+  const wall = uploadMesh(
+    withMaterial(
+      [
+        ...city.wallPavement.flatMap((strip) => slab(strip, 0, CURB_HEIGHT, WALL_COLORS.corner)),
+        ...city.wall.flatMap(({ rect, kind }) => slab(rect, 0, CURB_HEIGHT, WALL_COLORS[kind])),
+      ],
+      MATERIAL.defaultCurb,
+    ),
+  );
   // All buildings in one mesh, with corners already in world position, so they draw in a single call.
   const buildingMesh = uploadMesh(
-    buildings.flatMap(({ rect, height }) => slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65])),
+    withMaterial(
+      buildings.flatMap(({ rect, height }) => slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65])),
+      MATERIAL.defaultBuilding,
+    ),
   );
   const lights = uploadMesh(streetLights.flatMap(streetLightVertices));
   const signals = uploadMesh([
@@ -193,6 +204,7 @@ const normalTextureLocation = gl.getUniformLocation(asciiProgram, 'u_normals');
 const cellSizeLocation = gl.getUniformLocation(asciiProgram, 'u_cellSize');
 const glyphsLocation = gl.getUniformLocation(asciiProgram, 'u_glyphs');
 const rampLengthLocation = gl.getUniformLocation(asciiProgram, 'u_rampLength');
+const edgeMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_edgeMaterials');
 const backgroundLocation = gl.getUniformLocation(asciiProgram, 'u_background');
 const renderModeLocation = gl.getUniformLocation(asciiProgram, 'u_renderMode');
 const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
@@ -232,7 +244,6 @@ const settings: DevSettings = {
 
 const dpr = window.devicePixelRatio || 1;
 const CELL_ASPECT = 1.75;
-const GLYPH_RAMPS = [' .-:=+*%#@'];
 const scene = createRenderTarget(gl);
 
 let cellWidth = 0;
@@ -400,7 +411,8 @@ function frame(timeMs: number) {
   gl!.activeTexture(gl!.TEXTURE2);
   gl!.bindTexture(gl!.TEXTURE_2D, scene.normalTexture);
   gl!.uniform1i(normalTextureLocation, 2);
-  gl!.uniform1i(rampLengthLocation, [...GLYPH_RAMPS[0]].length);
+  gl!.uniform1i(rampLengthLocation, RAMP_LENGTH);
+  gl!.uniform1i(edgeMaterialsLocation, EDGE_MATERIALS);
   gl!.uniform3fv(backgroundLocation, background);
   gl!.uniform1f(glyphShadeLocation, settings.glyphShade);
   gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);
