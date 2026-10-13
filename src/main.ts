@@ -30,7 +30,7 @@ import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { EDGE_MATERIALS, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
-import { box, FLOATS_PER_VERTEX, withMaterial, withSideMaterial } from './render/shapes.ts';
+import { box, flatDisc, FLOATS_PER_VERTEX, withMaterial, withSideMaterial } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
@@ -165,6 +165,11 @@ const ZONE_COLORS: Record<Zone, Vec3> = {
   [Zone.Plaza]: [0.2, 0.7, 0.9],
 };
 
+// Test pond in the middle of each park, for the animated water glyphs.
+const POND_RADIUS = 12;
+const POND_SIDES = 24;
+const POND_COLOR: Vec3 = [0.15, 0.3, 0.6];
+
 function buildCityMeshes(
   city: City,
   buildings: Building[],
@@ -192,12 +197,23 @@ function buildCityMeshes(
       MATERIAL.defaultBuilding,
     ),
   );
+  const ponds = uploadMesh(
+    withMaterial(
+      city.blocks
+        .filter(({ zone }) => zone === Zone.Park)
+        .flatMap(({ rect }) => {
+          const centre: Vec3 = [(rect.minX + rect.maxX) / 2, CURB_HEIGHT + 0.02, (rect.minZ + rect.maxZ) / 2];
+          return flatDisc(centre, POND_RADIUS, POND_SIDES, POND_COLOR);
+        }),
+      MATERIAL.water,
+    ),
+  );
   const lights = uploadMesh(streetLights.flatMap(streetLightVertices));
   const signals = uploadMesh([
     ...trafficLights.flatMap((light) => trafficLightVertices(light)),
     ...stopSigns.flatMap((sign) => stopSignVertices(sign)),
   ]);
-  return [road, markings, pavements, wall, buildingMesh, lights, signals];
+  return [road, markings, pavements, wall, buildingMesh, ponds, lights, signals];
 }
 
 const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };

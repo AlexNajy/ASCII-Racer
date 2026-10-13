@@ -97,7 +97,7 @@ npm run preview   # serve the production build locally
 - [ ] **10. Per-material glyph sets**: each material gets its own characters, settled before building models are tuned against them
   - [x] Material IDs: a material float in each vertex (separate from `id`), the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell
   - [x] Glyph sets per material: one atlas row per set (building, road, curb); a set can repeat characters to force them. Buildings get `[` / `]` edge glyphs on the left and right of each face, skipped behind objects in front
-  - [ ] Animated sets: glyph picked from time and cell position as well as brightness, so things like fire flicker between `(` and `)` on their own
+  - [ ] Animated sets: glyph picked from time and cell position as well as brightness, so things like fire flicker between `(` and `)` on their own. First case: a test pond in the park with a shimmering water set
   - [ ] Screen direction glyphs: strokes follow a surface's slope as seen on screen, derived from the normal in the ASCII pass (no tangents in the vertex data): walls vertical, sloped roofs `\` → `|` → `/` as you move around them; flat surfaces keep their ramp
 - [ ] **11. HUD**: drawn in the glyph grid, not as HTML
   - [ ] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass
@@ -110,11 +110,19 @@ npm run preview   # serve the production build locally
   - [ ] Spawn rules: which styles and prefabs each zone, lot and neighbourhood can get, and how often
   - [ ] Colour palettes: a hand-picked palette per style, one colour per building from the seed
   - [ ] Lit windows and neon: emissive faces in the models, seeded per building
-- [ ] **13. Visual identity**: flicker-free glyphs at speed, speed streaks, particles
+- [ ] **13. Visual identity**: flicker-free glyphs at speed, speed streaks, particles, weather
   - [ ] Particles: GL points of size 1 in the one-pixel-per-cell scene target, so each particle is exactly one glyph (crash debris as flying `#`); visual only, so they don't need to be deterministic
   - [ ] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
   - [ ] Speed streaks
-- [ ] **14. Menu + game modes**
+  - [ ] Tire marks: dark marks left on the road while drifting
+  - [ ] Weather toggle (none / rain / snow) in the dev menu: drops falling as a screen-space overlay in the ASCII pass (`|` or `/` for rain, `*` and `.` for snow), wet roads as an animated set
+- [ ] **14. Sound**: Web Audio API, no libraries; reads the simulation state, never feeds back into it
+  - [ ] Audio setup: audio context started on the first click or keypress, master volume and mute
+  - [ ] Engine: a looped sound with pitch and volume from speed and throttle
+  - [ ] Tires and impacts: a screech that fades in with drift, thuds by collision speed
+  - [ ] Ambience: a low city hum, plus rain and snow with weather
+  - [ ] Positional sound: other players' cars panned and fading by distance (`PannerNode`), with multiplayer
+- [ ] **15. Menu + game modes**
   - [ ] Menus drawn with the HUD's text layer
   - [ ] Game modes
-- [ ] **15. Multiplayer**: a small server to connect players, other players' cars, rollback netcode
+- [ ] **16. Multiplayer**: a small server to connect players, other players' cars, rollback netcode

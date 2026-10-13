@@ -112,9 +112,10 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 10. Per-material glyph sets: material IDs in the scene buffer pick an atlas row per cell
 11. HUD: a text layer drawn in the glyph grid (speedometer first)
 12. Building models: parametric styles and fixed prefabs in place of the boxes, with seeded spawning rules per zone, lot and neighbourhood
-13. Visual identity: temporally stable glyphs (no flicker at speed), speed streaks, particles
-14. Menu + game modes
-15. Multiplayer: a small server to connect players, other players' cars, rollback netcode
+13. Visual identity: temporally stable glyphs (no flicker at speed), speed streaks, particles, tire marks, weather (rain / snow)
+14. Sound: Web Audio API, engine, tires, impacts, ambience
+15. Menu + game modes
+16. Multiplayer: a small server to connect players, other players' cars, rollback netcode
 
 ## Conventions
 

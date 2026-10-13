@@ -25,6 +25,7 @@ const SETS = {
   stopSign: { ramp: ' .-:=+*%#@' },
   roadMarkings: { ramp: ' .-:=+*%#@' },
   star: { ramp: ' ..::+++**' },
+  water: { ramp: ' .-~~~~===' },
 } satisfies Record<string, GlyphSet>;
 
 export type Material = keyof typeof SETS;

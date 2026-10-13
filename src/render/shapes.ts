@@ -151,6 +151,21 @@ export function disc(
   return vertices;
 }
 
+// A flat regular polygon lying on the ground and facing up (ponds), as a fan of triangles from the centre.
+export function flatDisc(centre: Vec3, radius: number, sides: number, color: Vec3, emission = 0): number[] {
+  const rim = (corner: number): Vec3 => {
+    const angle = (2 * Math.PI * corner) / sides;
+    return along(centre, [[1, 0, 0], Math.cos(angle) * radius], [[0, 0, 1], -Math.sin(angle) * radius]);
+  };
+  const vertices: number[] = [];
+  for (let corner = 0; corner < sides; corner++) {
+    for (const point of [centre, rim(corner), rim(corner + 1)]) {
+      vertices.push(...point, ...color, 0, 1, 0, emission, NO_ID, MATERIAL.default);
+    }
+  }
+  return vertices;
+}
+
 // A square bar between two points at any angle. Must not point straight up.
 export function beam(from: Vec3, to: Vec3, thickness: number, color: Vec3, emission = 0): number[] {
   const length = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
