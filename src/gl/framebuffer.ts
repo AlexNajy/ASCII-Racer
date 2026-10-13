@@ -2,6 +2,7 @@ export interface RenderTarget {
   framebuffer: WebGLFramebuffer;
   colorTexture: WebGLTexture;
   normalTexture: WebGLTexture; // normals remapped from -1..1 to 0..1
+  scatterTexture: WebGLTexture; // one random number per pixel, from the surface's world position
   depthBuffer: WebGLRenderbuffer;
   width: number;
   height: number;
@@ -23,6 +24,7 @@ export function createRenderTarget(gl: WebGL2RenderingContext): RenderTarget {
     framebuffer: gl.createFramebuffer(),
     colorTexture: createTargetTexture(gl),
     normalTexture: createTargetTexture(gl),
+    scatterTexture: createTargetTexture(gl),
     depthBuffer: gl.createRenderbuffer(),
     width: 0,
     height: 0,
@@ -42,6 +44,8 @@ export function resizeRenderTarget(
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
   }
+  gl.bindTexture(gl.TEXTURE_2D, target.scatterTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, width, height, 0, gl.RED, gl.UNSIGNED_BYTE, null);
 
   gl.bindRenderbuffer(gl.RENDERBUFFER, target.depthBuffer);
   gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height);
@@ -49,9 +53,10 @@ export function resizeRenderTarget(
   gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target.colorTexture, 0);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, target.normalTexture, 0);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, target.scatterTexture, 0);
   gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, target.depthBuffer);
-  // Fragment shader output 0 goes to the colour texture, output 1 to the normal texture.
-  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+  // Fragment shader output 0 goes to the colour texture, 1 to the normal texture, 2 to the scatter texture.
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
 
   const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);

@@ -1,6 +1,8 @@
 import type { CarSettings } from '../game/car.ts';
 import type { ChaseCameraSettings } from '../game/chaseCamera.ts';
 import type { CitySettings } from '../game/city.ts';
+import type { ScatterSettings } from '../render/materials.ts';
+import type { SkySettings } from '../render/sky.ts';
 
 export const RenderMode = {
   Glyphs: 0,
@@ -11,6 +13,7 @@ export const RenderMode = {
   NormalTexture: 5,
   CrtScene: 6,
   CrtGlyphs: 7,
+  ScreenNormals: 8,
 } as const;
 export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 
@@ -35,6 +38,11 @@ export interface DevSettings {
   headlightAngle: number; // degrees, the cone's full width
   headlightRange: number; // m
   headlightIntensity: number;
+  animationLevels: number; // how many ramp levels animated glyphs move up and down
+  animationSeconds: number; // one animation loop
+  waveScale: number; // how tightly packed the waves are across cells
+  splashChance: number; // share of shore cells splashing at any moment, 0 to 1
+  splashSeconds: number; // how long one splash lasts
 }
 
 type NumberSetting =
@@ -47,7 +55,12 @@ type NumberSetting =
   | 'glyphShade'
   | 'headlightAngle'
   | 'headlightRange'
-  | 'headlightIntensity';
+  | 'headlightIntensity'
+  | 'animationLevels'
+  | 'animationSeconds'
+  | 'waveScale'
+  | 'splashChance'
+  | 'splashSeconds';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -58,8 +71,11 @@ export function createDevMenu(
   citySettings: CitySettings,
   carSettings: CarSettings,
   chaseSettings: ChaseCameraSettings,
+  skySettings: SkySettings,
+  scatterSettings: Partial<Record<string, ScatterSettings>>,
   onChange: (setting: keyof DevSettings) => void,
   onCityChange: () => void,
+  onSkyChange: () => void,
   onToggle: (open: boolean) => void,
 ): DevMenu {
   const panel = document.createElement('div');
@@ -181,12 +197,29 @@ export function createDevMenu(
     slider(parent, label, chaseSettings[key], min, max, step, (value) => (chaseSettings[key] = value));
   }
 
+  function skySlider(
+    parent: HTMLElement,
+    label: string,
+    key: keyof SkySettings,
+    min: number,
+    max: number,
+    step: number,
+  ) {
+    slider(parent, label, skySettings[key], min, max, step, (value) => {
+      skySettings[key] = value;
+      onSkyChange();
+    });
+  }
+
   const viewPage = page('View');
   const cityPage = page('City');
   const buildingsPage = page('Buildings');
   const lightingPage = page('Lighting');
   const carPage = page('Car');
   const cameraPage = page('Camera');
+  const skyPage = page('Sky');
+  const animationPage = page('Animation');
+  const scatterPage = page('Scatter');
 
   settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
   settingSlider(viewPage, 'Cell width', 'cellWidth', 4, 16, 1);
@@ -218,6 +251,23 @@ export function createDevMenu(
   chaseSlider(cameraPage, 'Speed FOV boost (°)', 'speedFovBoost', 0, 40, 1);
   chaseSlider(cameraPage, 'Drift travel blend', 'driftTravelBlend', 0, 1, 0.05);
   chaseSlider(cameraPage, 'Wall return (/s)', 'wallReturn', 0.2, 10, 0.1);
+  settingSlider(animationPage, 'Levels', 'animationLevels', 0, 5, 0.1);
+  settingSlider(animationPage, 'Loop time (s)', 'animationSeconds', 0.5, 20, 0.5);
+  settingSlider(animationPage, 'Wave scale', 'waveScale', 0.1, 4, 0.1);
+  settingSlider(animationPage, 'Splash chance', 'splashChance', 0, 1, 0.01);
+  settingSlider(animationPage, 'Splash time (s)', 'splashSeconds', 0.05, 2, 0.05);
+  // One group of sliders per scatter material, read by the scene pass every frame.
+  for (const [name, scatter] of Object.entries(scatterSettings)) {
+    if (!scatter) continue;
+    slider(scatterPage, `${name} square size (m)`, scatter.square, 0.05, 2, 0.05, (value) => (scatter.square = value));
+    slider(scatterPage, `${name} patch size (m)`, scatter.patch, 0.5, 20, 0.5, (value) => (scatter.patch = value));
+    slider(scatterPage, `${name} patchiness`, scatter.patchiness, 0, 1, 0.05, (value) => (scatter.patchiness = value));
+  }
+  skySlider(skyPage, 'Star count', 'starCount', 0, 10000, 100);
+  skySlider(skyPage, 'Star seed', 'starSeed', 1, 1000, 1);
+  skySlider(skyPage, 'Lowest star (y)', 'starMinY', 0, 0.9, 0.01);
+  skySlider(skyPage, 'Min brightness', 'starMinBrightness', 0, 1, 0.01);
+  skySlider(skyPage, 'Brightness power', 'starBrightnessPower', 0.5, 10, 0.1);
 
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,

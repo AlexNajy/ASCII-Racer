@@ -1,7 +1,8 @@
 import { CURB_HEIGHT } from '../../../game/city.ts';
 import { STREET_LIGHT_POLE_HEIGHT, STREET_LIGHT_POLE_WIDTH, type StreetLight } from '../../../game/streetLights.ts';
 import type { Vec3 } from '../../../math/mat4.ts';
-import { beam, box } from '../../shapes.ts';
+import { MATERIAL } from '../../materials.ts';
+import { beam, box, withMaterial } from '../../shapes.ts';
 
 const ARM_THICKNESS = 0.3;
 const ARM_REACH = 3;
@@ -32,13 +33,18 @@ export function streetLightVertices({ x, z, facingX, facingZ }: StreetLight): nu
   const armDrop = (ARM_RISE / ARM_REACH) * (HEAD_LENGTH - HEAD_OVERHANG);
   const headBottom = armEnd[1] - armDrop - ARM_THICKNESS / 2;
   return [
-    ...box([x - pole, CURB_HEIGHT, z - pole], [x + pole, top, z + pole], POLE_COLOR),
-    ...beam([x, top - ARM_THICKNESS / 2, z], armEnd, ARM_THICKNESS, POLE_COLOR),
-    ...box(...flatBox(HEAD_LENGTH, HEAD_WIDTH, headBottom, HEAD_HEIGHT), POLE_COLOR),
-    ...box(
-      ...flatBox(HEAD_LENGTH - 2 * BULB_INSET, HEAD_WIDTH - 2 * BULB_INSET, headBottom - BULB_HEIGHT, BULB_HEIGHT),
-      BULB_COLOR,
-      1,
+    ...withMaterial(box([x - pole, CURB_HEIGHT, z - pole], [x + pole, top, z + pole], POLE_COLOR), MATERIAL.streetLightPole),
+    ...withMaterial(
+      [
+        ...beam([x, top - ARM_THICKNESS / 2, z], armEnd, ARM_THICKNESS, POLE_COLOR),
+        ...box(...flatBox(HEAD_LENGTH, HEAD_WIDTH, headBottom, HEAD_HEIGHT), POLE_COLOR),
+        ...box(
+          ...flatBox(HEAD_LENGTH - 2 * BULB_INSET, HEAD_WIDTH - 2 * BULB_INSET, headBottom - BULB_HEIGHT, BULB_HEIGHT),
+          BULB_COLOR,
+          1,
+        ),
+      ],
+      MATERIAL.streetLight,
     ),
   ];
 }

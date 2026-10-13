@@ -6,7 +6,8 @@ import {
   type TrafficLight,
 } from '../../../game/intersections.ts';
 import type { Vec3 } from '../../../math/mat4.ts';
-import { beam, box, disc, facingBox, pixelArt, withId } from '../../shapes.ts';
+import { MATERIAL } from '../../materials.ts';
+import { beam, box, disc, facingBox, pixelArt, withId, withMaterial } from '../../shapes.ts';
 
 // Signal IDs, read by the scene vertex shader: junction * 10 + road * 5 + lamp. Road 0 is the column road
 // (north-south), 1 the row road. Lamps 0-2 are red, yellow, green for that road's traffic; 3 and 4 the walking
@@ -30,7 +31,7 @@ const LAMP_RADIUS = 0.22;
 const LAMP_SPACING = 0.55;
 const LAMP_DEPTH = 0.06; // how far a lamp sticks out of the shell
 const LAMP_SIDES = 12;
-const POLE_COLOR: Vec3 = [0.6, 0.62, 0.64];
+const POLE_COLOR: Vec3 = [0.6, 0.6, 0.6];
 const SHELL_COLOR: Vec3 = [0.85, 0.65, 0.1];
 // Top to bottom: red, yellow, green. Built lit; the shader dims the ones that are off.
 const LAMP_COLORS: Vec3[] = [
@@ -59,7 +60,7 @@ export function trafficLightVertices(light: TrafficLight): number[] {
   const pole = TRAFFIC_LIGHT_POLE_WIDTH / 2;
   const walkY = CURB_HEIGHT + WALK_HEIGHT;
   const top = CURB_HEIGHT + (heads.length > 0 ? TRAFFIC_LIGHT_POLE_HEIGHT : WALK_POLE_HEIGHT);
-  const vertices = box([x - pole, CURB_HEIGHT, z - pole], [x + pole, top, z + pole], POLE_COLOR);
+  const vertices = withMaterial(box([x - pole, CURB_HEIGHT, z - pole], [x + pole, top, z + pole], POLE_COLOR), MATERIAL.trafficLightPole);
   // Lamps facing ±z face traffic on the column road. Walk lights facing ±z stand at the ends of a crosswalk
   // over the row road, so the people using them walk alongside the column road.
   for (const { facingX: walkX, facingZ: walkZ } of walkSignals) {
@@ -67,14 +68,22 @@ export function trafficLightVertices(light: TrafficLight): number[] {
     const out = (distance: number): Vec3 => [x + walkX * distance, walkY, z + walkZ * distance];
     const front = pole + WALK_DEPTH;
     vertices.push(
-      ...facingBox(out(pole + WALK_DEPTH / 2), direction, WALK_SIZE, WALK_SIZE, WALK_DEPTH, WALK_BOX_COLOR),
-      ...facingBox(out(front + WALK_PANEL_DEPTH / 2), direction, WALK_PANEL, WALK_PANEL, WALK_PANEL_DEPTH, WALK_PANEL_COLOR),
+      ...withMaterial(
+        [
+          ...facingBox(out(pole + WALK_DEPTH / 2), direction, WALK_SIZE, WALK_SIZE, WALK_DEPTH, WALK_BOX_COLOR),
+          ...facingBox(out(front + WALK_PANEL_DEPTH / 2), direction, WALK_PANEL, WALK_PANEL, WALK_PANEL_DEPTH, WALK_PANEL_COLOR),
+        ],
+        MATERIAL.walkSign,
+      ),
     );
     // Both symbols in the same spot; the shader hides the one that is off.
     const symbol = (rows: string[], color: Vec3, lamp: number) =>
-      withId(
-        pixelArt(rows, out(front + WALK_PANEL_DEPTH), direction, WALK_PIXEL, WALK_PANEL_DEPTH, color, 1),
-        signalId(junction, walkZ !== 0, lamp),
+      withMaterial(
+        withId(
+          pixelArt(rows, out(front + WALK_PANEL_DEPTH), direction, WALK_PIXEL, WALK_PANEL_DEPTH, color, 1),
+          signalId(junction, walkZ !== 0, lamp),
+        ),
+        MATERIAL.walkSign,
       );
     vertices.push(...symbol(WALKER, WALKER_COLOR, WALKER_LAMP), ...symbol(HAND, HAND_COLOR, HAND_LAMP));
   }
@@ -87,8 +96,13 @@ export function trafficLightVertices(light: TrafficLight): number[] {
   const flatStart = BEND_REACH - ARM_THICKNESS / 2;
   const armEnd = Math.max(...heads) + HEAD_WIDTH / 2;
   vertices.push(
-    ...beam([x, top - ARM_THICKNESS / 2, z], bend, ARM_THICKNESS, POLE_COLOR),
-    ...beam([x + armX * flatStart, armY, z + armZ * flatStart], [x + armX * armEnd, armY, z + armZ * armEnd], ARM_THICKNESS, POLE_COLOR),
+    ...withMaterial(
+      [
+        ...beam([x, top - ARM_THICKNESS / 2, z], bend, ARM_THICKNESS, POLE_COLOR),
+        ...beam([x + armX * flatStart, armY, z + armZ * flatStart], [x + armX * armEnd, armY, z + armZ * armEnd], ARM_THICKNESS, POLE_COLOR),
+      ],
+      MATERIAL.trafficLight,
+    ),
   );
 
   const facing: Vec3 = [facingX, 0, facingZ];
@@ -97,13 +111,15 @@ export function trafficLightVertices(light: TrafficLight): number[] {
   for (const distance of heads) {
     const centreX = x + armX * distance + facingX * headOffset;
     const centreZ = z + armZ * distance + facingZ * headOffset;
-    vertices.push(...facingBox([centreX, centreY, centreZ], facing, HEAD_WIDTH, HEAD_HEIGHT, HEAD_DEPTH, SHELL_COLOR));
+    vertices.push(
+      ...withMaterial(facingBox([centreX, centreY, centreZ], facing, HEAD_WIDTH, HEAD_HEIGHT, HEAD_DEPTH, SHELL_COLOR), MATERIAL.trafficLight),
+    );
     const frontX = centreX + (facingX * HEAD_DEPTH) / 2;
     const frontZ = centreZ + (facingZ * HEAD_DEPTH) / 2;
     LAMP_COLORS.forEach((color, i) => {
       const lampY = centreY + (1 - i) * LAMP_SPACING;
       const lamp = disc([frontX, lampY, frontZ], facing, LAMP_RADIUS, 2 * LAMP_DEPTH, LAMP_SIDES, color, 1);
-      vertices.push(...withId(lamp, signalId(junction, facingZ !== 0, RED + i)));
+      vertices.push(...withMaterial(withId(lamp, signalId(junction, facingZ !== 0, RED + i)), MATERIAL.trafficLight));
     });
   }
 
