@@ -39,6 +39,11 @@ export interface DevSettings {
   animationLevels: number; // how many ramp levels animated glyphs move up and down
   animationSeconds: number; // one animation loop
   waveScale: number; // how tightly packed the waves are across cells
+  splashChance: number; // share of shore cells splashing at any moment, 0 to 1
+  splashSeconds: number; // how long one splash lasts
+  scatterCell: number; // m, size of one random square on a scatter surface
+  patchSize: number; // m, size of the patches scatter glyphs clump into
+  patchiness: number; // 0 = every square on its own, 1 = patches only
 }
 
 type NumberSetting =
@@ -54,7 +59,12 @@ type NumberSetting =
   | 'headlightIntensity'
   | 'animationLevels'
   | 'animationSeconds'
-  | 'waveScale';
+  | 'waveScale'
+  | 'splashChance'
+  | 'splashSeconds'
+  | 'scatterCell'
+  | 'patchSize'
+  | 'patchiness';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -212,6 +222,7 @@ export function createDevMenu(
   const cameraPage = page('Camera');
   const skyPage = page('Sky');
   const animationPage = page('Animation');
+  const scatterPage = page('Scatter');
 
   settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
   settingSlider(viewPage, 'Cell width', 'cellWidth', 4, 16, 1);
@@ -246,6 +257,11 @@ export function createDevMenu(
   settingSlider(animationPage, 'Levels', 'animationLevels', 0, 5, 0.1);
   settingSlider(animationPage, 'Loop time (s)', 'animationSeconds', 0.5, 20, 0.5);
   settingSlider(animationPage, 'Wave scale', 'waveScale', 0.1, 4, 0.1);
+  settingSlider(animationPage, 'Splash chance', 'splashChance', 0, 1, 0.01);
+  settingSlider(animationPage, 'Splash time (s)', 'splashSeconds', 0.05, 2, 0.05);
+  settingSlider(scatterPage, 'Square size (m)', 'scatterCell', 0.05, 2, 0.05);
+  settingSlider(scatterPage, 'Patch size (m)', 'patchSize', 0.5, 20, 0.5);
+  settingSlider(scatterPage, 'Patchiness', 'patchiness', 0, 1, 0.05);
   skySlider(skyPage, 'Star count', 'starCount', 0, 10000, 100);
   skySlider(skyPage, 'Star seed', 'starSeed', 1, 1000, 1);
   skySlider(skyPage, 'Lowest star (y)', 'starMinY', 0, 0.9, 0.01);

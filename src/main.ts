@@ -28,7 +28,7 @@ import { createProgram } from './gl/shader.ts';
 import { identity, multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
-import { ANIMATED_MATERIALS, EDGE_MATERIALS, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH } from './render/materials.ts';
+import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
 import { box, flatDisc, FLOATS_PER_VERTEX, withMaterial, withSideMaterial } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
@@ -74,6 +74,10 @@ const emissionLocation = gl.getAttribLocation(program, 'a_emission');
 const idLocation = gl.getAttribLocation(program, 'a_id');
 const materialLocation = gl.getAttribLocation(program, 'a_material');
 const signalsTextureLocation = gl.getUniformLocation(program, 'u_signals');
+const sceneScatterMaterialsLocation = gl.getUniformLocation(program, 'u_scatterMaterials');
+const scatterCellLocation = gl.getUniformLocation(program, 'u_scatterCell');
+const patchSizeLocation = gl.getUniformLocation(program, 'u_patchSize');
+const patchinessLocation = gl.getUniformLocation(program, 'u_patchiness');
 
 interface Mesh {
   vao: WebGLVertexArrayObject;
@@ -183,7 +187,14 @@ function buildCityMeshes(
   );
   const curb = (vertices: number[]) =>
     withSideMaterial(withMaterial(vertices, MATERIAL.defaultCurb), MATERIAL.defaultCurbSide);
-  const pavements = uploadMesh(curb(city.blocks.flatMap(({ rect, zone }) => slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone]))));
+  const pavements = uploadMesh(
+    city.blocks.flatMap(({ rect, zone }) =>
+      withSideMaterial(
+        withMaterial(slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone]), zone === Zone.Park ? MATERIAL.grass : MATERIAL.defaultCurb),
+        MATERIAL.defaultCurbSide,
+      ),
+    ),
+  );
   const wall = uploadMesh(
     curb([
       ...city.wallPavement.flatMap((strip) => slab(strip, 0, CURB_HEIGHT, WALL_COLORS.corner)),
@@ -245,6 +256,8 @@ function regenerateCity() {
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
 const sceneTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scene');
 const normalTextureLocation = gl.getUniformLocation(asciiProgram, 'u_normals');
+const scatterTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scatter');
+const scatterMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_scatterMaterials');
 const cellSizeLocation = gl.getUniformLocation(asciiProgram, 'u_cellSize');
 const glyphsLocation = gl.getUniformLocation(asciiProgram, 'u_glyphs');
 const rampLengthLocation = gl.getUniformLocation(asciiProgram, 'u_rampLength');
@@ -253,6 +266,9 @@ const animatedMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_animate
 const animationPhaseLocation = gl.getUniformLocation(asciiProgram, 'u_animationPhase');
 const animationLevelsLocation = gl.getUniformLocation(asciiProgram, 'u_animationLevels');
 const waveScaleLocation = gl.getUniformLocation(asciiProgram, 'u_waveScale');
+const tickLocation = gl.getUniformLocation(asciiProgram, 'u_tick');
+const splashChanceLocation = gl.getUniformLocation(asciiProgram, 'u_splashChance');
+const splashTicksLocation = gl.getUniformLocation(asciiProgram, 'u_splashTicks');
 const backgroundLocation = gl.getUniformLocation(asciiProgram, 'u_background');
 const renderModeLocation = gl.getUniformLocation(asciiProgram, 'u_renderMode');
 const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
@@ -291,6 +307,11 @@ const settings: DevSettings = {
   animationLevels: 1.5,
   animationSeconds: 10,
   waveScale: 2,
+  splashChance: 0.4,
+  splashSeconds: 1.2,
+  scatterCell: 0.3,
+  patchSize: 4,
+  patchiness: 0.5,
 };
 
 const dpr = window.devicePixelRatio || 1;
@@ -439,6 +460,10 @@ function frame(timeMs: number) {
   gl!.uniform1f(headlightInnerCosLocation, Math.cos(halfAngle * (1 - HEADLIGHT_SOFT_EDGE)));
   gl!.uniform1f(headlightRangeLocation, settings.headlightRange);
   gl!.uniform1f(headlightIntensityLocation, headlightsOn ? settings.headlightIntensity : 0);
+  gl!.uniform1i(sceneScatterMaterialsLocation, SCATTER_MATERIALS);
+  gl!.uniform1f(scatterCellLocation, settings.scatterCell);
+  gl!.uniform1f(patchSizeLocation, settings.patchSize);
+  gl!.uniform1f(patchinessLocation, settings.patchiness);
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
@@ -477,6 +502,10 @@ function frame(timeMs: number) {
   gl!.activeTexture(gl!.TEXTURE2);
   gl!.bindTexture(gl!.TEXTURE_2D, scene.normalTexture);
   gl!.uniform1i(normalTextureLocation, 2);
+  gl!.activeTexture(gl!.TEXTURE4);
+  gl!.bindTexture(gl!.TEXTURE_2D, scene.scatterTexture);
+  gl!.uniform1i(scatterTextureLocation, 4);
+  gl!.uniform1i(scatterMaterialsLocation, SCATTER_MATERIALS);
   gl!.uniform1i(rampLengthLocation, RAMP_LENGTH);
   gl!.uniform1i(edgeMaterialsLocation, EDGE_MATERIALS);
   gl!.uniform1i(animatedMaterialsLocation, ANIMATED_MATERIALS);
@@ -484,6 +513,9 @@ function frame(timeMs: number) {
   gl!.uniform1f(animationPhaseLocation, (clock.tick % animationTicks) / animationTicks);
   gl!.uniform1f(animationLevelsLocation, settings.animationLevels);
   gl!.uniform1f(waveScaleLocation, settings.waveScale);
+  gl!.uniform1i(tickLocation, clock.tick);
+  gl!.uniform1f(splashChanceLocation, settings.splashChance);
+  gl!.uniform1i(splashTicksLocation, Math.max(1, Math.round(settings.splashSeconds * TICKS_PER_SECOND)));
   gl!.uniform3fv(backgroundLocation, background);
   gl!.uniform1f(glyphShadeLocation, settings.glyphShade);
   gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);

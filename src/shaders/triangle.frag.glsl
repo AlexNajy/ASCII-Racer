@@ -22,9 +22,48 @@ uniform float u_headlightOuterCos; // cosine of the cone's half-angle: no light 
 uniform float u_headlightInnerCos; // full light inside this
 uniform float u_headlightRange; // m, the light fades to nothing here
 uniform float u_headlightIntensity;
+uniform int u_scatterMaterials; // bit n set: material n picks its glyph from the scatter value
+uniform float u_scatterCell; // m, size of one random square on a surface
+uniform float u_patchSize; // m, size of the patches the random squares clump into
+uniform float u_patchiness; // 0 = every square on its own, 1 = patches only
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
+layout(location = 2) out vec4 outScatter;
+
+// A random number from 0 to 1 for a grid square (PCG 3D hash): the same square always gives the same number.
+float hash(ivec2 square) {
+  uvec3 v = uvec3(uvec2(square), 0u) * 1664525u + 1013904223u;
+  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+  v ^= v >> 16u;
+  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+  return float(v.x) / 4294967295.0;
+}
+
+// Random numbers at the grid corners, blended smoothly in between: soft blobs instead of hard squares.
+float valueNoise(vec2 p) {
+  ivec2 i = ivec2(floor(p));
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float bottom = mix(hash(i), hash(i + ivec2(1, 0)), f.x);
+  float top = mix(hash(i + ivec2(0, 1)), hash(i + ivec2(1, 1)), f.x);
+  return mix(bottom, top, f.y);
+}
+
+// The surface's own 2D coordinates: the two world axes it lies along (floors xz, walls xy or zy).
+vec2 surfacePosition(vec3 position, vec3 normal) {
+  vec3 a = abs(normal);
+  if (a.y >= a.x && a.y >= a.z) return position.xz;
+  return a.x >= a.z ? position.zy : position.xy;
+}
+
+// Fine random squares mixed with soft patches, so the variants clump like grass and stains do.
+float scatter(vec3 normal) {
+  vec2 p = surfacePosition(v_worldPosition, normal);
+  float fine = hash(ivec2(floor(p / u_scatterCell)));
+  float patches = valueNoise(p / u_patchSize);
+  return mix(fine, patches, u_patchiness);
+}
 
 void main() {
   vec3 normal = normalize(v_normal);
@@ -33,6 +72,8 @@ void main() {
   float distance = length(v_viewPosition);
   // Alpha holds the distance for the ASCII pass's edges. Square root, so its 8 bits are finer up close.
   outNormal = vec4(normal * 0.5 + 0.5, sqrt(clamp(distance / u_fogEnd, 0.0, 1.0)));
+  bool scattered = (u_scatterMaterials & (1 << int(v_material))) != 0;
+  outScatter = vec4(scattered ? scatter(normal) : 0.0, 0.0, 0.0, 0.0);
 
   // Debug view: normals run from -1 to 1, colours from 0 to 1, so each axis is remapped.
   if (u_showNormals) {

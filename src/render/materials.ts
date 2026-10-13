@@ -5,6 +5,7 @@ interface GlyphSet {
   ramp: string;
   edges?: string;
   animated?: boolean; // the glyph moves up and down the ramp over time and across cells
+  scatter?: boolean; // the ramp is 10 variants picked at random by world position, not by brightness
 }
 
 export const RAMP_LENGTH = 10;
@@ -21,11 +22,12 @@ const SETS = {
   streetLight: { ramp: ' .-:=+*%#@' },
   trafficLightPole: { ramp: ' .-:=+*%#@' },
   trafficLight: { ramp: ' .-:=+*%#@' },
-  walkSign: { ramp: ' .-:=+*%#*' },
+  walkSign: { ramp: ' .-:o+*%#*' },
   stopSignPole: { ramp: ' .-:=+*%#@' },
   stopSign: { ramp: ' .-:=+*%#@' },
   roadMarkings: { ramp: ' .-:=+*%#@' },
   star: { ramp: ' ..::+++**' },
+  grass: { ramp: `.,.,''v"";`, scatter: true },
   water: { ramp: ' ~≈=oe*O6@', animated: true },
 } satisfies Record<string, GlyphSet>;
 
@@ -47,3 +49,6 @@ export const EDGE_MATERIALS = sets.reduce((mask, { edges }, i) => (edges ? mask 
 
 // Bit n is set when material n is animated. Same 1-31 limit as edges.
 export const ANIMATED_MATERIALS = sets.reduce((mask, { animated }, i) => (animated ? mask | (1 << (i + 1)) : mask), 0);
+
+// Bit n is set when material n is a scatter set. Same 1-31 limit as edges.
+export const SCATTER_MATERIALS = sets.reduce((mask, { scatter }, i) => (scatter ? mask | (1 << (i + 1)) : mask), 0);

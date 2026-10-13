@@ -4,13 +4,18 @@ precision highp float;
 uniform sampler2D u_scene;
 uniform sampler2D u_normals;
 uniform sampler2D u_glyphs;
+uniform sampler2D u_scatter;
 uniform ivec2 u_cellSize;
 uniform int u_rampLength;
 uniform int u_edgeMaterials; // bit n set: material n has edge glyphs after its ramp
+uniform int u_scatterMaterials; // bit n set: material n's ramp is 10 variants picked by the scatter value
 uniform int u_animatedMaterials; // bit n set: material n's glyph moves over time
 uniform float u_animationPhase; // 0 to 1 through one animation loop
 uniform float u_animationLevels; // animated glyphs move up to this many ramp levels brighter or darker
 uniform float u_waveScale;
+uniform int u_tick; // an int, so it stays exact (a float would lose whole ticks after ~77 hours)
+uniform float u_splashChance; // share of shore cells splashing at any moment
+uniform int u_splashTicks; // how long one splash lasts
 uniform vec3 u_background;
 // 0 = full-strength hue, 1 = the cell's true colour.
 uniform float u_glyphShade;
@@ -51,6 +56,41 @@ bool edgeTowards(ivec2 cell, vec4 normal, ivec2 offset) {
   vec4 neighbour = texelFetch(u_normals, other, 0);
   bool inFront = (normal.a - neighbour.a) * 255.0 > EDGE_DEPTH_STEPS;
   return facesDiffer(normal, neighbour) && !inFront;
+}
+
+// A random number from 0 to 1 for three whole numbers (PCG 3D hash): the same inputs always give the same result.
+float hash(uvec3 v) {
+  v = v * 1664525u + 1013904223u;
+  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+  v ^= v >> 16u;
+  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+  return float(v.x) / 4294967295.0;
+}
+
+// A cell at the edge of its material: a neighbour above, below or to the side is empty or another material,
+// and not standing in front of it (a car in front of the pond doesn't make a shore).
+bool isShore(ivec2 cell, int material) {
+  ivec2 last = textureSize(u_scene, 0) - 1;
+  float distance = texelFetch(u_normals, cell, 0).a;
+  ivec2 offsets[4] = ivec2[4](ivec2(-1, 0), ivec2(1, 0), ivec2(0, -1), ivec2(0, 1));
+  for (int i = 0; i < 4; i++) {
+    ivec2 other = clamp(cell + offsets[i], ivec2(0), last);
+    float alpha = texelFetch(u_scene, other, 0).a;
+    if (alpha == 0.0) return true;
+    if (int(round(alpha * 255.0)) == material) continue;
+    bool inFront = (distance - texelFetch(u_normals, other, 0).a) * 255.0 > EDGE_DEPTH_STEPS;
+    if (!inFront) return true;
+  }
+  return false;
+}
+
+// Shore cells splash now and then. Each cell starts its splashes at its own offset, so they don't all
+// change at the same moment.
+bool splashing(ivec2 cell) {
+  uvec2 c = uvec2(cell);
+  int start = int(hash(uvec3(c, 0u)) * float(u_splashTicks));
+  int slot = (u_tick + start) / u_splashTicks;
+  return hash(uvec3(c, uint(slot) + 1u)) < u_splashChance;
 }
 
 // Dev view, like an old TV: each scene pixel is a soft blob that bleeds into its neighbours (wider
@@ -118,9 +158,18 @@ void main() {
 
   if (level > 0 && (u_animatedMaterials & (1 << material)) != 0) {
     level = clamp(level + int(round(wave(cell) * u_animationLevels)), 1, u_rampLength - 1);
+    if (isShore(cell, material) && splashing(cell)) level = u_rampLength - 1;
   }
 
   int column = level;
+  if ((u_scatterMaterials & (1 << material)) != 0) {
+    // Too dark: empty, like level 0 of a ramp. Otherwise the scatter value picks the glyph, not the brightness.
+    if (level == 0) {
+      outColor = vec4(u_background, 1.0);
+      return;
+    }
+    column = min(int(texelFetch(u_scatter, cell, 0).r * float(u_rampLength)), u_rampLength - 1);
+  }
   if (level >= EDGE_MIN_LEVEL && (u_edgeMaterials & (1 << material)) != 0) {
     vec4 normal = normalAt(cell);
     bool left = edgeTowards(cell, normal, ivec2(-1, 0));
