@@ -12,6 +12,7 @@ interface GlyphSet {
   edges?: string;
   animated?: boolean; // the glyph moves up and down the ramp over time and across cells
   scatter?: ScatterSettings; // the ramp is 10 variants picked at random by world position, not by brightness
+  strokes?: boolean; // faces sloping on screen use the stroke set for their direction instead of this ramp
 }
 
 export const RAMP_LENGTH = 10;
@@ -19,7 +20,8 @@ const EDGE_GLYPHS = 3;
 
 const SETS = {
   default: { ramp: ' .-:=+*%#@' },
-  defaultBuilding: { ramp: ' .:!|I%&#H', edges: '|[]' },
+  defaultBuilding: { ramp: ' .:!|I%&#H', edges: '|[]'},
+  houseRoof: { ramp: ' .:!|I%&#H', edges: '|[]', strokes: true },
   defaultRoad: { ramp: ' ...,,,---' },
   defaultCurb: { ramp: ' :::--=*##' },
   defaultCurbSide: { ramp: ' :::==**##' },
@@ -36,6 +38,11 @@ const SETS = {
   grass: { ramp: `.,.,''v"";`, scatter: { square: 0.3, patch: 4, patchiness: 0.5 } },
   concrete: { ramp: `---==--===`, scatter: { square: 0.3, patch: 4, patchiness: 0.5 } },
   water: { ramp: ' ~≈=oe*O6@', animated: true },
+  // Stroke sets, in the order the ASCII pass numbers the directions.
+  strokeVertical: { ramp: ' .:!!|||||' },
+  strokeBackslash: { ramp: ' .`\\\\\\\\\\\\\\' },
+  strokeHorizontal: { ramp: ' .,=======' },
+  strokeSlash: { ramp: ' .,///////' },
 } satisfies Record<string, GlyphSet>;
 
 export type Material = keyof typeof SETS;
@@ -59,6 +66,19 @@ export const ANIMATED_MATERIALS = sets.reduce((mask, { animated }, i) => (animat
 
 // Bit n is set when material n is a scatter set. Same 1-31 limit as edges.
 export const SCATTER_MATERIALS = sets.reduce((mask, { scatter }, i) => (scatter ? mask | (1 << (i + 1)) : mask), 0);
+
+// Bit n is set when material n uses the stroke sets. Same 1-31 limit as edges.
+export const STROKE_MATERIALS = sets.reduce((mask, { strokes }, i) => (strokes ? mask | (1 << (i + 1)) : mask), 0);
+
+// Atlas row of the first stroke set; the other directions follow it.
+export const STROKE_ROW = MATERIAL.strokeVertical - 1;
+if (
+  MATERIAL.strokeBackslash !== MATERIAL.strokeVertical + 1 ||
+  MATERIAL.strokeHorizontal !== MATERIAL.strokeVertical + 2 ||
+  MATERIAL.strokeSlash !== MATERIAL.strokeVertical + 3
+) {
+  throw new Error('Stroke sets must follow each other: vertical, backslash, horizontal, slash');
+}
 
 // Each scatter set's settings, by name. A copy of the defaults above, so the dev menu can change them.
 export const SCATTER_SETTINGS = Object.fromEntries(

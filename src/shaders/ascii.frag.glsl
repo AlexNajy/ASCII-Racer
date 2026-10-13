@@ -10,6 +10,8 @@ uniform int u_rampLength;
 uniform int u_edgeMaterials; // bit n set: material n has edge glyphs after its ramp
 uniform int u_scatterMaterials; // bit n set: material n's ramp is 10 variants picked by the scatter value
 uniform int u_animatedMaterials; // bit n set: material n's glyph moves over time
+uniform int u_strokeMaterials; // bit n set: material n uses the stroke sets on faces sloping on screen
+uniform int u_strokeRow; // atlas row of the first stroke set (|), followed by \, - and /
 uniform float u_animationPhase; // 0 to 1 through one animation loop
 uniform float u_animationLevels; // animated glyphs move up to this many ramp levels brighter or darker
 uniform float u_waveScale;
@@ -48,6 +50,33 @@ vec4 normalAt(ivec2 cell) {
 
 bool facesDiffer(vec4 a, vec4 b) {
   return dot(a.rgb * 2.0 - 1.0, b.rgb * 2.0 - 1.0) < EDGE_THRESHOLD;
+}
+
+// World normals with more y than this are flat ground or roofs and keep their ramp.
+const float FLAT_NORMAL_Y = 0.99;
+// Faces whose fall line runs less than this along the screen (it points at or away from the camera) have no
+// stroke direction.
+const float STROKE_MIN_LEAN = 0.3;
+// Degrees either side of straight up a stroke line can tilt and still be |, and either side of level and still be -.
+// Everything between is / or \. Equal bins are 22.5 each.
+const float STROKE_VERTICAL_RANGE = 20.0;
+const float STROKE_HORIZONTAL_RANGE = 20.0;
+
+// The direction a face's strokes run on screen, along its fall line (straight downhill on the face):
+// 0 |, 1 \, 2 -, 3 /, or -1 for none.
+int strokeDirection(ivec2 cell) {
+  vec3 world = normalAt(cell).rgb * 2.0 - 1.0;
+  if (world.y > FLAT_NORMAL_Y) return -1;
+  // Straight down, minus the part that points out of the face.
+  vec3 fall = normalize(vec3(0.0, -1.0, 0.0) + world.y * world);
+  vec2 line = (u_viewRotation * fall).xy;
+  if (length(line) < STROKE_MIN_LEAN) return -1;
+  // A line has no front or back, so angles half a turn apart are the same: fold into 0 to 180°.
+  float angle = degrees(atan(line.y, line.x));
+  if (angle < 0.0) angle += 180.0;
+  if (abs(angle - 90.0) < STROKE_VERTICAL_RANGE) return 0;
+  if (angle < STROKE_HORIZONTAL_RANGE || angle > 180.0 - STROKE_HORIZONTAL_RANGE) return 2;
+  return angle < 90.0 ? 3 : 1;
 }
 
 // The cell is at the edge of its face on that side: the neighbour is empty (a silhouette), or faces another
@@ -184,6 +213,12 @@ void main() {
     bool right = edgeTowards(cell, normal, ivec2(1, 0));
     // Edge glyphs follow the ramp: dim, left, right. A face one cell wide is both, so it gets the dim one.
     if (left || right) column = u_rampLength + (level < EDGE_BRIGHT_LEVEL || left == right ? 0 : left ? 1 : 2);
+  }
+
+  // Edge glyphs win: they live in the material's own row.
+  if (level > 0 && column < u_rampLength && (u_strokeMaterials & (1 << material)) != 0) {
+    int direction = strokeDirection(cell);
+    if (direction >= 0) row = u_strokeRow + direction;
   }
 
   // Atlas rows run top-down, screen rows bottom-up, hence the flipped y.

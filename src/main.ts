@@ -29,7 +29,7 @@ import { createProgram } from './gl/shader.ts';
 import { identity, multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
-import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
+import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS, STROKE_ROW, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
 import { box, flatDisc, FLOATS_PER_VERTEX, gableRoof, withMaterial, withSideColor, withSideMaterial } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
@@ -144,8 +144,7 @@ function uploadStars() {
 uploadStars();
 
 // Test roofs for the screen direction glyphs.
-// Rise per metre of run: 1 is a 45° roof.
-const ROOF_PITCH = 1;
+const ROOF_ANGLE = 30; // degrees
 
 function isHouse(city: City, rect: Rect): boolean {
   const x = (rect.minX + rect.maxX) / 2;
@@ -226,16 +225,15 @@ function buildCityMeshes(
   );
   // All buildings in one mesh, with corners already in world position, so they draw in a single call.
   const buildingMesh = uploadMesh(
-    withMaterial(
-      buildings.flatMap(({ rect, height }) => {
-        const walls = slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65]);
-        if (!isHouse(city, rect)) return walls;
-        const { minX, minZ, maxX, maxZ } = rect;
-        const roofHeight = (ROOF_PITCH * Math.min(maxX - minX, maxZ - minZ)) / 2;
-        return [...walls, ...gableRoof(minX, minZ, maxX, maxZ, CURB_HEIGHT + height, roofHeight, [0.75, 0.7, 0.65])];
-      }),
-      MATERIAL.defaultBuilding,
-    ),
+    buildings.flatMap(({ rect, height }) => {
+      const walls = withMaterial(slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65]), MATERIAL.defaultBuilding);
+      if (!isHouse(city, rect)) return walls;
+      const { minX, minZ, maxX, maxZ } = rect;
+      const roofHeight = (Math.tan((ROOF_ANGLE * Math.PI) / 180) * Math.min(maxX - minX, maxZ - minZ)) / 2;
+      const roof = gableRoof(minX, minZ, maxX, maxZ, CURB_HEIGHT + height, roofHeight, [0.75, 0.7, 0.65]);
+      // Only the slopes are roof; the gable ends are wall.
+      return [...walls, ...withSideMaterial(withMaterial(roof, MATERIAL.houseRoof), MATERIAL.defaultBuilding)];
+    }),
   );
   const ponds = uploadMesh(
     withMaterial(
@@ -302,6 +300,8 @@ const backgroundLocation = gl.getUniformLocation(asciiProgram, 'u_background');
 const renderModeLocation = gl.getUniformLocation(asciiProgram, 'u_renderMode');
 const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
 const asciiViewRotationLocation = gl.getUniformLocation(asciiProgram, 'u_viewRotation');
+const strokeMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_strokeMaterials');
+const strokeRowLocation = gl.getUniformLocation(asciiProgram, 'u_strokeRow');
 const fullscreenVao = gl.createVertexArray();
 const crtProgram = createProgram(gl, fullscreenVertexSource, crtFragmentSource);
 const crtImageLocation = gl.getUniformLocation(crtProgram, 'u_image');
@@ -535,6 +535,8 @@ function frame(timeMs: number) {
   gl!.uniform1i(rampLengthLocation, RAMP_LENGTH);
   gl!.uniform1i(edgeMaterialsLocation, EDGE_MATERIALS);
   gl!.uniform1i(animatedMaterialsLocation, ANIMATED_MATERIALS);
+  gl!.uniform1i(strokeMaterialsLocation, STROKE_MATERIALS);
+  gl!.uniform1i(strokeRowLocation, STROKE_ROW);
   const animationTicks = Math.round(settings.animationSeconds * TICKS_PER_SECOND);
   gl!.uniform1f(animationPhaseLocation, (clock.tick % animationTicks) / animationTicks);
   gl!.uniform1f(animationLevelsLocation, settings.animationLevels);
