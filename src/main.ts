@@ -31,7 +31,7 @@ import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
-import { box, flatDisc, FLOATS_PER_VERTEX, withMaterial, withSideColor, withSideMaterial } from './render/shapes.ts';
+import { box, flatDisc, FLOATS_PER_VERTEX, gableRoof, withMaterial, withSideColor, withSideMaterial } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
@@ -143,6 +143,18 @@ function uploadStars() {
 }
 uploadStars();
 
+// Test roofs for the screen direction glyphs.
+// Rise per metre of run: 1 is a 45° roof.
+const ROOF_PITCH = 1;
+
+function isHouse(city: City, rect: Rect): boolean {
+  const x = (rect.minX + rect.maxX) / 2;
+  const z = (rect.minZ + rect.maxZ) / 2;
+  return city.blocks.some(
+    (block) => block.zone === Zone.Houses && x > block.rect.minX && x < block.rect.maxX && z > block.rect.minZ && z < block.rect.maxZ,
+  );
+}
+
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
   return box([rect.minX, bottom, rect.minZ], [rect.maxX, top, rect.maxZ], color);
 }
@@ -215,7 +227,13 @@ function buildCityMeshes(
   // All buildings in one mesh, with corners already in world position, so they draw in a single call.
   const buildingMesh = uploadMesh(
     withMaterial(
-      buildings.flatMap(({ rect, height }) => slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65])),
+      buildings.flatMap(({ rect, height }) => {
+        const walls = slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65]);
+        if (!isHouse(city, rect)) return walls;
+        const { minX, minZ, maxX, maxZ } = rect;
+        const roofHeight = (ROOF_PITCH * Math.min(maxX - minX, maxZ - minZ)) / 2;
+        return [...walls, ...gableRoof(minX, minZ, maxX, maxZ, CURB_HEIGHT + height, roofHeight, [0.75, 0.7, 0.65])];
+      }),
       MATERIAL.defaultBuilding,
     ),
   );
@@ -283,6 +301,7 @@ const splashTicksLocation = gl.getUniformLocation(asciiProgram, 'u_splashTicks')
 const backgroundLocation = gl.getUniformLocation(asciiProgram, 'u_background');
 const renderModeLocation = gl.getUniformLocation(asciiProgram, 'u_renderMode');
 const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
+const asciiViewRotationLocation = gl.getUniformLocation(asciiProgram, 'u_viewRotation');
 const fullscreenVao = gl.createVertexArray();
 const crtProgram = createProgram(gl, fullscreenVertexSource, crtFragmentSource);
 const crtImageLocation = gl.getUniformLocation(crtProgram, 'u_image');
@@ -525,6 +544,7 @@ function frame(timeMs: number) {
   gl!.uniform1i(splashTicksLocation, Math.max(1, Math.round(settings.splashSeconds * TICKS_PER_SECOND)));
   gl!.uniform3fv(backgroundLocation, background);
   gl!.uniform1f(glyphShadeLocation, settings.glyphShade);
+  gl!.uniformMatrix3fv(asciiViewRotationLocation, false, [view[0], view[1], view[2], view[4], view[5], view[6], view[8], view[9], view[10]]);
   gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);

@@ -19,7 +19,9 @@ uniform int u_splashTicks; // how long one splash lasts
 uniform vec3 u_background;
 // 0 = full-strength hue, 1 = the cell's true colour.
 uniform float u_glyphShade;
-uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene, 5 normal texture, 6 CRT scene
+uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene, 5 normal texture, 6 CRT scene, 8 screen normals
+// Turns world directions into view space: x right, y up, z towards the camera.
+uniform mat3 u_viewRotation;
 
 out vec4 outColor;
 
@@ -135,6 +137,12 @@ void main() {
 
   if (u_renderMode == 5) {
     outColor = vec4(texelFetch(u_normals, cell, 0).rgb, 1.0);
+    return;
+  }
+
+  if (u_renderMode == 8) {
+    vec3 normal = u_viewRotation * (texelFetch(u_normals, cell, 0).rgb * 2.0 - 1.0);
+    outColor = vec4(normal * 0.5 + 0.5, 1.0);
     return;
   }
 

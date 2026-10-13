@@ -13,6 +13,7 @@ export const RenderMode = {
   NormalTexture: 5,
   CrtScene: 6,
   CrtGlyphs: 7,
+  ScreenNormals: 8,
 } as const;
 export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 

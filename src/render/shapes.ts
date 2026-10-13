@@ -60,6 +60,32 @@ export function box(min: Vec3, max: Vec3, color: Vec3, emission = 0): number[] {
   return vertices;
 }
 
+// A pitched roof over the rectangle from (x0, z0) to (x1, z1): two slopes meeting at a ridge along the longer side,
+// closed by triangular gable ends.
+export function gableRoof(x0: number, z0: number, x1: number, z1: number, bottom: number, height: number, color: Vec3): number[] {
+  const alongX = x1 - x0 >= z1 - z0;
+  // Built with the ridge along x; for a ridge along z, x and z swap.
+  const [a0, a1, b0, b1] = alongX ? [x0, x1, z0, z1] : [z0, z1, x0, x1];
+  const point = (a: number, y: number, b: number): Vec3 => (alongX ? [a, y, b] : [b, y, a]);
+  const top = bottom + height;
+  const mid = (b0 + b1) / 2;
+  const half = (b1 - b0) / 2;
+  const slope = Math.hypot(half, height);
+  const triangles: [Vec3, Vec3, Vec3, Vec3][] = [
+    [point(a0, bottom, b0), point(a1, bottom, b0), point(a1, top, mid), point(0, half / slope, -height / slope)],
+    [point(a0, bottom, b0), point(a1, top, mid), point(a0, top, mid), point(0, half / slope, -height / slope)],
+    [point(a0, bottom, b1), point(a1, bottom, b1), point(a1, top, mid), point(0, half / slope, height / slope)],
+    [point(a0, bottom, b1), point(a1, top, mid), point(a0, top, mid), point(0, half / slope, height / slope)],
+    [point(a0, bottom, b0), point(a0, bottom, b1), point(a0, top, mid), point(-1, 0, 0)],
+    [point(a1, bottom, b0), point(a1, bottom, b1), point(a1, top, mid), point(1, 0, 0)],
+  ];
+  const vertices: number[] = [];
+  for (const [a, b, c, normal] of triangles) {
+    for (const corner of [a, b, c]) vertices.push(...corner, ...color, ...normal, 0, NO_ID, MATERIAL.default);
+  }
+  return vertices;
+}
+
 // A box centred on `centre` whose front points along `facing`, which must be ±x or ±z.
 // Width runs across the front, depth along `facing`.
 export function facingBox(
