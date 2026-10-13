@@ -8,6 +8,7 @@ import { MATERIAL } from './materials.ts';
 // Material (1-255, see materials.ts) picks the glyph set; the scene pass writes it into the colour target's alpha, 0 = empty.
 export const FLOATS_PER_VERTEX = 12;
 export const NO_ID = -1;
+const COLOR_OFFSET = 3;
 const NORMAL_Y_OFFSET = 7;
 const ID_OFFSET = 10;
 const MATERIAL_OFFSET = 11;
@@ -28,6 +29,15 @@ export function withMaterial(vertices: number[], material: number): number[] {
 export function withSideMaterial(vertices: number[], material: number): number[] {
   for (let i = 0; i < vertices.length; i += FLOATS_PER_VERTEX) {
     if (vertices[i + NORMAL_Y_OFFSET] === 0) vertices[i + MATERIAL_OFFSET] = material;
+  }
+  return vertices;
+}
+
+// Gives the vertices of vertical faces (normal with no y) the given colour, e.g. the sides of a curb.
+export function withSideColor(vertices: number[], color: Vec3): number[] {
+  for (let i = 0; i < vertices.length; i += FLOATS_PER_VERTEX) {
+    if (vertices[i + NORMAL_Y_OFFSET] !== 0) continue;
+    for (let c = 0; c < 3; c++) vertices[i + COLOR_OFFSET + c] = color[c];
   }
   return vertices;
 }

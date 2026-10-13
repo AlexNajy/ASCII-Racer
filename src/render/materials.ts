@@ -1,11 +1,17 @@
 // One glyph set per material, each one atlas row: the brightness ramp (darkest to brightest), then the
 // edge glyphs if it has any (dim edge, left edge, right edge).
 // A material's number is its place in this list plus 1, because 0 in the scene alpha means empty.
+export interface ScatterSettings {
+  square: number; // m, size of one random square on a surface
+  patch: number; // m, size of the patches the squares clump into
+  patchiness: number; // 0 = every square on its own, 1 = patches only
+}
+
 interface GlyphSet {
   ramp: string;
   edges?: string;
   animated?: boolean; // the glyph moves up and down the ramp over time and across cells
-  scatter?: boolean; // the ramp is 10 variants picked at random by world position, not by brightness
+  scatter?: ScatterSettings; // the ramp is 10 variants picked at random by world position, not by brightness
 }
 
 export const RAMP_LENGTH = 10;
@@ -26,8 +32,9 @@ const SETS = {
   stopSignPole: { ramp: ' .-:=+*%#@' },
   stopSign: { ramp: ' .-:=+*%#@' },
   roadMarkings: { ramp: ' .-:=+*%#@' },
-  star: { ramp: ' ..::+++**' },
-  grass: { ramp: `.,.,''v"";`, scatter: true },
+  star: { ramp: ' ..\'\'+++**' },
+  grass: { ramp: `.,.,''v"";`, scatter: { square: 0.3, patch: 4, patchiness: 0.5 } },
+  concrete: { ramp: `---==--===`, scatter: { square: 0.3, patch: 4, patchiness: 0.5 } },
   water: { ramp: ' ~≈=oe*O6@', animated: true },
 } satisfies Record<string, GlyphSet>;
 
@@ -52,3 +59,17 @@ export const ANIMATED_MATERIALS = sets.reduce((mask, { animated }, i) => (animat
 
 // Bit n is set when material n is a scatter set. Same 1-31 limit as edges.
 export const SCATTER_MATERIALS = sets.reduce((mask, { scatter }, i) => (scatter ? mask | (1 << (i + 1)) : mask), 0);
+
+// Each scatter set's settings, by name. A copy of the defaults above, so the dev menu can change them.
+export const SCATTER_SETTINGS = Object.fromEntries(
+  Object.entries(SETS as Record<string, GlyphSet>).flatMap(([name, { scatter }]) => (scatter ? [[name, { ...scatter }]] : [])),
+) as Partial<Record<Material, ScatterSettings>>;
+
+// Square, patch and patchiness per material number, for the scene shader's u_scatterParams.
+export function scatterParams(): Float32Array {
+  const params = new Float32Array(32 * 3);
+  for (const [name, scatter] of Object.entries(SCATTER_SETTINGS) as [Material, ScatterSettings][]) {
+    params.set([scatter.square, scatter.patch, scatter.patchiness], MATERIAL[name] * 3);
+  }
+  return params;
+}

@@ -23,17 +23,17 @@ uniform float u_headlightInnerCos; // full light inside this
 uniform float u_headlightRange; // m, the light fades to nothing here
 uniform float u_headlightIntensity;
 uniform int u_scatterMaterials; // bit n set: material n picks its glyph from the scatter value
-uniform float u_scatterCell; // m, size of one random square on a surface
-uniform float u_patchSize; // m, size of the patches the random squares clump into
-uniform float u_patchiness; // 0 = every square on its own, 1 = patches only
+// Per material number: square size (m), patch size (m), patchiness (0 = squares only, 1 = patches only).
+uniform vec3 u_scatterParams[32];
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
 layout(location = 2) out vec4 outScatter;
 
 // A random number from 0 to 1 for a grid square (PCG 3D hash): the same square always gives the same number.
-float hash(ivec2 square) {
-  uvec3 v = uvec3(uvec2(square), 0u) * 1664525u + 1013904223u;
+// The material is the third input, so each material gets its own pattern.
+float hash(ivec2 square, uint material) {
+  uvec3 v = uvec3(uvec2(square), material) * 1664525u + 1013904223u;
   v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
   v ^= v >> 16u;
   v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
@@ -41,12 +41,12 @@ float hash(ivec2 square) {
 }
 
 // Random numbers at the grid corners, blended smoothly in between: soft blobs instead of hard squares.
-float valueNoise(vec2 p) {
+float valueNoise(vec2 p, uint material) {
   ivec2 i = ivec2(floor(p));
   vec2 f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
-  float bottom = mix(hash(i), hash(i + ivec2(1, 0)), f.x);
-  float top = mix(hash(i + ivec2(0, 1)), hash(i + ivec2(1, 1)), f.x);
+  float bottom = mix(hash(i, material), hash(i + ivec2(1, 0), material), f.x);
+  float top = mix(hash(i + ivec2(0, 1), material), hash(i + ivec2(1, 1), material), f.x);
   return mix(bottom, top, f.y);
 }
 
@@ -59,10 +59,12 @@ vec2 surfacePosition(vec3 position, vec3 normal) {
 
 // Fine random squares mixed with soft patches, so the variants clump like grass and stains do.
 float scatter(vec3 normal) {
+  int material = int(v_material);
+  vec3 params = u_scatterParams[material];
   vec2 p = surfacePosition(v_worldPosition, normal);
-  float fine = hash(ivec2(floor(p / u_scatterCell)));
-  float patches = valueNoise(p / u_patchSize);
-  return mix(fine, patches, u_patchiness);
+  float fine = hash(ivec2(floor(p / params.x)), uint(material));
+  float patches = valueNoise(p / params.y, uint(material));
+  return mix(fine, patches, params.z);
 }
 
 void main() {

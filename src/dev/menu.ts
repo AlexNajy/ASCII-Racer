@@ -1,6 +1,7 @@
 import type { CarSettings } from '../game/car.ts';
 import type { ChaseCameraSettings } from '../game/chaseCamera.ts';
 import type { CitySettings } from '../game/city.ts';
+import type { ScatterSettings } from '../render/materials.ts';
 import type { SkySettings } from '../render/sky.ts';
 
 export const RenderMode = {
@@ -41,9 +42,6 @@ export interface DevSettings {
   waveScale: number; // how tightly packed the waves are across cells
   splashChance: number; // share of shore cells splashing at any moment, 0 to 1
   splashSeconds: number; // how long one splash lasts
-  scatterCell: number; // m, size of one random square on a scatter surface
-  patchSize: number; // m, size of the patches scatter glyphs clump into
-  patchiness: number; // 0 = every square on its own, 1 = patches only
 }
 
 type NumberSetting =
@@ -61,10 +59,7 @@ type NumberSetting =
   | 'animationSeconds'
   | 'waveScale'
   | 'splashChance'
-  | 'splashSeconds'
-  | 'scatterCell'
-  | 'patchSize'
-  | 'patchiness';
+  | 'splashSeconds';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -76,6 +71,7 @@ export function createDevMenu(
   carSettings: CarSettings,
   chaseSettings: ChaseCameraSettings,
   skySettings: SkySettings,
+  scatterSettings: Partial<Record<string, ScatterSettings>>,
   onChange: (setting: keyof DevSettings) => void,
   onCityChange: () => void,
   onSkyChange: () => void,
@@ -259,9 +255,13 @@ export function createDevMenu(
   settingSlider(animationPage, 'Wave scale', 'waveScale', 0.1, 4, 0.1);
   settingSlider(animationPage, 'Splash chance', 'splashChance', 0, 1, 0.01);
   settingSlider(animationPage, 'Splash time (s)', 'splashSeconds', 0.05, 2, 0.05);
-  settingSlider(scatterPage, 'Square size (m)', 'scatterCell', 0.05, 2, 0.05);
-  settingSlider(scatterPage, 'Patch size (m)', 'patchSize', 0.5, 20, 0.5);
-  settingSlider(scatterPage, 'Patchiness', 'patchiness', 0, 1, 0.05);
+  // One group of sliders per scatter material, read by the scene pass every frame.
+  for (const [name, scatter] of Object.entries(scatterSettings)) {
+    if (!scatter) continue;
+    slider(scatterPage, `${name} square size (m)`, scatter.square, 0.05, 2, 0.05, (value) => (scatter.square = value));
+    slider(scatterPage, `${name} patch size (m)`, scatter.patch, 0.5, 20, 0.5, (value) => (scatter.patch = value));
+    slider(scatterPage, `${name} patchiness`, scatter.patchiness, 0, 1, 0.05, (value) => (scatter.patchiness = value));
+  }
   skySlider(skyPage, 'Star count', 'starCount', 0, 10000, 100);
   skySlider(skyPage, 'Star seed', 'starSeed', 1, 1000, 1);
   skySlider(skyPage, 'Lowest star (y)', 'starMinY', 0, 0.9, 0.01);

@@ -13,7 +13,7 @@ interface Range {
 
 type BlockBuilder = (rect: Rect, random: () => number, settings: CitySettings) => Building[];
 
-const SETBACK = 3;
+export const SETBACK = 3;
 const ALLEY_WIDTH = 4;
 const MID_RISE_HEIGHT: Range = { min: 16, max: 42 };
 const SHOP_HEIGHT: Range = { min: 6.5, max: 15 };

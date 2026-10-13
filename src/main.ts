@@ -10,9 +10,10 @@ import {
   updateChaseCamera,
   type ChaseCameraSettings,
 } from './game/chaseCamera.ts';
-import { generateBuildings, type Building } from './game/buildings.ts';
+import { generateBuildings, inset, SETBACK, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { cityColliders, pushOutOfColliders } from './game/collision.ts';
+import { lotPavements } from './game/lots.ts';
 import { generateIntersections, type Intersections } from './game/intersections.ts';
 import { signalOffsets, signalPhase } from './game/signals.ts';
 import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
@@ -28,9 +29,9 @@ import { createProgram } from './gl/shader.ts';
 import { identity, multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
-import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH } from './render/materials.ts';
+import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
-import { box, flatDisc, FLOATS_PER_VERTEX, withMaterial, withSideMaterial } from './render/shapes.ts';
+import { box, flatDisc, FLOATS_PER_VERTEX, withMaterial, withSideColor, withSideMaterial } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
@@ -75,9 +76,7 @@ const idLocation = gl.getAttribLocation(program, 'a_id');
 const materialLocation = gl.getAttribLocation(program, 'a_material');
 const signalsTextureLocation = gl.getUniformLocation(program, 'u_signals');
 const sceneScatterMaterialsLocation = gl.getUniformLocation(program, 'u_scatterMaterials');
-const scatterCellLocation = gl.getUniformLocation(program, 'u_scatterCell');
-const patchSizeLocation = gl.getUniformLocation(program, 'u_patchSize');
-const patchinessLocation = gl.getUniformLocation(program, 'u_patchiness');
+const scatterParamsLocation = gl.getUniformLocation(program, 'u_scatterParams');
 
 interface Mesh {
   vao: WebGLVertexArrayObject;
@@ -157,16 +156,21 @@ const WALL_COLORS: Record<WallKind, Vec3> = {
   flex: [0.2, 0.7, 0.9],
 };
 
-// Temporary zone tints, for seeing the zoning.
-const ZONE_COLORS: Record<Zone, Vec3> = {
-  [Zone.LowDensity]: [0.2, 0.3, 0.75],
-  [Zone.MidDensity]: [0.05, 0.3, 0.1],
-  [Zone.HighRise]: [0.75, 0.75, 0.75],
-  [Zone.Houses]: [0.35, 0.55, 0.15],
-  [Zone.Park]: [0.15, 0.85, 0.2],
-  [Zone.Supermarket]: [0.9, 0.8, 0.1],
-  [Zone.ParkingLot]: [0.2, 0.2, 0.2],
-  [Zone.Plaza]: [0.2, 0.7, 0.9],
+const ROAD_COLOR: Vec3 = [0.2, 0.2, 0.2];
+const CONCRETE_COLOR: Vec3 = [0.6, 0.6, 0.6];
+const GRASS_COLOR: Vec3 = [0.2, 0.45, 0.15];
+
+// What each block's ground is made of. With `sidewalk`, the setback in front of the buildings is concrete and the
+// ground sits inside it. 'lot': a car park at road level inside a sidewalk with an entrance (game/lots.ts).
+const ZONE_SURFACES: Record<Zone, { material: Material; color: Vec3; sidewalk?: boolean } | 'lot'> = {
+  [Zone.LowDensity]: { material: 'concrete', color: CONCRETE_COLOR },
+  [Zone.MidDensity]: { material: 'concrete', color: CONCRETE_COLOR },
+  [Zone.HighRise]: { material: 'concrete', color: CONCRETE_COLOR },
+  [Zone.Houses]: { material: 'grass', color: GRASS_COLOR, sidewalk: true },
+  [Zone.Park]: { material: 'grass', color: GRASS_COLOR },
+  [Zone.Supermarket]: 'lot',
+  [Zone.ParkingLot]: 'lot',
+  [Zone.Plaza]: { material: 'concrete', color: CONCRETE_COLOR },
 };
 
 // Test pond in the middle of each park, for the animated water glyphs.
@@ -180,24 +184,31 @@ function buildCityMeshes(
   streetLights: StreetLight[],
   { trafficLights, stopSigns }: Intersections,
 ): Mesh[] {
-  const road = uploadMesh(withMaterial(slab(city.bounds, -0.1, 0, [0.2, 0.2, 0.2]), MATERIAL.defaultRoad));
+  const road = uploadMesh(withMaterial(slab(city.bounds, -0.1, 0, ROAD_COLOR), MATERIAL.defaultRoad));
   // Raised slightly so the paint doesn't fight the road surface for depth.
   const markings = uploadMesh(
     withMaterial(city.markings.flatMap((marking) => slab(marking, 0, 0.02, [1, 1, 1])), MATERIAL.roadMarkings),
   );
   const curb = (vertices: number[]) =>
-    withSideMaterial(withMaterial(vertices, MATERIAL.defaultCurb), MATERIAL.defaultCurbSide);
+    withSideColor(withSideMaterial(withMaterial(vertices, MATERIAL.concrete), MATERIAL.defaultCurbSide), CONCRETE_COLOR);
   const pavements = uploadMesh(
-    city.blocks.flatMap(({ rect, zone }) =>
-      withSideMaterial(
-        withMaterial(slab(rect, 0, CURB_HEIGHT, ZONE_COLORS[zone]), zone === Zone.Park ? MATERIAL.grass : MATERIAL.defaultCurb),
-        MATERIAL.defaultCurbSide,
-      ),
-    ),
+    city.blocks.flatMap((block) => {
+      const { rect, zone } = block;
+      const surface = ZONE_SURFACES[zone];
+      if (surface === 'lot') return curb(lotPavements(block, buildings).flatMap((r) => slab(r, 0, CURB_HEIGHT, CONCRETE_COLOR)));
+      const { material, color, sidewalk } = surface;
+      if (!sidewalk) {
+        const vertices = slab(rect, 0, CURB_HEIGHT, color);
+        return withSideColor(withSideMaterial(withMaterial(vertices, MATERIAL[material]), MATERIAL.defaultCurbSide), CONCRETE_COLOR);
+      }
+      // Raised slightly so the ground doesn't fight the sidewalk under it for depth.
+      const ground = slab(inset(rect, SETBACK), CURB_HEIGHT, CURB_HEIGHT + 0.02, color);
+      return [...curb(slab(rect, 0, CURB_HEIGHT, CONCRETE_COLOR)), ...withMaterial(ground, MATERIAL[material])];
+    }),
   );
   const wall = uploadMesh(
     curb([
-      ...city.wallPavement.flatMap((strip) => slab(strip, 0, CURB_HEIGHT, WALL_COLORS.corner)),
+      ...city.wallPavement.flatMap((strip) => slab(strip, 0, CURB_HEIGHT, CONCRETE_COLOR)),
       ...city.wall.flatMap(({ rect, kind }) => slab(rect, 0, CURB_HEIGHT, WALL_COLORS[kind])),
     ]),
   );
@@ -309,9 +320,6 @@ const settings: DevSettings = {
   waveScale: 2,
   splashChance: 0.4,
   splashSeconds: 1.2,
-  scatterCell: 0.3,
-  patchSize: 4,
-  patchiness: 0.5,
 };
 
 const dpr = window.devicePixelRatio || 1;
@@ -350,6 +358,7 @@ const devMenu = createDevMenu(
   carSettings,
   chaseSettings,
   skySettings,
+  SCATTER_SETTINGS,
   (setting) => {
     if (setting === 'cellWidth') {
       buildCells();
@@ -461,9 +470,7 @@ function frame(timeMs: number) {
   gl!.uniform1f(headlightRangeLocation, settings.headlightRange);
   gl!.uniform1f(headlightIntensityLocation, headlightsOn ? settings.headlightIntensity : 0);
   gl!.uniform1i(sceneScatterMaterialsLocation, SCATTER_MATERIALS);
-  gl!.uniform1f(scatterCellLocation, settings.scatterCell);
-  gl!.uniform1f(patchSizeLocation, settings.patchSize);
-  gl!.uniform1f(patchinessLocation, settings.patchiness);
+  gl!.uniform3fv(scatterParamsLocation, scatterParams());
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
