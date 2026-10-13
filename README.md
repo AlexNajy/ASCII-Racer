@@ -97,7 +97,8 @@ npm run preview   # serve the production build locally
 - [ ] **10. Per-material glyph sets**: each material gets its own characters, settled before building models are tuned against them
   - [x] Material IDs: a material float in each vertex (separate from `id`), the scene pass writes it into the colour target's alpha (0 = empty, 1–255 = material), and the ASCII pass reads it per cell
   - [x] Glyph sets per material: one atlas row per set (building, road, curb); a set can repeat characters to force them. Buildings get `[` / `]` edge glyphs on the left and right of each face, skipped behind objects in front
-  - [ ] Animated sets: glyph picked from time and cell position as well as brightness, so things like fire flicker between `(` and `)` on their own. First case: a test pond in the park with a shimmering water set
+  - [x] Animated sets: glyph picked from time and cell position as well as brightness, so things like fire flicker between `(` and `)` on their own. First case: a test pond in the park with a shimmering water set, with splashes on its shore
+  - [x] Scatter sets: glyph picked by a random value from the surface's world position instead of brightness (grass, concrete), each set with its own pattern and settings
   - [ ] Screen direction glyphs: strokes follow a surface's slope as seen on screen, derived from the normal in the ASCII pass (no tangents in the vertex data): walls vertical, sloped roofs `\` → `|` → `/` as you move around them; flat surfaces keep their ramp
 - [ ] **11. HUD**: drawn in the glyph grid, not as HTML
   - [ ] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass

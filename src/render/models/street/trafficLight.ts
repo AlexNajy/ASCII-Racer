@@ -31,7 +31,7 @@ const LAMP_RADIUS = 0.22;
 const LAMP_SPACING = 0.55;
 const LAMP_DEPTH = 0.06; // how far a lamp sticks out of the shell
 const LAMP_SIDES = 12;
-const POLE_COLOR: Vec3 = [0.6, 0.62, 0.64];
+const POLE_COLOR: Vec3 = [0.6, 0.6, 0.6];
 const SHELL_COLOR: Vec3 = [0.85, 0.65, 0.1];
 // Top to bottom: red, yellow, green. Built lit; the shader dims the ones that are off.
 const LAMP_COLORS: Vec3[] = [
