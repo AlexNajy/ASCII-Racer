@@ -4,6 +4,7 @@
 interface GlyphSet {
   ramp: string;
   edges?: string;
+  animated?: boolean; // the glyph moves up and down the ramp over time and across cells
 }
 
 export const RAMP_LENGTH = 10;
@@ -25,7 +26,7 @@ const SETS = {
   stopSign: { ramp: ' .-:=+*%#@' },
   roadMarkings: { ramp: ' .-:=+*%#@' },
   star: { ramp: ' ..::+++**' },
-  water: { ramp: ' .-~~~~===' },
+  water: { ramp: ' ~≈=oe*O6@', animated: true },
 } satisfies Record<string, GlyphSet>;
 
 export type Material = keyof typeof SETS;
@@ -43,3 +44,6 @@ export const MATERIAL = Object.fromEntries(Object.keys(SETS).map((name, i) => [n
 
 // Bit n is set when material n has edge glyphs. An int uniform has 32 bits, so only materials 1-31 can have edges.
 export const EDGE_MATERIALS = sets.reduce((mask, { edges }, i) => (edges ? mask | (1 << (i + 1)) : mask), 0);
+
+// Bit n is set when material n is animated. Same 1-31 limit as edges.
+export const ANIMATED_MATERIALS = sets.reduce((mask, { animated }, i) => (animated ? mask | (1 << (i + 1)) : mask), 0);

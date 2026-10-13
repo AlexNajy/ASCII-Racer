@@ -1,6 +1,6 @@
 import './style.css';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
-import { advanceClock, createClock, TICK_SECONDS } from './game/clock.ts';
+import { advanceClock, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
 import { blendCars, collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
@@ -28,7 +28,7 @@ import { createProgram } from './gl/shader.ts';
 import { identity, multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
-import { EDGE_MATERIALS, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH } from './render/materials.ts';
+import { ANIMATED_MATERIALS, EDGE_MATERIALS, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
 import { box, flatDisc, FLOATS_PER_VERTEX, withMaterial, withSideMaterial } from './render/shapes.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
@@ -249,6 +249,10 @@ const cellSizeLocation = gl.getUniformLocation(asciiProgram, 'u_cellSize');
 const glyphsLocation = gl.getUniformLocation(asciiProgram, 'u_glyphs');
 const rampLengthLocation = gl.getUniformLocation(asciiProgram, 'u_rampLength');
 const edgeMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_edgeMaterials');
+const animatedMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_animatedMaterials');
+const animationPhaseLocation = gl.getUniformLocation(asciiProgram, 'u_animationPhase');
+const animationLevelsLocation = gl.getUniformLocation(asciiProgram, 'u_animationLevels');
+const waveScaleLocation = gl.getUniformLocation(asciiProgram, 'u_waveScale');
 const backgroundLocation = gl.getUniformLocation(asciiProgram, 'u_background');
 const renderModeLocation = gl.getUniformLocation(asciiProgram, 'u_renderMode');
 const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
@@ -284,6 +288,9 @@ const settings: DevSettings = {
   headlightAngle: 70,
   headlightRange: 50,
   headlightIntensity: 1,
+  animationLevels: 1.5,
+  animationSeconds: 10,
+  waveScale: 2,
 };
 
 const dpr = window.devicePixelRatio || 1;
@@ -472,6 +479,11 @@ function frame(timeMs: number) {
   gl!.uniform1i(normalTextureLocation, 2);
   gl!.uniform1i(rampLengthLocation, RAMP_LENGTH);
   gl!.uniform1i(edgeMaterialsLocation, EDGE_MATERIALS);
+  gl!.uniform1i(animatedMaterialsLocation, ANIMATED_MATERIALS);
+  const animationTicks = Math.round(settings.animationSeconds * TICKS_PER_SECOND);
+  gl!.uniform1f(animationPhaseLocation, (clock.tick % animationTicks) / animationTicks);
+  gl!.uniform1f(animationLevelsLocation, settings.animationLevels);
+  gl!.uniform1f(waveScaleLocation, settings.waveScale);
   gl!.uniform3fv(backgroundLocation, background);
   gl!.uniform1f(glyphShadeLocation, settings.glyphShade);
   gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);

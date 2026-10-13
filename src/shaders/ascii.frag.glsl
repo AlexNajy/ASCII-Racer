@@ -7,6 +7,10 @@ uniform sampler2D u_glyphs;
 uniform ivec2 u_cellSize;
 uniform int u_rampLength;
 uniform int u_edgeMaterials; // bit n set: material n has edge glyphs after its ramp
+uniform int u_animatedMaterials; // bit n set: material n's glyph moves over time
+uniform float u_animationPhase; // 0 to 1 through one animation loop
+uniform float u_animationLevels; // animated glyphs move up to this many ramp levels brighter or darker
+uniform float u_waveScale;
 uniform vec3 u_background;
 // 0 = full-strength hue, 1 = the cell's true colour.
 uniform float u_glyphShade;
@@ -23,6 +27,12 @@ const int EDGE_BRIGHT_LEVEL = 4;
 // A neighbour this many distance steps closer (normals alpha, 1/255 each) is in front, so it hides the
 // face instead of ending it. 1 step is ~0.3 m at 2 m, ~0.6 m at 10 m, ~2 m at 100 m.
 const float EDGE_DEPTH_STEPS = 1.5;
+// Two waves crossing at different angles and speeds, -1 to 1. Whole-number speeds so the loop is seamless.
+float wave(ivec2 cell) {
+  float t = 6.2831853 * u_animationPhase;
+  vec2 c = vec2(cell) * u_waveScale;
+  return 0.5 * (sin(t + c.x * 0.7 + c.y * 0.3) + sin(2.0 * t - c.x * 0.4 + c.y * 0.9));
+}
 
 vec4 normalAt(ivec2 cell) {
   ivec2 last = textureSize(u_normals, 0) - 1;
@@ -105,6 +115,10 @@ void main() {
   // Alpha holds the material (1-255) in 8 bits; material 1 is atlas row 0.
   int material = int(round(scene.a * 255.0));
   int row = material - 1;
+
+  if (level > 0 && (u_animatedMaterials & (1 << material)) != 0) {
+    level = clamp(level + int(round(wave(cell) * u_animationLevels)), 1, u_rampLength - 1);
+  }
 
   int column = level;
   if (level >= EDGE_MIN_LEVEL && (u_edgeMaterials & (1 << material)) != 0) {

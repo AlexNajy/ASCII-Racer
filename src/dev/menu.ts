@@ -36,6 +36,9 @@ export interface DevSettings {
   headlightAngle: number; // degrees, the cone's full width
   headlightRange: number; // m
   headlightIntensity: number;
+  animationLevels: number; // how many ramp levels animated glyphs move up and down
+  animationSeconds: number; // one animation loop
+  waveScale: number; // how tightly packed the waves are across cells
 }
 
 type NumberSetting =
@@ -48,7 +51,10 @@ type NumberSetting =
   | 'glyphShade'
   | 'headlightAngle'
   | 'headlightRange'
-  | 'headlightIntensity';
+  | 'headlightIntensity'
+  | 'animationLevels'
+  | 'animationSeconds'
+  | 'waveScale';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -205,6 +211,7 @@ export function createDevMenu(
   const carPage = page('Car');
   const cameraPage = page('Camera');
   const skyPage = page('Sky');
+  const animationPage = page('Animation');
 
   settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
   settingSlider(viewPage, 'Cell width', 'cellWidth', 4, 16, 1);
@@ -236,6 +243,9 @@ export function createDevMenu(
   chaseSlider(cameraPage, 'Speed FOV boost (°)', 'speedFovBoost', 0, 40, 1);
   chaseSlider(cameraPage, 'Drift travel blend', 'driftTravelBlend', 0, 1, 0.05);
   chaseSlider(cameraPage, 'Wall return (/s)', 'wallReturn', 0.2, 10, 0.1);
+  settingSlider(animationPage, 'Levels', 'animationLevels', 0, 5, 0.1);
+  settingSlider(animationPage, 'Loop time (s)', 'animationSeconds', 0.5, 20, 0.5);
+  settingSlider(animationPage, 'Wave scale', 'waveScale', 0.1, 4, 0.1);
   skySlider(skyPage, 'Star count', 'starCount', 0, 10000, 100);
   skySlider(skyPage, 'Star seed', 'starSeed', 1, 1000, 1);
   skySlider(skyPage, 'Lowest star (y)', 'starMinY', 0, 0.9, 0.01);
