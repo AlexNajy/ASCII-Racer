@@ -13,6 +13,7 @@ import {
 import { generateBuildings, inset, SETBACK, type Building } from './game/buildings.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { cityColliders, pushOutOfColliders } from './game/collision.ts';
+import { FENCE_HEIGHT, houseFences } from './game/fences.ts';
 import { lotPavements } from './game/lots.ts';
 import { generateIntersections, type Intersections } from './game/intersections.ts';
 import { signalOffsets, signalPhase } from './game/signals.ts';
@@ -188,10 +189,12 @@ const ZONE_SURFACES: Record<Zone, { material: Material; color: Vec3; sidewalk?: 
 const POND_RADIUS = 12;
 const POND_SIDES = 24;
 const POND_COLOR: Vec3 = [0.15, 0.3, 0.6];
+const FENCE_COLOR: Vec3 = [0.45, 0.35, 0.25];
 
 function buildCityMeshes(
   city: City,
   buildings: Building[],
+  fences: Rect[],
   streetLights: StreetLight[],
   { trafficLights, stopSigns }: Intersections,
 ): Mesh[] {
@@ -235,6 +238,12 @@ function buildCityMeshes(
       return [...walls, ...withSideMaterial(withMaterial(roof, MATERIAL.houseRoof), MATERIAL.defaultBuilding)];
     }),
   );
+  const fenceMesh = uploadMesh(
+    withMaterial(
+      fences.flatMap((rect) => slab(rect, CURB_HEIGHT, CURB_HEIGHT + FENCE_HEIGHT, FENCE_COLOR)),
+      MATERIAL.default,
+    ),
+  );
   const ponds = uploadMesh(
     withMaterial(
       city.blocks
@@ -251,7 +260,7 @@ function buildCityMeshes(
     ...trafficLights.flatMap((light) => trafficLightVertices(light)),
     ...stopSigns.flatMap((sign) => stopSignVertices(sign)),
   ]);
-  return [road, markings, pavements, wall, buildingMesh, ponds, lights, signals];
+  return [road, markings, pavements, wall, buildingMesh, fenceMesh, ponds, lights, signals];
 }
 
 const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
@@ -259,25 +268,27 @@ const carSettings: CarSettings = { ...DEFAULT_CAR_SETTINGS };
 const chaseSettings: ChaseCameraSettings = { ...DEFAULT_CHASE_CAMERA_SETTINGS };
 let city = generateCity(citySettings);
 let buildings = generateBuildings(city, citySettings);
+let fences = houseFences(city, buildings);
 let streetLights = generateStreetLights(city, citySettings);
 let intersections = generateIntersections(city, citySettings);
 let offsets = signalOffsets(city, citySettings.seed);
 let signals = createSignalTexture(gl, city.junctions.length);
-let colliders = cityColliders(buildings, streetLights, intersections);
-let cityMeshes = buildCityMeshes(city, buildings, streetLights, intersections);
+let colliders = cityColliders(buildings, fences, streetLights, intersections);
+let cityMeshes = buildCityMeshes(city, buildings, fences, streetLights, intersections);
 
 // The data is kept, not just the meshes, so the game can collide with it.
 function regenerateCity() {
   city = generateCity(citySettings);
   buildings = generateBuildings(city, citySettings);
+  fences = houseFences(city, buildings);
   streetLights = generateStreetLights(city, citySettings);
   intersections = generateIntersections(city, citySettings);
-  colliders = cityColliders(buildings, streetLights, intersections);
+  colliders = cityColliders(buildings, fences, streetLights, intersections);
   offsets = signalOffsets(city, citySettings.seed);
   gl!.deleteTexture(signals.texture);
   signals = createSignalTexture(gl!, city.junctions.length);
   cityMeshes.forEach(deleteMesh);
-  cityMeshes = buildCityMeshes(city, buildings, streetLights, intersections);
+  cityMeshes = buildCityMeshes(city, buildings, fences, streetLights, intersections);
 }
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);

@@ -161,28 +161,53 @@ const tower: BlockBuilder = (rect, random) => {
   return [{ rect: { minX, minZ, maxX: minX + width, maxZ: minZ + depth }, ...storeys(TOWER, random) }];
 };
 
+// Indices of neighbouring houses, either side of a block centre line: north, south, west and east pairs.
+const HOUSE_PAIRS = [
+  [0, 1],
+  [2, 3],
+  [0, 2],
+  [1, 3],
+] as const;
+
+function houseStoreys(random: () => number): Storeys {
+  return storeys(random() < HOUSE_TWO_STOREY_CHANCE ? TWO_STOREY_HOUSE : HOUSE, random);
+}
+
 // Four houses, one per quarter, set in the corner nearest the block centre so each yard faces the street.
-const houses: BlockBuilder = (rect, random) => {
+// Two neighbours can join across the centre line into a duplex; each house joins at most one.
+const houses: BlockBuilder = (rect, random, settings) => {
   const centreX = (rect.minX + rect.maxX) / 2;
   const centreZ = (rect.minZ + rect.maxZ) / 2;
-  const result: Building[] = [];
+  const homes: Building[] = [];
   for (const sideZ of [-1, 1]) {
     for (const sideX of [-1, 1]) {
       const nearX = centreX + sideX * HOUSE_FENCE_GAP;
       const nearZ = centreZ + sideZ * HOUSE_FENCE_GAP;
       const farX = nearX + sideX * between(HOUSE_SIZE, random);
       const farZ = nearZ + sideZ * between(HOUSE_SIZE, random);
-      result.push({
+      homes.push({
         rect: {
           minX: Math.min(nearX, farX),
           minZ: Math.min(nearZ, farZ),
           maxX: Math.max(nearX, farX),
           maxZ: Math.max(nearZ, farZ),
         },
-        ...storeys(random() < HOUSE_TWO_STOREY_CHANCE ? TWO_STOREY_HOUSE : HOUSE, random),
+        ...houseStoreys(random),
       });
     }
   }
+  const used = homes.map(() => false);
+  const result: Building[] = [];
+  for (const [first, second] of HOUSE_PAIRS) {
+    const duplex = random() < settings.housesDuplexChance;
+    const duplexStoreys = storeys(TWO_STOREY_HOUSE, random);
+    if (!duplex || used[first] || used[second]) continue;
+    used[first] = used[second] = true;
+    result.push({ rect: union([homes[first].rect, homes[second].rect]), ...duplexStoreys });
+  }
+  homes.forEach((home, index) => {
+    if (!used[index]) result.push(home);
+  });
   return result;
 };
 
