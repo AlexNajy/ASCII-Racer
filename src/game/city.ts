@@ -86,7 +86,7 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
   lowDensityMergeChance: 0.4,
   lowDensityStripMallChance: 0.1,
   housesBigHouseChance: 0.15,
-  housesGarageChance: 0.5,
+  housesGarageChance: 0.6,
   streetLightSpacing: 25,
 };
 

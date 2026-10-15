@@ -14,6 +14,7 @@ import { generateBuildings, inset, SETBACK, type Building } from './game/buildin
 import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
 import { cityColliders, pushOutOfColliders } from './game/collision.ts';
 import { FENCE_HEIGHT, houseFences } from './game/fences.ts';
+import { houseDriveways, subtract } from './game/driveways.ts';
 import { lotPavements } from './game/lots.ts';
 import { generateIntersections, type Intersections } from './game/intersections.ts';
 import { signalOffsets, signalPhase } from './game/signals.ts';
@@ -197,6 +198,7 @@ function buildCityMeshes(
   );
   const curb = (vertices: number[]) =>
     withSideColor(withSideMaterial(withMaterial(vertices, MATERIAL.concrete), MATERIAL.defaultCurbSide), CONCRETE_COLOR);
+  const driveways = houseDriveways(city, buildings);
   const pavements = uploadMesh(
     city.blocks.flatMap((block) => {
       const { rect, zone } = block;
@@ -208,7 +210,8 @@ function buildCityMeshes(
         return withSideColor(withSideMaterial(withMaterial(vertices, MATERIAL[material]), MATERIAL.defaultCurbSide), CONCRETE_COLOR);
       }
       // Raised slightly so the ground doesn't fight the sidewalk under it for depth.
-      const ground = slab(inset(rect, SETBACK), CURB_HEIGHT, CURB_HEIGHT + 0.02, color);
+      // Driveways are holes in it, where the sidewalk shows through.
+      const ground = subtract(inset(rect, SETBACK), driveways).flatMap((r) => slab(r, CURB_HEIGHT, CURB_HEIGHT + 0.02, color));
       return [...curb(slab(rect, 0, CURB_HEIGHT, CONCRETE_COLOR)), ...withMaterial(ground, MATERIAL[material])];
     }),
   );

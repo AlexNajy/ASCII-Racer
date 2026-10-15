@@ -8,7 +8,8 @@ export interface Building {
   floorHeight: number; // m
   height: number; // base + floors × floorHeight
   part?: 'house' | 'garage'; // only on houses blocks
-  entrance?: Side; // the street a house's lot opens to, where its garage door faces
+  entrance?: Side; // the street a house's lot opens to
+  door?: Side; // garages only: the wall the door is on
 }
 
 export type Side = 'minX' | 'maxX' | 'minZ' | 'maxZ';
@@ -50,6 +51,7 @@ const GARAGE: FloorPlan = { floorHeights: [3.7], floors: { min: 1, max: 1 } };
 const GARAGE_WIDTH: Range = { min: 6, max: 7 }; // garages are square
 const BIG_HOUSE_GARAGE_WIDTH: Range = { min: 8, max: 9 };
 const GARAGE_SPOTS = [0, 0.5, 1]; // along the wall: one end, the middle, the other end
+const WIDE_HOUSE_GARAGE_SPOTS = [0, 1]; // a garage in the middle of a long front would cover the front door
 const HOUSE_FENCE_GAP = 2; // space between each house and the block's centre lines, where the fence will go
 
 function between(range: Range, random: () => number): number {
@@ -192,8 +194,8 @@ function fromCorner(x: number, z: number, sizeX: number, sizeZ: number): Rect {
 }
 
 // A box against `side` of `rect`, `width` along that side and sticking out `depth`, `share` (0 to 1) of the way along.
-function garageSpot(random: () => number): number {
-  return GARAGE_SPOTS[Math.floor(random() * GARAGE_SPOTS.length)];
+function garageSpot(spots: readonly number[], random: () => number): number {
+  return spots[Math.floor(random() * spots.length)];
 }
 
 function attached(rect: Rect, side: Side, width: number, depth: number, share: number): Rect {
@@ -212,6 +214,7 @@ interface Home {
   house: Rect;
   entrance: Side;
   garage?: Rect;
+  garageDoor: Side;
   storeys: Storeys;
   garageStoreys: Storeys;
 }
@@ -242,25 +245,40 @@ const houses: BlockBuilder = (rect, random, settings) => {
           : fromCorner(nearX, nearZ, sideX * depth, sideZ * length);
       // A wide house's end wall is left out: a garage there wouldn't fit before the sidewalk.
       const towardsX = random() < 0.5;
-      const entrance = wide ? (alongX ? zSide : xSide) : towardsX ? xSide : zSide;
+      const garageSide = wide ? (alongX ? zSide : xSide) : towardsX ? xSide : zSide;
       const hasGarage = random() < settings.housesGarageChance;
       const garageSize = between(GARAGE_WIDTH, random);
-      const garage = attached(house, entrance, garageSize, garageSize, garageSpot(random));
+      const garage = attached(house, garageSide, garageSize, garageSize, garageSpot(wide ? WIDE_HOUSE_GARAGE_SPOTS : GARAGE_SPOTS, random));
+      const homeStoreys = houseStoreys(random);
+      const garageStoreys = storeys(GARAGE, random);
+      // A square house's garage, equally likely: door and lot on the garage's street; lot on the other street with
+      // the driveway running past the door; or door and lot both on the other street.
+      const layoutRoll = Math.floor(random() * 3);
+      const layout = !wide && hasGarage ? layoutRoll : 0;
+      const otherSide = garageSide === xSide ? zSide : xSide;
       homes.push({
         core,
         house,
-        entrance,
+        entrance: layout === 0 ? garageSide : otherSide,
         garage: hasGarage ? garage : undefined,
-        storeys: houseStoreys(random),
-        garageStoreys: storeys(GARAGE, random),
+        garageDoor: layout === 2 ? otherSide : garageSide,
+        storeys: homeStoreys,
+        garageStoreys,
       });
     }
   }
   const used = homes.map(() => false);
   const result: Building[] = [];
-  const addHome = (house: Rect, entrance: Side, houseStoreys: Storeys, garage: Rect | undefined, garageStoreys: Storeys) => {
+  const addHome = (
+    house: Rect,
+    entrance: Side,
+    houseStoreys: Storeys,
+    garage: Rect | undefined,
+    door: Side,
+    garageStoreys: Storeys,
+  ) => {
     result.push({ rect: house, part: 'house', entrance, ...houseStoreys });
-    if (garage) result.push({ rect: garage, part: 'garage', entrance, ...garageStoreys });
+    if (garage) result.push({ rect: garage, part: 'garage', entrance, door, ...garageStoreys });
   };
   for (const [first, second, front] of HOUSE_PAIRS) {
     const bigHouse = random() < settings.housesBigHouseChance;
@@ -281,10 +299,10 @@ const houses: BlockBuilder = (rect, random, settings) => {
     used[first] = used[second] = true;
     const house = union([homes[first].core, homes[second].core]);
     const garage = hasGarage ? attached(house, garageSide, garageWidth, garageWidth, garageShare) : undefined;
-    addHome(house, front, bigHouseStoreys, garage, homes[first].garageStoreys);
+    addHome(house, front, bigHouseStoreys, garage, front, homes[first].garageStoreys);
   }
   homes.forEach((home, index) => {
-    if (!used[index]) addHome(home.house, home.entrance, home.storeys, home.garage, home.garageStoreys);
+    if (!used[index]) addHome(home.house, home.entrance, home.storeys, home.garage, home.garageDoor, home.garageStoreys);
   });
   return result;
 };
