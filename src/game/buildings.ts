@@ -10,6 +10,7 @@ export interface Building {
   part?: 'house' | 'garage'; // only on houses blocks
   entrance?: Side; // the street a house's lot opens to
   door?: Side; // garages only: the wall the door is on
+  driveway?: Rect; // houses without a garage: a dead-end driveway
 }
 
 export type Side = 'minX' | 'maxX' | 'minZ' | 'maxZ';
@@ -52,6 +53,8 @@ const GARAGE_WIDTH: Range = { min: 6, max: 7 }; // garages are square
 const BIG_HOUSE_GARAGE_WIDTH: Range = { min: 8, max: 9 };
 const GARAGE_SPOTS = [0, 0.5, 1]; // along the wall: one end, the middle, the other end
 const WIDE_HOUSE_GARAGE_SPOTS = [0, 1]; // a garage in the middle of a long front would cover the front door
+const DEAD_END_WIDTH = 5; // m, a driveway without a garage
+const DEAD_END_GAP = 3; // m, grass between a dead end that leads to its house and the house, for a path to the door later
 const HOUSE_FENCE_GAP = 2; // space between each house and the block's centre lines, where the fence will go
 
 function between(range: Range, random: () => number): number {
@@ -209,12 +212,24 @@ function attached(rect: Rect, side: Side, width: number, depth: number, share: n
   return { minX, minZ, maxX: minX + width, maxZ: minZ + depth };
 }
 
+const OPPOSITE: Record<Side, Side> = { minX: 'maxX', maxX: 'minX', minZ: 'maxZ', maxZ: 'minZ' };
+
+// From `from` out to the yard's edge on `side`, between `a` and `b` across.
+function toStreet(yard: Rect, side: Side, from: number, a: number, b: number): Rect {
+  const [min, max] = [Math.min(from, yard[side]), Math.max(from, yard[side])];
+  const [acrossMin, acrossMax] = [Math.min(a, b), Math.max(a, b)];
+  return side === 'minX' || side === 'maxX'
+    ? { minX: min, maxX: max, minZ: acrossMin, maxZ: acrossMax }
+    : { minX: acrossMin, maxX: acrossMax, minZ: min, maxZ: max };
+}
+
 interface Home {
   core: Rect; // the square on the lot's inner corner, the part a big house is made of
   house: Rect;
   entrance: Side;
   garage?: Rect;
   garageDoor: Side;
+  deadEnd?: Rect;
   storeys: Storeys;
   garageStoreys: Storeys;
 }
@@ -248,7 +263,8 @@ const houses: BlockBuilder = (rect, random, settings) => {
       const garageSide = wide ? (alongX ? zSide : xSide) : towardsX ? xSide : zSide;
       const hasGarage = random() < settings.housesGarageChance;
       const garageSize = between(GARAGE_WIDTH, random);
-      const garage = attached(house, garageSide, garageSize, garageSize, garageSpot(wide ? WIDE_HOUSE_GARAGE_SPOTS : GARAGE_SPOTS, random));
+      const spot = garageSpot(wide ? WIDE_HOUSE_GARAGE_SPOTS : GARAGE_SPOTS, random);
+      const garage = attached(house, garageSide, garageSize, garageSize, spot);
       const homeStoreys = houseStoreys(random);
       const garageStoreys = storeys(GARAGE, random);
       // A square house's garage, equally likely: door and lot on the garage's street; lot on the other street with
@@ -256,12 +272,40 @@ const houses: BlockBuilder = (rect, random, settings) => {
       const layoutRoll = Math.floor(random() * 3);
       const layout = !wide && hasGarage ? layoutRoll : 0;
       const otherSide = garageSide === xSide ? zSide : xSide;
+      const deadEndRoll = Math.floor(random() * 4);
+      // Without a garage, a dead-end driveway to park on, kept clear of the house. One that runs past the house is
+      // centred between it and the yard edge.
+      const clearX = house[xSide] + sideX * DEAD_END_GAP;
+      const clearZ = house[zSide] + sideZ * DEAD_END_GAP;
+      const pastX = (house[xSide] + rect[xSide] - DEAD_END_WIDTH) / 2;
+      const pastZ = (house[zSide] + rect[zSide] - DEAD_END_WIDTH) / 2;
+      const spotX = house.minX + spot * (house.maxX - house.minX - DEAD_END_WIDTH);
+      const spotZ = house.minZ + spot * (house.maxZ - house.minZ - DEAD_END_WIDTH);
+      // A square house's, equally likely: straight up to either street wall, or past either of them from the other
+      // street, through the lot's street corner.
+      const squareDeadEnds: [Side, Rect][] = [
+        [xSide, toStreet(rect, xSide, clearX, spotZ, spotZ + DEAD_END_WIDTH)],
+        [zSide, toStreet(rect, zSide, clearZ, spotX, spotX + DEAD_END_WIDTH)],
+        [zSide, toStreet(rect, zSide, nearZ, pastX, pastX + DEAD_END_WIDTH)],
+        [xSide, toStreet(rect, xSide, nearX, pastZ, pastZ + DEAD_END_WIDTH)],
+      ];
+      // A wide house's goes up to the street end of its front.
+      const wideDeadEnd =
+        garageSide === zSide
+          ? toStreet(rect, zSide, clearZ, house[xSide], house[xSide] - sideX * DEAD_END_WIDTH)
+          : toStreet(rect, xSide, clearX, house[zSide], house[zSide] - sideZ * DEAD_END_WIDTH);
+      const [entrance, deadEnd]: [Side, Rect | undefined] = hasGarage
+        ? [layout === 0 ? garageSide : otherSide, undefined]
+        : wide
+          ? [garageSide, wideDeadEnd]
+          : squareDeadEnds[deadEndRoll];
       homes.push({
         core,
         house,
-        entrance: layout === 0 ? garageSide : otherSide,
+        entrance,
         garage: hasGarage ? garage : undefined,
         garageDoor: layout === 2 ? otherSide : garageSide,
+        deadEnd,
         storeys: homeStoreys,
         garageStoreys,
       });
@@ -269,16 +313,9 @@ const houses: BlockBuilder = (rect, random, settings) => {
   }
   const used = homes.map(() => false);
   const result: Building[] = [];
-  const addHome = (
-    house: Rect,
-    entrance: Side,
-    houseStoreys: Storeys,
-    garage: Rect | undefined,
-    door: Side,
-    garageStoreys: Storeys,
-  ) => {
-    result.push({ rect: house, part: 'house', entrance, ...houseStoreys });
-    if (garage) result.push({ rect: garage, part: 'garage', entrance, door, ...garageStoreys });
+  const addHome = ({ house, entrance, storeys, garage, garageDoor, deadEnd, garageStoreys }: Omit<Home, 'core'>) => {
+    result.push({ rect: house, part: 'house', entrance, driveway: deadEnd, ...storeys });
+    if (garage) result.push({ rect: garage, part: 'garage', entrance, door: garageDoor, ...garageStoreys });
   };
   for (const [first, second, front] of HOUSE_PAIRS) {
     const bigHouse = random() < settings.housesBigHouseChance;
@@ -295,14 +332,27 @@ const houses: BlockBuilder = (rect, random, settings) => {
     ];
     const [garageSide, garageShare] = spots[Math.floor(random() * spots.length)];
     const garageWidth = between(BIG_HOUSE_GARAGE_WIDTH, random);
+    const deadEndSide = random() < 0.5 ? left : right;
     if (!bigHouse || used[first] || used[second]) continue;
     used[first] = used[second] = true;
     const house = union([homes[first].core, homes[second].core]);
     const garage = hasGarage ? attached(house, garageSide, garageWidth, garageWidth, garageShare) : undefined;
-    addHome(house, front, bigHouseStoreys, garage, front, homes[first].garageStoreys);
+    // Without a garage, a dead end beside one end wall, from the back of the house to the street, centred between
+    // the wall and the yard edge.
+    const past = (house[deadEndSide] + rect[deadEndSide] - DEAD_END_WIDTH) / 2;
+    const deadEnd = hasGarage ? undefined : toStreet(rect, front, house[OPPOSITE[front]], past, past + DEAD_END_WIDTH);
+    addHome({
+      house,
+      entrance: front,
+      storeys: bigHouseStoreys,
+      garage,
+      garageDoor: front,
+      deadEnd,
+      garageStoreys: homes[first].garageStoreys,
+    });
   }
   homes.forEach((home, index) => {
-    if (!used[index]) addHome(home.house, home.entrance, home.storeys, home.garage, home.garageDoor, home.garageStoreys);
+    if (!used[index]) addHome(home);
   });
   return result;
 };

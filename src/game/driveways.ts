@@ -63,14 +63,17 @@ export function subtract(rect: Rect, holes: Rect[]): Rect[] {
   return holes.reduce((pieces, hole) => pieces.flatMap((piece) => cut(piece, hole)), [rect]);
 }
 
-// A strip from each garage door to the sidewalk of the street its lot opens to.
+// A strip from each garage door to the sidewalk of the street its lot opens to, and the dead ends of houses
+// without a garage.
 export function houseDriveways(city: City, buildings: Building[]): Rect[] {
   const yards = city.blocks.filter(({ zone }) => zone === Zone.Houses).map(({ rect }) => inset(rect, SETBACK));
-  return buildings
+  const deadEnds = buildings.flatMap(({ driveway }) => (driveway ? [driveway] : []));
+  const garageDriveways = buildings
     .filter(({ part }) => part === 'garage')
     .flatMap(({ rect, entrance, door }) => {
       const yard = yards.find((y) => rect.minX >= y.minX && rect.maxX <= y.maxX && rect.minZ >= y.minZ && rect.maxZ <= y.maxZ);
       if (!yard || !entrance || !door) return [];
       return [door === entrance ? straight(rect, door, yard) : alongside(rect, door, entrance, yard)];
     });
+  return [...garageDriveways, ...deadEnds];
 }
