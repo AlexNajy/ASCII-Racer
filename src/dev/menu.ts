@@ -341,7 +341,8 @@ export function createDevMenu(
   citySlider(buildingsPage, 'Low empty lot chance', 'lowDensityEmptyChance', 0, 1, 0.025);
   citySlider(buildingsPage, 'Low merge chance', 'lowDensityMergeChance', 0, 1, 0.025);
   citySlider(buildingsPage, 'Low strip mall chance', 'lowDensityStripMallChance', 0, 1, 0.025);
-  citySlider(buildingsPage, 'Duplex chance', 'housesDuplexChance', 0, 1, 0.025);
+  citySlider(buildingsPage, 'Big house chance', 'housesBigHouseChance', 0, 1, 0.025);
+  citySlider(buildingsPage, 'Garage chance', 'housesGarageChance', 0, 1, 0.025);
   citySlider(lightingPage, 'Street light spacing (m)', 'streetLightSpacing', 10, 60, 1);
 
   window.addEventListener('keydown', (event) => {

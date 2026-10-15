@@ -147,14 +147,6 @@ uploadStars();
 // Test roofs for the screen direction glyphs.
 const ROOF_ANGLE = 30; // degrees
 
-function isHouse(city: City, rect: Rect): boolean {
-  const x = (rect.minX + rect.maxX) / 2;
-  const z = (rect.minZ + rect.maxZ) / 2;
-  return city.blocks.some(
-    (block) => block.zone === Zone.Houses && x > block.rect.minX && x < block.rect.maxX && z > block.rect.minZ && z < block.rect.maxZ,
-  );
-}
-
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
   return box([rect.minX, bottom, rect.minZ], [rect.maxX, top, rect.maxZ], color);
 }
@@ -228,9 +220,9 @@ function buildCityMeshes(
   );
   // All buildings in one mesh, with corners already in world position, so they draw in a single call.
   const buildingMesh = uploadMesh(
-    buildings.flatMap(({ rect, height }) => {
+    buildings.flatMap(({ rect, height, part }) => {
       const walls = withMaterial(slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65]), MATERIAL.defaultBuilding);
-      if (!isHouse(city, rect)) return walls;
+      if (part !== 'house') return walls;
       const { minX, minZ, maxX, maxZ } = rect;
       const roofHeight = (Math.tan((ROOF_ANGLE * Math.PI) / 180) * Math.min(maxX - minX, maxZ - minZ)) / 2;
       const roof = gableRoof(minX, minZ, maxX, maxZ, CURB_HEIGHT + height, roofHeight, [0.75, 0.7, 0.65]);

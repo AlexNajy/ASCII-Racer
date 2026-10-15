@@ -60,7 +60,8 @@ export interface CitySettings {
   lowDensityEmptyChance: number; // per shop lot, 0 to 1
   lowDensityMergeChance: number; // per side and corner, 0 to 1
   lowDensityStripMallChance: number; // per block, 0 to 1
-  housesDuplexChance: number; // per pair of neighbouring houses, 0 to 1
+  housesBigHouseChance: number; // per pair of neighbouring houses, 0 to 1
+  housesGarageChance: number; // per house, 0 to 1
   streetLightSpacing: number; // metres between lights along a lit road
 }
 
@@ -84,7 +85,8 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
   lowDensityEmptyChance: 0.0625,
   lowDensityMergeChance: 0.4,
   lowDensityStripMallChance: 0.1,
-  housesDuplexChance: 0.15,
+  housesBigHouseChance: 0.15,
+  housesGarageChance: 0.5,
   streetLightSpacing: 25,
 };
 
