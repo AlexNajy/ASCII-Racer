@@ -3,7 +3,17 @@ import { Zone, type City, type CitySettings, type Rect, type WallPiece } from '.
 
 export interface Building {
   rect: Rect;
-  height: number;
+  base: number; // m, a raised ground floor (house steps)
+  floors: number;
+  floorHeight: number; // m
+  height: number; // base + floors × floorHeight
+}
+
+// One floor height is picked from the list per building. Floors are whole, both ends included.
+interface FloorPlan {
+  floorHeights: readonly number[];
+  floors: Range;
+  base?: Range;
 }
 
 interface Range {
@@ -15,19 +25,32 @@ type BlockBuilder = (rect: Rect, random: () => number, settings: CitySettings) =
 
 export const SETBACK = 3;
 const ALLEY_WIDTH = 4;
-const MID_RISE_HEIGHT: Range = { min: 16, max: 42 };
-const SHOP_HEIGHT: Range = { min: 6.5, max: 15 };
-const TOWER_HEIGHT: Range = { min: 50, max: 120 };
+const SHOP: FloorPlan = { floorHeights: [6, 7, 8], floors: { min: 1, max: 2 } };
+const MERGED_SHOP: FloorPlan = { ...SHOP, floors: { min: 1, max: 3 } };
+const STRIP_MALL_SHOP: FloorPlan = { ...SHOP, floors: { min: 1, max: 1 } };
+const MID_RISE: FloorPlan = { floorHeights: [3, 3.5], floors: { min: 5, max: 10 } };
+const TOWER: FloorPlan = { floorHeights: [3.5, 4], floors: { min: 15, max: 30 } };
+const HOUSE: FloorPlan = { floorHeights: [2.4, 2.7, 3], floors: { min: 1, max: 1 }, base: { min: 0, max: 1.2 } };
+const TWO_STOREY_HOUSE: FloorPlan = { ...HOUSE, floors: { min: 2, max: 2 } };
+const HOUSE_TWO_STOREY_CHANCE = 0.15;
+const SUPERMARKET: FloorPlan = { floorHeights: [6, 7, 8], floors: { min: 1, max: 1 } };
+const WALL: FloorPlan = { floorHeights: [3, 3.5], floors: { min: 3, max: 10 } };
+const NARROW_WALL: FloorPlan = { floorHeights: [3, 3.5], floors: { min: 5, max: 9 } };
 const TOWER_SIZE: Range = { min: 0.5, max: 0.7 }; // fraction of the block's width and depth
-const HOUSE_HEIGHT: Range = { min: 7, max: 10 };
-const HOUSE_SIZE: Range = { min: 14, max: 18 };
-const SUPERMARKET_HEIGHT = 15;
+const HOUSE_SIZE: Range = { min: 10, max: 13 };
 const HOUSE_FENCE_GAP = 2; // space between each house and the block's centre lines, where the fence will go
-const WALL_HEIGHT: Range = { min: 10, max: 35 };
-const NARROW_WALL_HEIGHT: Range = { min: 16, max: 30 };
 
 function between(range: Range, random: () => number): number {
   return range.min + random() * (range.max - range.min);
+}
+
+type Storeys = Omit<Building, 'rect'>;
+
+function storeys(plan: FloorPlan, random: () => number): Storeys {
+  const floorHeight = plan.floorHeights[Math.floor(random() * plan.floorHeights.length)];
+  const floors = plan.floors.min + Math.floor(random() * (plan.floors.max - plan.floors.min + 1));
+  const base = plan.base ? between(plan.base, random) : 0;
+  return { base, floors, floorHeight, height: base + floors * floorHeight };
 }
 
 export function inset(rect: Rect, metres: number): Rect {
@@ -75,7 +98,7 @@ function alleyGaps(chance: number, random: () => number): [number, number] {
 const midRise: BlockBuilder = (rect, random, settings) =>
   split(rect, 2, 2, ...alleyGaps(settings.midDensityAlleyChance, random)).map((lot) => ({
     rect: lot,
-    height: between(MID_RISE_HEIGHT, random),
+    ...storeys(MID_RISE, random),
   }));
 
 // Lot indices of the 3×3 grid along each side of the block, corner to corner.
@@ -108,21 +131,23 @@ const shops: BlockBuilder = (rect, random, settings) => {
     if (index === 4) return false;
     return stripMall ? !parking.includes(index) : !empty;
   });
-  const heights = lots.map(() => between(SHOP_HEIGHT, random));
+  const shopPlan = stripMall ? STRIP_MALL_SHOP : SHOP;
+  const lotStoreys = lots.map(() => storeys(shopPlan, random));
   const used = lots.map(() => false);
   const result: Building[] = [];
   for (const [first, middle, last] of SHOP_SIDES) {
     const joinFirst = random() < settings.lowDensityMergeChance;
     const joinLast = random() < settings.lowDensityMergeChance;
+    const mergedStoreys = storeys(stripMall ? STRIP_MALL_SHOP : MERGED_SHOP, random);
     if (!filled[middle]) continue;
     const group: number[] = [middle];
     if (joinFirst && filled[first] && !used[first]) group.push(first);
     if (joinLast && filled[last] && !used[last]) group.push(last);
     group.forEach((index) => (used[index] = true));
-    result.push({ rect: union(group.map((index) => lots[index])), height: heights[middle] });
+    result.push({ rect: union(group.map((index) => lots[index])), ...(group.length > 1 ? mergedStoreys : lotStoreys[middle]) });
   }
   for (const corner of SHOP_CORNERS) {
-    if (filled[corner] && !used[corner]) result.push({ rect: lots[corner], height: heights[corner] });
+    if (filled[corner] && !used[corner]) result.push({ rect: lots[corner], ...lotStoreys[corner] });
   }
   return result;
 };
@@ -133,7 +158,7 @@ const tower: BlockBuilder = (rect, random) => {
   const depth = (rect.maxZ - rect.minZ) * between(TOWER_SIZE, random);
   const minX = rect.minX + random() * (rect.maxX - rect.minX - width);
   const minZ = rect.minZ + random() * (rect.maxZ - rect.minZ - depth);
-  return [{ rect: { minX, minZ, maxX: minX + width, maxZ: minZ + depth }, height: between(TOWER_HEIGHT, random) }];
+  return [{ rect: { minX, minZ, maxX: minX + width, maxZ: minZ + depth }, ...storeys(TOWER, random) }];
 };
 
 // Four houses, one per quarter, set in the corner nearest the block centre so each yard faces the street.
@@ -154,7 +179,7 @@ const houses: BlockBuilder = (rect, random) => {
           maxX: Math.max(nearX, farX),
           maxZ: Math.max(nearZ, farZ),
         },
-        height: between(HOUSE_HEIGHT, random),
+        ...storeys(random() < HOUSE_TWO_STOREY_CHANCE ? TWO_STOREY_HOUSE : HOUSE, random),
       });
     }
   }
@@ -171,7 +196,7 @@ const supermarket: BlockBuilder = (rect, random) => {
     { ...rect, maxX: midX },
     { ...rect, minX: midX },
   ];
-  return [{ rect: halves[Math.floor(random() * halves.length)], height: SUPERMARKET_HEIGHT }];
+  return [{ rect: halves[Math.floor(random() * halves.length)], ...storeys(SUPERMARKET, random) }];
 };
 
 const noBuildings: BlockBuilder = () => [];
@@ -189,34 +214,37 @@ const BUILDERS: Record<Zone, BlockBuilder> = {
 
 // One building filling the whole wall piece, so neighbours touch and the wall stays unbroken.
 function wallBuilding({ rect, kind }: WallPiece, random: () => number): Building {
-  return { rect, height: between(kind === 'narrow' ? NARROW_WALL_HEIGHT : WALL_HEIGHT, random) };
+  return { rect, ...storeys(kind === 'narrow' ? NARROW_WALL : WALL, random) };
 }
 
 // Zones without buildings use 1.
-function heightScales(settings: CitySettings): Record<Zone, number> {
+function floorScales(settings: CitySettings): Record<Zone, number> {
   return {
-    [Zone.LowDensity]: settings.lowDensityHeight,
-    [Zone.MidDensity]: settings.midDensityHeight,
-    [Zone.HighRise]: settings.highRiseHeight,
-    [Zone.Houses]: settings.housesHeight,
+    [Zone.LowDensity]: settings.lowDensityFloors,
+    [Zone.MidDensity]: settings.midDensityFloors,
+    [Zone.HighRise]: settings.highRiseFloors,
+    [Zone.Houses]: settings.housesFloors,
     [Zone.Park]: 1,
-    [Zone.Supermarket]: settings.supermarketHeight,
+    [Zone.Supermarket]: settings.supermarketFloors,
     [Zone.ParkingLot]: 1,
     [Zone.Plaza]: 1,
   };
 }
 
-function scaled(building: Building, scale: number): Building {
-  return { ...building, height: building.height * scale };
+// Floors stay whole, at least 1.
+function scaled(building: Building, floorScale: number, ceilingScale: number): Building {
+  const floors = Math.max(1, Math.round(building.floors * floorScale));
+  const floorHeight = building.floorHeight * ceilingScale;
+  return { ...building, floors, floorHeight, height: building.base + floors * floorHeight };
 }
 
-// Heights are scaled after generation, so a multiplier doesn't change the random calls or the layout.
+// Scaled after generation, so a multiplier doesn't change the random calls or the layout.
 export function generateBuildings(city: City, settings: CitySettings): Building[] {
   const { seed } = settings;
-  const scales = heightScales(settings);
+  const scales = floorScales(settings);
   const blockBuildings = city.blocks.flatMap((block, index) =>
     BUILDERS[block.zone](inset(block.rect, SETBACK), createRandom(blockSeed(seed, index)), settings).map((building) =>
-      scaled(building, scales[block.zone]),
+      scaled(building, scales[block.zone], settings.ceilingHeight),
     ),
   );
   // Seeds after the block and wall side seeds used in city.ts.
@@ -225,7 +253,7 @@ export function generateBuildings(city: City, settings: CitySettings): Building[
   const wallBuildings = city.wall.flatMap((piece, index) =>
     piece.kind === 'flex'
       ? []
-      : [scaled(wallBuilding(piece, createRandom(blockSeed(seed, wallSeedStart + index))), settings.wallHeight)],
+      : [scaled(wallBuilding(piece, createRandom(blockSeed(seed, wallSeedStart + index))), settings.wallFloors, settings.ceilingHeight)],
   );
   return [...blockBuildings, ...wallBuildings];
 }

@@ -48,13 +48,14 @@ export interface CitySettings {
   // Chance of mid density at the downtown centre and at the downtown radius and beyond, 0 to 1.
   centreDensityChance: number;
   edgeDensityChance: number;
-  // Building height multipliers per zone, 1 = the ranges in buildings.ts.
-  wallHeight: number;
-  housesHeight: number;
-  lowDensityHeight: number;
-  midDensityHeight: number;
-  highRiseHeight: number;
-  supermarketHeight: number;
+  // Floor count multipliers per zone, 1 = the floor plans in buildings.ts.
+  wallFloors: number;
+  housesFloors: number;
+  lowDensityFloors: number;
+  midDensityFloors: number;
+  highRiseFloors: number;
+  supermarketFloors: number;
+  ceilingHeight: number; // multiplier on every floor height
   midDensityAlleyChance: number; // per direction, 0 to 1
   lowDensityEmptyChance: number; // per shop lot, 0 to 1
   lowDensityMergeChance: number; // per side and corner, 0 to 1
@@ -71,15 +72,16 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
   blocksPerSide: 8,
   centreDensityChance: 0.9,
   edgeDensityChance: 0.1,
-  wallHeight: 1,
-  housesHeight: 1,
-  lowDensityHeight: 1,
-  midDensityHeight: 1,
-  highRiseHeight: 1,
-  supermarketHeight: 1,
+  wallFloors: 1,
+  housesFloors: 1,
+  lowDensityFloors: 1,
+  midDensityFloors: 1,
+  highRiseFloors: 1,
+  supermarketFloors: 1,
+  ceilingHeight: 1,
   midDensityAlleyChance: 0.5,
-  lowDensityEmptyChance: 0.125,
-  lowDensityMergeChance: 0.2,
+  lowDensityEmptyChance: 0.0625,
+  lowDensityMergeChance: 0.4,
   lowDensityStripMallChance: 0.1,
   streetLightSpacing: 25,
 };
