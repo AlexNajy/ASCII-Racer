@@ -101,7 +101,11 @@ npm run preview   # serve the production build locally
   - [x] Scatter sets: glyph picked by a random value from the surface's world position instead of brightness (grass, concrete), each set with its own pattern and settings
   - [x] Screen direction glyphs: strokes follow a surface's slope as seen on screen, derived from the normal in the ASCII pass (no tangents in the vertex data): a stroke set per direction (`|`, `\`, `-`, `/`) that materials opt into, sloped roofs `\` → `|` → `/` as you move around them; flat surfaces keep their ramp. First case: test gable roofs on the houses
 - [ ] **11. Building models**: real shapes in place of the boxes, with seeded spawning rules for which model goes where
-  - [ ] Floors: building heights snapped to whole floors
+  - [ ] Floors: height = base + floors × floor height, from a few discrete options per zone
+  - [ ] Setbacks: buildings stand at varying distances from the curb, per zone and block side
+  - [ ] Lot fillers: zone builders split into reusable building types (tower, mid-rise, shop, mall, open space), open lots kept as data
+  - [ ] High-rise layouts: weighted block layouts (one big building, a tower plus fillers, two towers with an alley)
+  - [ ] Merges: houses and mid-rises joining neighbours, merged buildings getting more floors
   - [ ] Parametric styles: several shape functions per zone (setbacks, roofs, shopfronts), each a function of footprint and height
   - [ ] Prefabs: fixed-size models (houses, kiosks, dumpsters) placed and rotated by the seed
   - [ ] Spawn rules: which styles and prefabs each zone, lot and neighbourhood can get, and how often

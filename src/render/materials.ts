@@ -36,7 +36,7 @@ const SETS = {
   roadMarkings: { ramp: ' .-:=+*%#@' },
   star: { ramp: ' ..\'\'+++**' },
   grass: { ramp: `.,.,''v"";`, scatter: { square: 0.3, patch: 4, patchiness: 0.5 } },
-  concrete: { ramp: `---==--===`, scatter: { square: 0.3, patch: 4, patchiness: 0.5 } },
+  concrete: { ramp: `---==--===`, scatter: { square: 0.3, patch: 3, patchiness: 0.8 } },
   water: { ramp: ' ~≈=oe*O6@', animated: true },
   // Stroke sets, in the order the ASCII pass numbers the directions.
   strokeVertical: { ramp: ' .:!!|||||' },
