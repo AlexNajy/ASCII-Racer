@@ -11,6 +11,7 @@ export interface Building {
   entrance?: Side; // the street a house's lot opens to
   door?: Side; // garages only: the wall the door is on
   driveway?: Rect; // houses without a garage: a dead-end driveway
+  streets?: Side[]; // block buildings: the sides on the block's street edge, so 2 is a corner
 }
 
 export type Side = 'minX' | 'maxX' | 'minZ' | 'maxZ';
@@ -30,6 +31,7 @@ interface Range {
 type BlockBuilder = (rect: Rect, random: () => number, settings: CitySettings) => Building[];
 
 export const SETBACK = 3;
+const EDGE_TOLERANCE = 1e-6; // m, lot edges come from sums that can miss the block edge by rounding
 const ALLEY_WIDTH = 4;
 const SHOP: FloorPlan = { floorHeights: [6, 7, 8], floors: { min: 1, max: 2 } };
 const MERGED_SHOP: FloorPlan = { ...SHOP, floors: { min: 1, max: 3 } };
@@ -383,9 +385,24 @@ const BUILDERS: Record<Zone, BlockBuilder> = {
   [Zone.Plaza]: noBuildings,
 };
 
+// The side facing into the city. Only for side pieces: a corner piece is outside two sides of the bounds.
+function wallStreet(rect: Rect, bounds: Rect): Side {
+  if (rect.maxZ <= bounds.minZ) return 'maxZ';
+  if (rect.minZ >= bounds.maxZ) return 'minZ';
+  return rect.maxX <= bounds.minX ? 'maxX' : 'minX';
+}
+
 // One building filling the whole wall piece, so neighbours touch and the wall stays unbroken.
-function wallBuilding({ rect, kind }: WallPiece, random: () => number): Building {
-  return { rect, ...storeys(kind === 'narrow' ? NARROW_WALL : WALL, random) };
+// Corner pieces sit behind the ends of two sides and only touch the pavement at a point, so they face no street.
+function wallBuilding({ rect, kind }: WallPiece, random: () => number, bounds: Rect): Building {
+  const streets = kind === 'corner' ? [] : [wallStreet(rect, bounds)];
+  return { rect, ...storeys(kind === 'narrow' ? NARROW_WALL : WALL, random), streets };
+}
+
+const SIDES: Side[] = ['minX', 'maxX', 'minZ', 'maxZ'];
+
+function streetSides(building: Rect, lots: Rect): Side[] {
+  return SIDES.filter((side) => Math.abs(building[side] - lots[side]) < EDGE_TOLERANCE);
 }
 
 // Zones without buildings use 1.
@@ -413,18 +430,26 @@ function scaled(building: Building, floorScale: number, ceilingScale: number): B
 export function generateBuildings(city: City, settings: CitySettings): Building[] {
   const { seed } = settings;
   const scales = floorScales(settings);
-  const blockBuildings = city.blocks.flatMap((block, index) =>
-    BUILDERS[block.zone](inset(block.rect, SETBACK), createRandom(blockSeed(seed, index)), settings).map((building) =>
-      scaled(building, scales[block.zone], settings.ceilingHeight),
-    ),
-  );
+  const blockBuildings = city.blocks.flatMap((block, index) => {
+    const lots = inset(block.rect, SETBACK);
+    return BUILDERS[block.zone](lots, createRandom(blockSeed(seed, index)), settings).map((building) => ({
+      ...scaled(building, scales[block.zone], settings.ceilingHeight),
+      streets: streetSides(building.rect, lots),
+    }));
+  });
   // Seeds after the block and wall side seeds used in city.ts.
   const wallSeedStart = city.blocks.length + 4;
   // Flex pieces stay open as alleys.
   const wallBuildings = city.wall.flatMap((piece, index) =>
     piece.kind === 'flex'
       ? []
-      : [scaled(wallBuilding(piece, createRandom(blockSeed(seed, wallSeedStart + index))), settings.wallFloors, settings.ceilingHeight)],
+      : [
+          scaled(
+            wallBuilding(piece, createRandom(blockSeed(seed, wallSeedStart + index)), city.bounds),
+            settings.wallFloors,
+            settings.ceilingHeight,
+          ),
+        ],
   );
   return [...blockBuildings, ...wallBuildings];
 }

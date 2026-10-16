@@ -104,11 +104,12 @@ npm run preview   # serve the production build locally
   - [x] Floors: height = base + floors × floor height, from a few discrete options per zone
   - [x] House shapes: square or wide houses, square garages, neighbours joining into big houses
   - [x] Fences: a cross between house lots and along the sidewalk, open on each lot's entrance side
-  - [ ] Driveways: from the garage or front door to the entrance street
-  - [ ] Setbacks: buildings stand at varying distances from the curb, per zone and block side
+  - [x] Driveways: from the garage or front door to the entrance street
+  - [x] Lot context: each lot knows which of its sides face a street (corner, middle, inner), so models can choose how much of it to fill
   - [ ] Lot fillers: zone builders split into reusable building types (tower, mid-rise, shop, mall, open space), open lots kept as data
   - [ ] High-rise layouts: weighted block layouts (one big building, a tower plus fillers, two towers with an alley)
   - [ ] Merges: mid-rises joining neighbours, merged buildings getting more floors
+  - [ ] Model interface: a model gives geometry plus its own colliders from a lot; the first one is a box that fills it
   - [ ] Parametric styles: several shape functions per zone (setbacks, roofs, shopfronts), each a function of footprint and height
   - [ ] Prefabs: fixed-size models (houses, kiosks, dumpsters) placed and rotated by the seed
   - [ ] Spawn rules: which styles and prefabs each zone, lot and neighbourhood can get, and how often
