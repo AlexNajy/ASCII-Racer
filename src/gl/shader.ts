@@ -22,6 +22,8 @@ export function createProgram(
   gl: WebGL2RenderingContext,
   vertexSource: string,
   fragmentSource: string,
+  // Fixed attribute locations, so programs sharing a vertex shader can share vertex arrays.
+  attributes: Record<string, number> = {},
 ): WebGLProgram {
   const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertexSource);
   const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
@@ -29,6 +31,7 @@ export function createProgram(
   const program = gl.createProgram();
   gl.attachShader(program, vertexShader);
   gl.attachShader(program, fragmentShader);
+  for (const [name, location] of Object.entries(attributes)) gl.bindAttribLocation(program, location, name);
   gl.linkProgram(program);
 
   gl.deleteShader(vertexShader);

@@ -26,9 +26,13 @@ uniform int u_scatterMaterials; // bit n set: material n picks its glyph from th
 // Per material number: square size (m), patch size (m), patchiness (0 = squares only, 1 = patches only).
 uniform vec3 u_scatterParams[32];
 
+#ifdef WORLD_GLYPHS
+layout(location = 0) out vec4 outColor;
+#else
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
 layout(location = 2) out vec4 outScatter;
+#endif
 
 // A random number from 0 to 1 for a grid square (PCG 3D hash): the same square always gives the same number.
 // The material is the third input, so each material gets its own pattern.
@@ -67,28 +71,13 @@ float scatter(vec3 normal) {
   return mix(fine, patches, params.z);
 }
 
-void main() {
-  vec3 normal = normalize(v_normal);
-  // The camera is at the origin of view space, so this is the true distance, giving a circle of fog.
-  // Positions interpolate correctly across a triangle; distances don't, so the length is taken here.
-  float distance = length(v_viewPosition);
-  // Alpha holds the distance for the ASCII pass's edges. Square root, so its 8 bits are finer up close.
-  outNormal = vec4(normal * 0.5 + 0.5, sqrt(clamp(distance / u_fogEnd, 0.0, 1.0)));
-  bool scattered = (u_scatterMaterials & (1 << int(v_material))) != 0;
-  outScatter = vec4(scattered ? scatter(normal) : 0.0, 0.0, 0.0, 0.0);
-
-  // Debug view: normals run from -1 to 1, colours from 0 to 1, so each axis is remapped.
-  if (u_showNormals) {
-    outColor = vec4(normal * 0.5 + 0.5, v_material / 255.0);
-    return;
-  }
-
+vec3 light(vec3 position, vec3 normal) {
   // Diffuse: a surface gets the most light facing it head-on, none when edge-on or facing away.
   // Ambient lights every face equally, so faces turned away from the light aren't fully black.
   float diffuse = max(dot(normal, u_lightDirection), 0.0);
 
   // Headlight: inside the cone, fading with distance, brightest on surfaces facing it.
-  vec3 toSurface = v_worldPosition - u_headlightPosition;
+  vec3 toSurface = position - u_headlightPosition;
   float lightDistance = length(toSurface);
   vec3 lightRay = toSurface / max(lightDistance, 0.001);
   float cone = smoothstep(u_headlightOuterCos, u_headlightInnerCos, dot(lightRay, u_headlightDirection));
@@ -97,11 +86,44 @@ void main() {
   float headlight = u_headlightIntensity * cone * reach * reach * facing;
 
   vec3 lit = v_color * (u_ambient + u_lightIntensity * diffuse + headlight);
-  lit = mix(lit, v_color, v_emission);
+  return mix(lit, v_color, v_emission);
+}
 
-  // Clear up to u_fogStart, then a straight fade to the fog colour at u_fogEnd.
-  // max() avoids dividing by zero when the start is at or past the end.
-  float fog = clamp((distance - u_fogStart) / max(u_fogEnd - u_fogStart, 0.001), 0.0, 1.0);
+// Clear up to u_fogStart, then a straight fade to the fog colour at u_fogEnd.
+// max() avoids dividing by zero when the start is at or past the end.
+float fogAt(float distance) {
+  return clamp((distance - u_fogStart) / max(u_fogEnd - u_fogStart, 0.001), 0.0, 1.0);
+}
+
+#ifdef WORLD_GLYPHS
+// @world-glyphs
+#endif
+
+void main() {
+  vec3 normal = normalize(v_normal);
+  // The camera is at the origin of view space, so this is the true distance, giving a circle of fog.
+  // Positions interpolate correctly across a triangle; distances don't, so the length is taken here.
+  float distance = length(v_viewPosition);
+#ifdef WORLD_GLYPHS
+  worldGlyphs(normal, distance);
+  return;
+#endif
+#ifndef WORLD_GLYPHS
+  // Alpha holds the distance for the ASCII pass's edges. Square root, so its 8 bits are finer up close.
+  outNormal = vec4(normal * 0.5 + 0.5, sqrt(clamp(distance / u_fogEnd, 0.0, 1.0)));
+  bool scattered = (u_scatterMaterials & (1 << int(v_material))) != 0;
+  outScatter = vec4(scattered ? scatter(normal) : 0.0, 0.0, 0.0, 0.0);
+#endif
+
+  // Debug view: normals run from -1 to 1, colours from 0 to 1, so each axis is remapped.
+  if (u_showNormals) {
+    outColor = vec4(normal * 0.5 + 0.5, v_material / 255.0);
+    return;
+  }
+
+  vec3 color = mix(light(v_worldPosition, normal), u_fogColor, fogAt(distance));
+#ifndef WORLD_GLYPHS
   // Alpha holds the material: 8 bits, so the ASCII pass reads it back as round(a * 255).
-  outColor = vec4(mix(lit, u_fogColor, fog), v_material / 255.0);
+  outColor = vec4(color, v_material / 255.0);
+#endif
 }
