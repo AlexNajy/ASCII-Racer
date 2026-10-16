@@ -44,12 +44,8 @@ export interface DevSettings {
   waveScale: number; // how tightly packed the waves are across cells
   splashChance: number; // share of shore cells splashing at any moment, 0 to 1
   splashSeconds: number; // how long one splash lasts
-  glyphSize: number; // m, width of a world glyph on ground, car and roofs; the height follows from the character shape
-  objectGlyphSize: number; // m, width of a world glyph on poles, signs, signals and road markings
-  facadeGlyphHeight: number; // m, wanted world glyph height on walls, rounded to fit whole floors
+  glyphHeight: number; // m, one world glyph on every surface and sprite; the width follows from the character shape
   starGlyphSize: number; // CSS px, one star glyph
-  glyphFadeStart: number; // CSS px of glyph height where world glyphs start to blur into their average
-  glyphFadeEnd: number; // CSS px
   edgeBrightness: number; // world glyphs along wall edges
 }
 
@@ -69,12 +65,8 @@ type NumberSetting =
   | 'waveScale'
   | 'splashChance'
   | 'splashSeconds'
-  | 'glyphSize'
-  | 'objectGlyphSize'
-  | 'facadeGlyphHeight'
+  | 'glyphHeight'
   | 'starGlyphSize'
-  | 'glyphFadeStart'
-  | 'glyphFadeEnd'
   | 'edgeBrightness';
 
 export interface DevMenu {
@@ -272,12 +264,8 @@ export function createDevMenu(
   settingSlider(animationPage, 'Wave scale', 'waveScale', 0.1, 4, 0.1);
   settingSlider(animationPage, 'Splash chance', 'splashChance', 0, 1, 0.01);
   settingSlider(animationPage, 'Splash time (s)', 'splashSeconds', 0.05, 2, 0.05);
-  settingSlider(worldGlyphsPage, 'Ground glyph size (m)', 'glyphSize', 0.05, 2, 0.05);
-  settingSlider(worldGlyphsPage, 'Object glyph size (m)', 'objectGlyphSize', 0.02, 0.5, 0.01);
-  settingSlider(worldGlyphsPage, 'Wall glyph height (m)', 'facadeGlyphHeight', 0.5, 3.5, 0.05);
+  settingSlider(worldGlyphsPage, 'Glyph height (m)', 'glyphHeight', 0.3, 3.5, 0.05);
   settingSlider(worldGlyphsPage, 'Star glyph size (px)', 'starGlyphSize', 4, 30, 1);
-  settingSlider(worldGlyphsPage, 'Fade start (px per glyph)', 'glyphFadeStart', 1, 30, 0.5);
-  settingSlider(worldGlyphsPage, 'Fade end (px per glyph)', 'glyphFadeEnd', 0.5, 20, 0.5);
   settingSlider(worldGlyphsPage, 'Edge brightness', 'edgeBrightness', 0, 2, 0.05);
   // One group of sliders per scatter material, read by the scene pass every frame.
   for (const [name, scatter] of Object.entries(scatterSettings)) {

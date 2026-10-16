@@ -12,17 +12,17 @@ import { beam, box, disc, facingBox, pixelArt, withId, withMaterial } from '../.
 // Signal IDs, read by the scene vertex shader: junction * 10 + road * 5 + lamp. Road 0 is the column road
 // (north-south), 1 the row road. Lamps 0-2 are red, yellow, green for that road's traffic; 3 and 4 the walking
 // person and the hand for people walking alongside it. The shader keeps the same numbers.
-const RED = 0;
-const WALKER_LAMP = 3;
-const HAND_LAMP = 4;
+export const RED = 0;
+export const WALKER_LAMP = 3;
+export const HAND_LAMP = 4;
 
-function signalId(junction: number, alongZ: boolean, lamp: number): number {
+export function signalId(junction: number, alongZ: boolean, lamp: number): number {
   return junction * 10 + (alongZ ? 0 : 1) * 5 + lamp;
 }
 
 const ARM_THICKNESS = 0.3;
-const BEND_REACH = 1.5; // the diagonal part of the arm, before it turns flat
-const BEND_RISE = 0.8;
+export const BEND_REACH = 1.5; // the diagonal part of the arm, before it turns flat
+export const BEND_RISE = 0.8;
 const HEAD_WIDTH = 0.6;
 const HEAD_HEIGHT = 1.7;
 const HEAD_DEPTH = 0.45;
@@ -31,10 +31,10 @@ const LAMP_RADIUS = 0.22;
 const LAMP_SPACING = 0.55;
 const LAMP_DEPTH = 0.06; // how far a lamp sticks out of the shell
 const LAMP_SIDES = 12;
-const POLE_COLOR: Vec3 = [0.6, 0.6, 0.6];
+export const POLE_COLOR: Vec3 = [0.6, 0.6, 0.6];
 const SHELL_COLOR: Vec3 = [0.85, 0.65, 0.1];
 // Top to bottom: red, yellow, green. Built lit; the shader dims the ones that are off.
-const LAMP_COLORS: Vec3[] = [
+export const LAMP_COLORS: Vec3[] = [
   [1, 0.1, 0.05],
   [1, 0.75, 0.1],
   [0.1, 1, 0.4],
@@ -42,7 +42,7 @@ const LAMP_COLORS: Vec3[] = [
 
 // Crosswalk light, Vancouver style: one box clamped to the pole, with the walking person and the hand
 // shown in the same spot on one dark panel.
-const WALK_HEIGHT = 2.8; // centre above the pavement
+export const WALK_HEIGHT = 2.8; // centre above the pavement
 const WALK_SIZE = 0.5;
 const WALK_DEPTH = 0.3;
 const WALK_PANEL = 0.44;
@@ -50,8 +50,8 @@ const WALK_PANEL_DEPTH = 0.02;
 const WALK_PIXEL = 0.045;
 const WALK_BOX_COLOR: Vec3 = [0.2, 0.2, 0.2];
 const WALK_PANEL_COLOR: Vec3 = [0.05, 0.05, 0.05];
-const HAND_COLOR: Vec3 = [1, 0.3, 0.1];
-const WALKER_COLOR: Vec3 = [0.95, 0.95, 0.9];
+export const HAND_COLOR: Vec3 = [1, 0.3, 0.1];
+export const WALKER_COLOR: Vec3 = [0.95, 0.95, 0.9];
 const WALKER = ['...##..', '...##..', '..###..', '.#.###.', '#..##.#', '...##..', '..#.#..', '.#...#.', '#.....#'];
 const HAND = ['..#.#.#', '..#.#.#', '#.#.#.#', '#.#####', '#######', '.######', '..#####', '..####.', '..####.'];
 

@@ -28,7 +28,16 @@ import {
 import { createProgram } from './gl/shader.ts';
 import { identity, multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
-import { createGlyphAtlas } from './render/glyphs.ts';
+import { createDistanceGlyphAtlas, createGlyphAtlas } from './render/glyphs.ts';
+import {
+  FLOATS_PER_SPRITE_VERTEX,
+  markingSprites,
+  SPRITE_GLYPHS,
+  spriteVertices,
+  stopSignSprites,
+  streetLightSprites,
+  trafficLightSprites,
+} from './render/glyphSprites.ts';
 import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS, STROKE_ROW, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
 import { box, flatDisc, FLOATS_PER_VERTEX, gableRoof, withMaterial, withSideColor, withSideMaterial } from './render/shapes.ts';
@@ -41,6 +50,10 @@ import { headlight, HEADLIGHT_SOFT_EDGE } from './render/headlights.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import worldGlyphsSource from './shaders/worldGlyphs.glsl?raw';
+import lightingSource from './shaders/lighting.glsl?raw';
+import glyphInkSource from './shaders/glyphInk.glsl?raw';
+import spriteVertexSource from './shaders/glyphSprite.vert.glsl?raw';
+import spriteFragmentSource from './shaders/glyphSprite.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
 import asciiFragmentSource from './shaders/ascii.frag.glsl?raw';
 import crtFragmentSource from './shaders/crt.frag.glsl?raw';
@@ -62,7 +75,9 @@ const SCENE_ATTRIBUTES = {
   a_facade: 6,
   a_building: 7,
 };
-const program = createProgram(gl, vertexSource, fragmentSource, SCENE_ATTRIBUTES);
+// Shared shader chunks, inserted where a shader has their marker line.
+const withChunks = (source: string) => source.replace('// @lighting', lightingSource).replace('// @glyph-ink', glyphInkSource);
+const program = createProgram(gl, vertexSource, withChunks(fragmentSource), SCENE_ATTRIBUTES);
 const positionLocation = gl.getAttribLocation(program, 'a_position');
 const colorLocation = gl.getAttribLocation(program, 'a_color');
 const normalLocation = gl.getAttribLocation(program, 'a_normal');
@@ -98,6 +113,7 @@ function sceneUniforms(sceneProgram: WebGLProgram) {
     scatterParams: at('u_scatterParams'),
   };
 }
+type SceneUniforms = ReturnType<typeof sceneUniforms>;
 const sceneProgramUniforms = sceneUniforms(program);
 
 // Prototype: glyphs painted onto surfaces in world space. The same scene shader with WORLD_GLYPHS defined,
@@ -105,9 +121,11 @@ const sceneProgramUniforms = sceneUniforms(program);
 const worldGlyphsProgram = createProgram(
   gl,
   vertexSource,
-  fragmentSource
-    .replace('#version 300 es', '#version 300 es\n#define WORLD_GLYPHS')
-    .replace('// @world-glyphs', worldGlyphsSource),
+  withChunks(
+    fragmentSource
+      .replace('#version 300 es', '#version 300 es\n#define WORLD_GLYPHS')
+      .replace('// @world-glyphs', worldGlyphsSource),
+  ),
   SCENE_ATTRIBUTES,
 );
 const worldGlyphsUniforms = sceneUniforms(worldGlyphsProgram);
@@ -119,11 +137,10 @@ const worldLocations = {
   themeRow: worldUniform('u_themeRow'),
   themeCount: worldUniform('u_themeCount'),
   edgeRow: worldUniform('u_edgeRow'),
-  glyphSizes: worldUniform('u_glyphSizes'),
+  cellTexels: worldUniform('u_cellTexels'),
+  sdfSpread: worldUniform('u_sdfSpread'),
+  glyphSize: worldUniform('u_glyphSize'),
   densities: worldUniform('u_densities'),
-  facadeGlyphHeight: worldUniform('u_facadeGlyphHeight'),
-  fadeStart: worldUniform('u_fadeStart'),
-  fadeEnd: worldUniform('u_fadeEnd'),
   edgeBrightness: worldUniform('u_edgeBrightness'),
 };
 let uniforms = sceneProgramUniforms;
@@ -280,7 +297,7 @@ function buildCityMeshes(
   buildings: Building[],
   streetLights: StreetLight[],
   { trafficLights, stopSigns }: Intersections,
-): Mesh[] {
+): { ground: Mesh[]; furniture: Mesh[] } {
   const road = uploadMesh(withMaterial(slab(city.bounds, -0.1, 0, ROAD_COLOR), MATERIAL.defaultRoad));
   // Raised slightly so the paint doesn't fight the road surface for depth.
   const markings = uploadMesh(
@@ -341,7 +358,8 @@ function buildCityMeshes(
     ...trafficLights.flatMap((light) => trafficLightVertices(light)),
     ...stopSigns.flatMap((sign) => stopSignVertices(sign)),
   ]);
-  return [road, markings, pavements, wall, buildingMesh, ponds, lights, signals];
+  // Street furniture and markings are drawn as glyph sprites in the world glyphs mode instead.
+  return { ground: [road, pavements, wall, buildingMesh, ponds], furniture: [markings, lights, signals] };
 }
 
 const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
@@ -366,8 +384,9 @@ function regenerateCity() {
   offsets = signalOffsets(city, citySettings.seed);
   gl!.deleteTexture(signals.texture);
   signals = createSignalTexture(gl!, city.junctions.length);
-  cityMeshes.forEach(deleteMesh);
+  [...cityMeshes.ground, ...cityMeshes.furniture].forEach(deleteMesh);
   cityMeshes = buildCityMeshes(city, buildings, streetLights, intersections);
+  spritesHeight = 0;
 }
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
@@ -429,12 +448,8 @@ const settings: DevSettings = {
   waveScale: 2,
   splashChance: 0.4,
   splashSeconds: 1.2,
-  glyphSize: 0.3,
-  objectGlyphSize: 0.12,
-  facadeGlyphHeight: 1.75,
+  glyphHeight: 1.2,
   starGlyphSize: 10,
-  glyphFadeStart: 3,
-  glyphFadeEnd: 1.25,
   edgeBrightness: 0.7,
 };
 
@@ -449,36 +464,87 @@ const WINDOW_THEMES = [' .:;=+#HHH', ' .,:;xXZXZ', " .'`/|//\\/", ' .:o%%#%@%', 
 const WALL_EDGES = '[]=';
 const ATLAS_COLUMNS = [...GLYPH_RAMPS[0]].length;
 const padRow = (glyphs: string) => glyphs + ' '.repeat(ATLAS_COLUMNS - [...glyphs].length);
-const WORLD_GLYPH_ROWS = [...GLYPH_RAMPS, ...WINDOW_THEMES.map(padRow), padRow(WALL_EDGES)];
-// Ground, car and roofs get big glyphs; poles, signs, signals and road markings small ones, so their glyphs fit.
-const LARGE_GLYPH_MATERIALS: Material[] = ['default', 'defaultBuilding', 'houseRoof', 'defaultRoad', 'concrete', 'grass', 'water'];
-// Share of grid squares with a glyph, for materials that would otherwise be an even field of dots.
-const GLYPH_DENSITY: Partial<Record<Material, number>> = { defaultRoad: 0.2 };
-// Atlas cell size in texels, much bigger than a screen cell so glyphs stay sharp up close.
-const WORLD_ATLAS_CELL_HEIGHT = 64;
-const worldGlyphAtlas = createGlyphAtlas(
-  gl,
-  WORLD_GLYPH_ROWS,
-  Math.round(WORLD_ATLAS_CELL_HEIGHT / CELL_ASPECT),
-  WORLD_ATLAS_CELL_HEIGHT,
-  true,
-);
-
-// Width and height of one glyph per material number, for u_glyphSizes.
-function worldGlyphSizes(): Float32Array {
-  const sizes = new Float32Array(32 * 2);
-  for (const name of Object.keys(MATERIAL) as Material[]) {
-    const width = LARGE_GLYPH_MATERIALS.includes(name) ? settings.glyphSize : settings.objectGlyphSize;
-    sizes.set([width, width * CELL_ASPECT], MATERIAL[name] * 2);
-  }
-  // Curb sides get exactly one row of glyphs.
-  sizes.set([CURB_HEIGHT / CELL_ASPECT, CURB_HEIGHT], MATERIAL.defaultCurbSide * 2);
-  return sizes;
-}
+const WORLD_GLYPH_ROWS = [...GLYPH_RAMPS, ...WINDOW_THEMES.map(padRow), padRow(WALL_EDGES), padRow(SPRITE_GLYPHS)];
+const EDGE_ROW = WORLD_GLYPH_ROWS.length - 2;
+const SPRITE_ROW = WORLD_GLYPH_ROWS.length - 1;
+// Share of grid squares with a glyph, so surfaces are scattered characters with dark space between them.
+// Curb sides are too low for a whole glyph, so they stay dark.
+const GLYPH_DENSITY: Partial<Record<Material, number>> = { defaultRoad: 0.04, concrete: 0.3, grass: 0.35, defaultCurbSide: 0 };
+// Atlas cell size in texels. Big, since the distance field is cut from it: the finer it is, the truer the outlines.
+const WORLD_ATLAS_CELL_HEIGHT = 128;
+const WORLD_ATLAS_CELL_WIDTH = Math.round(WORLD_ATLAS_CELL_HEIGHT / CELL_ASPECT);
+const SDF_SPREAD = 12; // texels
+const worldGlyphAtlas = createDistanceGlyphAtlas(gl, WORLD_GLYPH_ROWS, WORLD_ATLAS_CELL_WIDTH, WORLD_ATLAS_CELL_HEIGHT, SDF_SPREAD);
 
 const worldGlyphDensities = new Float32Array(32).fill(1);
 for (const [name, density] of Object.entries(GLYPH_DENSITY) as [Material, number][]) {
   worldGlyphDensities[MATERIAL[name]] = density;
+}
+
+// Street furniture and road markings as single characters in space (render/glyphSprites.ts).
+const SPRITE_ATTRIBUTES = {
+  a_centre: 0,
+  a_corner: 1,
+  a_size: 2,
+  a_glyph: 3,
+  a_color: 4,
+  a_emission: 5,
+  a_id: 6,
+  a_right: 7,
+  a_up: 8,
+  a_twoSided: 9,
+};
+// Floats per attribute, in the order they are packed.
+const SPRITE_LAYOUT: [keyof typeof SPRITE_ATTRIBUTES, number][] = [
+  ['a_centre', 3],
+  ['a_corner', 2],
+  ['a_size', 2],
+  ['a_glyph', 2],
+  ['a_color', 3],
+  ['a_emission', 1],
+  ['a_id', 1],
+  ['a_right', 3],
+  ['a_up', 3],
+  ['a_twoSided', 1],
+];
+const spriteProgram = createProgram(gl, spriteVertexSource, withChunks(spriteFragmentSource), SPRITE_ATTRIBUTES);
+const spriteUniforms = sceneUniforms(spriteProgram);
+const spriteUniform = (name: string) => gl!.getUniformLocation(spriteProgram, name);
+const spriteLocations = {
+  cameraPosition: spriteUniform('u_cameraPosition'),
+  atlasGrid: spriteUniform('u_atlasGrid'),
+  atlasSize: spriteUniform('u_atlasSize'),
+  glyphs: spriteUniform('u_glyphs'),
+  sdfSpread: spriteUniform('u_sdfSpread'),
+};
+const spriteVao = gl.createVertexArray();
+const spriteBuffer = gl.createBuffer();
+gl.bindVertexArray(spriteVao);
+gl.bindBuffer(gl.ARRAY_BUFFER, spriteBuffer);
+let spriteOffset = 0;
+for (const [name, size] of SPRITE_LAYOUT) {
+  gl.enableVertexAttribArray(SPRITE_ATTRIBUTES[name]);
+  gl.vertexAttribPointer(SPRITE_ATTRIBUTES[name], size, gl.FLOAT, false, FLOATS_PER_SPRITE_VERTEX * 4, spriteOffset * 4);
+  spriteOffset += size;
+}
+gl.bindVertexArray(null);
+let spriteCount = 0;
+// The glyph height the sprites were built for; 0 means they need building.
+let spritesHeight = 0;
+
+// Rebuilt when the city or the glyph height changes.
+function uploadSprites(height: number) {
+  const sprites = [
+    ...streetLights.flatMap((light) => streetLightSprites(light, height)),
+    ...intersections.trafficLights.flatMap((light) => trafficLightSprites(light, height)),
+    ...intersections.stopSigns.flatMap((sign) => stopSignSprites(sign, height)),
+    ...city.markings.flatMap(markingSprites),
+  ];
+  const vertices = spriteVertices(sprites, SPRITE_ROW);
+  gl!.bindBuffer(gl!.ARRAY_BUFFER, spriteBuffer);
+  gl!.bufferData(gl!.ARRAY_BUFFER, new Float32Array(vertices), gl!.STATIC_DRAW);
+  spriteCount = vertices.length / FLOATS_PER_SPRITE_VERTEX;
+  spritesHeight = height;
 }
 
 // The sky as glyphs: the same star shaders with WORLD_GLYPHS defined, drawing glyph sprites.
@@ -628,30 +694,34 @@ function frame(timeMs: number) {
   gl!.clearColor(background[0], background[1], background[2], 0);
   gl!.clear(gl!.COLOR_BUFFER_BIT | gl!.DEPTH_BUFFER_BIT);
 
-  gl!.useProgram(sceneProgram);
-  gl!.uniform3fv(uniforms.fogColor, background);
-  gl!.uniform1f(uniforms.fogStart, settings.fogStart);
-  gl!.uniform1f(uniforms.fogEnd, settings.viewDistance);
-  gl!.uniform1i(uniforms.showNormals, showNormals ? 1 : 0);
-  gl!.uniform3fv(uniforms.lightDirection, LIGHT_DIRECTION);
-  gl!.uniform1f(uniforms.ambient, settings.ambient);
-  gl!.uniform1f(uniforms.lightIntensity, settings.lightIntensity);
   const light = headlight(drawnCar);
   const halfAngle = (settings.headlightAngle * Math.PI) / 360;
-  gl!.uniform3fv(uniforms.headlightPosition, light.position);
-  gl!.uniform3fv(uniforms.headlightDirection, light.direction);
-  gl!.uniform1f(uniforms.headlightOuterCos, Math.cos(halfAngle));
-  gl!.uniform1f(uniforms.headlightInnerCos, Math.cos(halfAngle * (1 - HEADLIGHT_SOFT_EDGE)));
-  gl!.uniform1f(uniforms.headlightRange, settings.headlightRange);
-  gl!.uniform1f(uniforms.headlightIntensity, headlightsOn ? settings.headlightIntensity : 0);
-  gl!.uniform1i(uniforms.scatterMaterials, SCATTER_MATERIALS);
-  gl!.uniform3fv(uniforms.scatterParams, scatterParams());
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
-  gl!.uniformMatrix4fv(uniforms.projection, false, projection);
   gl!.activeTexture(gl!.TEXTURE3);
   updateSignalTexture(gl!, signals, offsets.map((offset) => signalPhase(clock.tick, offset)));
-  gl!.uniform1i(uniforms.signalsTexture, 3);
+  // The scene program and the glyph sprites share fog, lights, projection and signals.
+  const applySceneUniforms = (u: SceneUniforms) => {
+    gl!.uniform3fv(u.fogColor, background);
+    gl!.uniform1f(u.fogStart, settings.fogStart);
+    gl!.uniform1f(u.fogEnd, settings.viewDistance);
+    gl!.uniform1i(u.showNormals, showNormals ? 1 : 0);
+    gl!.uniform3fv(u.lightDirection, LIGHT_DIRECTION);
+    gl!.uniform1f(u.ambient, settings.ambient);
+    gl!.uniform1f(u.lightIntensity, settings.lightIntensity);
+    gl!.uniform3fv(u.headlightPosition, light.position);
+    gl!.uniform3fv(u.headlightDirection, light.direction);
+    gl!.uniform1f(u.headlightOuterCos, Math.cos(halfAngle));
+    gl!.uniform1f(u.headlightInnerCos, Math.cos(halfAngle * (1 - HEADLIGHT_SOFT_EDGE)));
+    gl!.uniform1f(u.headlightRange, settings.headlightRange);
+    gl!.uniform1f(u.headlightIntensity, headlightsOn ? settings.headlightIntensity : 0);
+    gl!.uniform1i(u.scatterMaterials, SCATTER_MATERIALS);
+    gl!.uniform3fv(u.scatterParams, scatterParams());
+    gl!.uniformMatrix4fv(u.projection, false, projection);
+    gl!.uniform1i(u.signalsTexture, 3);
+  };
+  gl!.useProgram(sceneProgram);
+  applySceneUniforms(uniforms);
   const view = viewMatrix(camera);
 
   // Stars first and without depth, so anything in the city covers them.
@@ -686,17 +756,30 @@ function frame(timeMs: number) {
     gl!.uniform1i(worldLocations.rampLength, RAMP_LENGTH);
     gl!.uniform1i(worldLocations.themeRow, GLYPH_RAMPS.length);
     gl!.uniform1i(worldLocations.themeCount, WINDOW_THEMES.length);
-    gl!.uniform1i(worldLocations.edgeRow, WORLD_GLYPH_ROWS.length - 1);
-    gl!.uniform2fv(worldLocations.glyphSizes, worldGlyphSizes());
+    gl!.uniform1i(worldLocations.edgeRow, EDGE_ROW);
+    gl!.uniform2f(worldLocations.cellTexels, WORLD_ATLAS_CELL_WIDTH, WORLD_ATLAS_CELL_HEIGHT);
+    gl!.uniform1f(worldLocations.sdfSpread, SDF_SPREAD);
+    gl!.uniform2f(worldLocations.glyphSize, settings.glyphHeight / CELL_ASPECT, settings.glyphHeight);
     gl!.uniform1fv(worldLocations.densities, worldGlyphDensities);
-    gl!.uniform1f(worldLocations.facadeGlyphHeight, settings.facadeGlyphHeight);
-    gl!.uniform1f(worldLocations.fadeStart, settings.glyphFadeStart * dpr);
-    gl!.uniform1f(worldLocations.fadeEnd, settings.glyphFadeEnd * dpr);
     gl!.uniform1f(worldLocations.edgeBrightness, settings.edgeBrightness);
   }
 
-  for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
+  for (const mesh of cityMeshes.ground) draw(mesh, gl!.TRIANGLES, view);
+  if (!worldGlyphs) for (const mesh of cityMeshes.furniture) draw(mesh, gl!.TRIANGLES, view);
   draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
+  if (worldGlyphs) {
+    if (spritesHeight !== settings.glyphHeight) uploadSprites(settings.glyphHeight);
+    gl!.useProgram(spriteProgram);
+    applySceneUniforms(spriteUniforms);
+    gl!.uniformMatrix4fv(spriteUniforms.modelView, false, view);
+    gl!.uniform3fv(spriteLocations.cameraPosition, camera.position);
+    gl!.uniform2f(spriteLocations.atlasGrid, ATLAS_COLUMNS, WORLD_GLYPH_ROWS.length);
+    gl!.uniform2f(spriteLocations.atlasSize, ATLAS_COLUMNS * WORLD_ATLAS_CELL_WIDTH, WORLD_GLYPH_ROWS.length * WORLD_ATLAS_CELL_HEIGHT);
+    gl!.uniform1i(spriteLocations.glyphs, 5);
+    gl!.uniform1f(spriteLocations.sdfSpread, SDF_SPREAD);
+    gl!.bindVertexArray(spriteVao);
+    gl!.drawArrays(gl!.TRIANGLES, 0, spriteCount);
+  }
   if (fullResolution) return;
 
 

@@ -5,16 +5,16 @@ import { MATERIAL } from '../../materials.ts';
 import { beam, box, withMaterial } from '../../shapes.ts';
 
 const ARM_THICKNESS = 0.3;
-const ARM_REACH = 3;
-const ARM_RISE = 0.8;
+export const ARM_REACH = 3;
+export const ARM_RISE = 0.8;
 const HEAD_LENGTH = 1.2;
 const HEAD_WIDTH = 0.6;
 const HEAD_HEIGHT = 0.35;
 const HEAD_OVERHANG = 0.2;
 const BULB_INSET = 0.1;
 const BULB_HEIGHT = 0.15;
-const POLE_COLOR: Vec3 = [0.35, 0.35, 0.35];
-const BULB_COLOR: Vec3 = [1, 0.9, 0.6];
+export const POLE_COLOR: Vec3 = [0.35, 0.35, 0.35];
+export const BULB_COLOR: Vec3 = [1, 0.9, 0.6];
 
 export function streetLightVertices({ x, z, facingX, facingZ }: StreetLight): number[] {
   const pole = STREET_LIGHT_POLE_WIDTH / 2;

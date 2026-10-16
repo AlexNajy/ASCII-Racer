@@ -21,7 +21,8 @@ void main() {
   // The sprite is square and the glyph narrower, so x is stretched around the centre.
   vec2 inside = vec2((gl_PointCoord.x - 0.5) * CELL_ASPECT + 0.5, gl_PointCoord.y);
   if (inside.x < 0.0 || inside.x > 1.0) discard;
-  float glyph = texture(u_glyphs, (vec2(level, u_material - 1.0) + inside) / u_atlasGrid).r;
+  // Green holds plain ink coverage; red is a distance field for the glyphs on surfaces.
+  float glyph = texture(u_glyphs, (vec2(level, u_material - 1.0) + inside) / u_atlasGrid).g;
   if (glyph == 0.0) discard;
   outColor = vec4(v_color * glyph, 1.0);
 }
