@@ -1,7 +1,7 @@
 import './style.css';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
-import { blendCars, CAR_HEIGHT, CAR_LENGTH, CAR_WIDTH, collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
+import { blendCars, collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import {
@@ -31,7 +31,10 @@ import { viewMatrix, type Camera } from './render/camera.ts';
 import { createDistanceGlyphAtlas, createGlyphAtlas } from './render/glyphs.ts';
 import {
   FLOATS_PER_SPRITE_VERTEX,
-  markingSprites,
+  buildingEdgeSprites,
+  carSprites,
+  markingSprite,
+  type Sprite,
   SPRITE_GLYPHS,
   spriteVertices,
   stopSignSprites,
@@ -141,7 +144,6 @@ const worldLocations = {
   sdfSpread: worldUniform('u_sdfSpread'),
   glyphSize: worldUniform('u_glyphSize'),
   densities: worldUniform('u_densities'),
-  edgeBrightness: worldUniform('u_edgeBrightness'),
 };
 let uniforms = sceneProgramUniforms;
 
@@ -238,10 +240,10 @@ function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
 }
 
 // World glyphs: for each vertex of a building's side walls, u and v in m from the face's bottom left as seen from
-// outside, the face width, the box height and a tag: building number + 1, or -1 for a panel. Top and bottom faces get zeros.
+// outside, the face width, the building height and the building number + 1. Top and bottom faces get zeros.
 const FLOATS_PER_FACADE = 5;
 
-function facadeData(vertices: number[], rect: Rect, bottom: number, height: number, tag: number): number[] {
+function facadeData(vertices: number[], rect: Rect, bottom: number, height: number, building: number): number[] {
   const data: number[] = [];
   for (let i = 0; i < vertices.length; i += FLOATS_PER_VERTEX) {
     const [x, y, z, , , , nx, ny, nz] = vertices.slice(i, i + 9);
@@ -251,15 +253,12 @@ function facadeData(vertices: number[], rect: Rect, bottom: number, height: numb
     }
     const width = nx !== 0 ? rect.maxZ - rect.minZ : rect.maxX - rect.minX;
     const u = nx > 0 ? rect.maxZ - z : nx < 0 ? z - rect.minZ : nz > 0 ? x - rect.minX : rect.maxX - x;
-    data.push(u, y - bottom, width, height, tag);
+    data.push(u, y - bottom, width, height, building + 1);
   }
   return data;
 }
 
-const CAR_PANEL = -1;
-const carModel = carVertices();
-const carRect = { minX: -CAR_WIDTH / 2, minZ: -CAR_LENGTH / 2, maxX: CAR_WIDTH / 2, maxZ: CAR_LENGTH / 2 };
-const carMesh = uploadMesh(carModel, facadeData(carModel, carRect, 0, CAR_HEIGHT, CAR_PANEL));
+const carMesh = uploadMesh(carVertices());
 
 // Temporary wall tints, for checking the shuffled order.
 const WALL_COLORS: Record<WallKind, Vec3> = {
@@ -271,6 +270,7 @@ const WALL_COLORS: Record<WallKind, Vec3> = {
 };
 
 const ROAD_COLOR: Vec3 = [0.2, 0.2, 0.2];
+const BUILDING_COLOR: Vec3 = [0.75, 0.7, 0.65];
 const CONCRETE_COLOR: Vec3 = [0.6, 0.6, 0.6];
 const GRASS_COLOR: Vec3 = [0.2, 0.45, 0.15];
 
@@ -330,13 +330,13 @@ function buildCityMeshes(
   const buildingVertices: number[] = [];
   const buildingFacades: number[] = [];
   buildings.forEach(({ rect, height }, index) => {
-    const walls = withMaterial(slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65]), MATERIAL.defaultBuilding);
+    const walls = withMaterial(slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, BUILDING_COLOR), MATERIAL.defaultBuilding);
     buildingVertices.push(...walls);
-    buildingFacades.push(...facadeData(walls, rect, CURB_HEIGHT, height, index + 1));
+    buildingFacades.push(...facadeData(walls, rect, CURB_HEIGHT, height, index));
     if (!isHouse(city, rect)) return;
     const { minX, minZ, maxX, maxZ } = rect;
     const roofHeight = (Math.tan((ROOF_ANGLE * Math.PI) / 180) * Math.min(maxX - minX, maxZ - minZ)) / 2;
-    const roof = gableRoof(minX, minZ, maxX, maxZ, CURB_HEIGHT + height, roofHeight, [0.75, 0.7, 0.65]);
+    const roof = gableRoof(minX, minZ, maxX, maxZ, CURB_HEIGHT + height, roofHeight, BUILDING_COLOR);
     // Only the slopes are roof; the gable ends are wall.
     buildingVertices.push(...withSideMaterial(withMaterial(roof, MATERIAL.houseRoof), MATERIAL.defaultBuilding));
     buildingFacades.push(...new Array((roof.length / FLOATS_PER_VERTEX) * FLOATS_PER_FACADE).fill(0));
@@ -448,9 +448,8 @@ const settings: DevSettings = {
   waveScale: 2,
   splashChance: 0.4,
   splashSeconds: 1.2,
-  glyphHeight: 1.2,
+  glyphHeight: 1,
   starGlyphSize: 10,
-  edgeBrightness: 0.7,
 };
 
 const dpr = window.devicePixelRatio || 1;
@@ -461,15 +460,25 @@ const scene = createRenderTarget(gl);
 // Window glyph themes, one picked per building, darkest first like a ramp.
 const WINDOW_THEMES = [' .:;=+#HHH', ' .,:;xXZXZ', " .'`/|//\\/", ' .:o%%#%@%', ' .,vVAYAVO'];
 // Glyphs that draw the outline of each wall: left side, right side, top.
-const WALL_EDGES = '[]=';
 const ATLAS_COLUMNS = [...GLYPH_RAMPS[0]].length;
 const padRow = (glyphs: string) => glyphs + ' '.repeat(ATLAS_COLUMNS - [...glyphs].length);
-const WORLD_GLYPH_ROWS = [...GLYPH_RAMPS, ...WINDOW_THEMES.map(padRow), padRow(WALL_EDGES), padRow(SPRITE_GLYPHS)];
-const EDGE_ROW = WORLD_GLYPH_ROWS.length - 2;
-const SPRITE_ROW = WORLD_GLYPH_ROWS.length - 1;
+// Sprite glyphs take as many rows as they need.
+const spriteRows = Array.from({ length: Math.ceil([...SPRITE_GLYPHS].length / ATLAS_COLUMNS) }, (_, i) =>
+  padRow([...SPRITE_GLYPHS].slice(i * ATLAS_COLUMNS, (i + 1) * ATLAS_COLUMNS).join('')),
+);
+const WORLD_GLYPH_ROWS = [...GLYPH_RAMPS, ...WINDOW_THEMES.map(padRow), ...spriteRows];
+const SPRITE_ROW = WORLD_GLYPH_ROWS.length - spriteRows.length;
 // Share of grid squares with a glyph, so surfaces are scattered characters with dark space between them.
 // Curb sides are too low for a whole glyph, so they stay dark.
-const GLYPH_DENSITY: Partial<Record<Material, number>> = { defaultRoad: 0.04, concrete: 0.3, grass: 0.35, defaultCurbSide: 0 };
+// Curb sides are too low for a whole glyph and flat roofs are outlined by sprites, so both stay dark.
+const GLYPH_DENSITY: Partial<Record<Material, number>> = {
+  defaultRoad: 0.04,
+  concrete: 0.3,
+  grass: 0.35,
+  houseRoof: 0.3,
+  defaultCurbSide: 0,
+  defaultBuilding: 0,
+};
 // Atlas cell size in texels. Big, since the distance field is cut from it: the finer it is, the truer the outlines.
 const WORLD_ATLAS_CELL_HEIGHT = 128;
 const WORLD_ATLAS_CELL_WIDTH = Math.round(WORLD_ATLAS_CELL_HEIGHT / CELL_ASPECT);
@@ -486,19 +495,21 @@ const SPRITE_ATTRIBUTES = {
   a_centre: 0,
   a_corner: 1,
   a_size: 2,
-  a_glyph: 3,
-  a_color: 4,
-  a_emission: 5,
-  a_id: 6,
-  a_right: 7,
-  a_up: 8,
-  a_twoSided: 9,
+  a_repeat: 3,
+  a_glyph: 4,
+  a_color: 5,
+  a_emission: 6,
+  a_id: 7,
+  a_right: 8,
+  a_up: 9,
+  a_twoSided: 10,
 };
 // Floats per attribute, in the order they are packed.
 const SPRITE_LAYOUT: [keyof typeof SPRITE_ATTRIBUTES, number][] = [
   ['a_centre', 3],
   ['a_corner', 2],
   ['a_size', 2],
+  ['a_repeat', 2],
   ['a_glyph', 2],
   ['a_color', 3],
   ['a_emission', 1],
@@ -513,37 +524,53 @@ const spriteUniform = (name: string) => gl!.getUniformLocation(spriteProgram, na
 const spriteLocations = {
   cameraPosition: spriteUniform('u_cameraPosition'),
   atlasGrid: spriteUniform('u_atlasGrid'),
-  atlasSize: spriteUniform('u_atlasSize'),
+  cellTexels: spriteUniform('u_cellTexels'),
   glyphs: spriteUniform('u_glyphs'),
   sdfSpread: spriteUniform('u_sdfSpread'),
 };
-const spriteVao = gl.createVertexArray();
-const spriteBuffer = gl.createBuffer();
-gl.bindVertexArray(spriteVao);
-gl.bindBuffer(gl.ARRAY_BUFFER, spriteBuffer);
-let spriteOffset = 0;
-for (const [name, size] of SPRITE_LAYOUT) {
-  gl.enableVertexAttribArray(SPRITE_ATTRIBUTES[name]);
-  gl.vertexAttribPointer(SPRITE_ATTRIBUTES[name], size, gl.FLOAT, false, FLOATS_PER_SPRITE_VERTEX * 4, spriteOffset * 4);
-  spriteOffset += size;
+interface SpriteMesh {
+  vao: WebGLVertexArrayObject;
+  buffer: WebGLBuffer;
+  count: number;
 }
-gl.bindVertexArray(null);
-let spriteCount = 0;
-// The glyph height the sprites were built for; 0 means they need building.
+
+function createSpriteMesh(): SpriteMesh {
+  const vao = gl!.createVertexArray();
+  const buffer = gl!.createBuffer();
+  gl!.bindVertexArray(vao);
+  gl!.bindBuffer(gl!.ARRAY_BUFFER, buffer);
+  let offset = 0;
+  for (const [name, size] of SPRITE_LAYOUT) {
+    gl!.enableVertexAttribArray(SPRITE_ATTRIBUTES[name]);
+    gl!.vertexAttribPointer(SPRITE_ATTRIBUTES[name], size, gl!.FLOAT, false, FLOATS_PER_SPRITE_VERTEX * 4, offset * 4);
+    offset += size;
+  }
+  gl!.bindVertexArray(null);
+  return { vao, buffer, count: 0 };
+}
+
+function uploadSpriteMesh(mesh: SpriteMesh, sprites: Sprite[]) {
+  const vertices = spriteVertices(sprites, SPRITE_ROW, ATLAS_COLUMNS);
+  gl!.bindBuffer(gl!.ARRAY_BUFFER, mesh.buffer);
+  gl!.bufferData(gl!.ARRAY_BUFFER, new Float32Array(vertices), gl!.STATIC_DRAW);
+  mesh.count = vertices.length / FLOATS_PER_SPRITE_VERTEX;
+}
+
+const citySprites = createSpriteMesh();
+const carSpriteMesh = createSpriteMesh();
+uploadSpriteMesh(carSpriteMesh, carSprites());
+// The glyph height the city sprites were built for; 0 means they need building.
 let spritesHeight = 0;
 
 // Rebuilt when the city or the glyph height changes.
-function uploadSprites(height: number) {
-  const sprites = [
+function uploadCitySprites(height: number) {
+  uploadSpriteMesh(citySprites, [
+    ...buildings.flatMap((building) => buildingEdgeSprites(building, BUILDING_COLOR, height)),
     ...streetLights.flatMap((light) => streetLightSprites(light, height)),
     ...intersections.trafficLights.flatMap((light) => trafficLightSprites(light, height)),
     ...intersections.stopSigns.flatMap((sign) => stopSignSprites(sign, height)),
-    ...city.markings.flatMap(markingSprites),
-  ];
-  const vertices = spriteVertices(sprites, SPRITE_ROW);
-  gl!.bindBuffer(gl!.ARRAY_BUFFER, spriteBuffer);
-  gl!.bufferData(gl!.ARRAY_BUFFER, new Float32Array(vertices), gl!.STATIC_DRAW);
-  spriteCount = vertices.length / FLOATS_PER_SPRITE_VERTEX;
+    ...city.markings.map((rect) => markingSprite(rect, height)),
+  ]);
   spritesHeight = height;
 }
 
@@ -756,29 +783,32 @@ function frame(timeMs: number) {
     gl!.uniform1i(worldLocations.rampLength, RAMP_LENGTH);
     gl!.uniform1i(worldLocations.themeRow, GLYPH_RAMPS.length);
     gl!.uniform1i(worldLocations.themeCount, WINDOW_THEMES.length);
-    gl!.uniform1i(worldLocations.edgeRow, EDGE_ROW);
     gl!.uniform2f(worldLocations.cellTexels, WORLD_ATLAS_CELL_WIDTH, WORLD_ATLAS_CELL_HEIGHT);
     gl!.uniform1f(worldLocations.sdfSpread, SDF_SPREAD);
     gl!.uniform2f(worldLocations.glyphSize, settings.glyphHeight / CELL_ASPECT, settings.glyphHeight);
     gl!.uniform1fv(worldLocations.densities, worldGlyphDensities);
-    gl!.uniform1f(worldLocations.edgeBrightness, settings.edgeBrightness);
   }
 
   for (const mesh of cityMeshes.ground) draw(mesh, gl!.TRIANGLES, view);
   if (!worldGlyphs) for (const mesh of cityMeshes.furniture) draw(mesh, gl!.TRIANGLES, view);
-  draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
+  const carModel = multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading));
+  // In the world glyphs mode the car is only its glyph sprites, never its box.
+  if (!worldGlyphs) draw(carMesh, gl!.TRIANGLES, view, carModel);
   if (worldGlyphs) {
-    if (spritesHeight !== settings.glyphHeight) uploadSprites(settings.glyphHeight);
+    if (spritesHeight !== settings.glyphHeight) uploadCitySprites(settings.glyphHeight);
     gl!.useProgram(spriteProgram);
     applySceneUniforms(spriteUniforms);
     gl!.uniformMatrix4fv(spriteUniforms.modelView, false, view);
     gl!.uniform3fv(spriteLocations.cameraPosition, camera.position);
     gl!.uniform2f(spriteLocations.atlasGrid, ATLAS_COLUMNS, WORLD_GLYPH_ROWS.length);
-    gl!.uniform2f(spriteLocations.atlasSize, ATLAS_COLUMNS * WORLD_ATLAS_CELL_WIDTH, WORLD_GLYPH_ROWS.length * WORLD_ATLAS_CELL_HEIGHT);
+    gl!.uniform2f(spriteLocations.cellTexels, WORLD_ATLAS_CELL_WIDTH, WORLD_ATLAS_CELL_HEIGHT);
     gl!.uniform1i(spriteLocations.glyphs, 5);
     gl!.uniform1f(spriteLocations.sdfSpread, SDF_SPREAD);
-    gl!.bindVertexArray(spriteVao);
-    gl!.drawArrays(gl!.TRIANGLES, 0, spriteCount);
+    for (const [mesh, model] of [[citySprites, identity()], [carSpriteMesh, carModel]] as const) {
+      gl!.uniformMatrix4fv(spriteUniforms.model, false, model);
+      gl!.bindVertexArray(mesh.vao);
+      gl!.drawArrays(gl!.TRIANGLES, 0, mesh.count);
+    }
   }
   if (fullResolution) return;
 

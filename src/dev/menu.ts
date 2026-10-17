@@ -46,7 +46,6 @@ export interface DevSettings {
   splashSeconds: number; // how long one splash lasts
   glyphHeight: number; // m, one world glyph on every surface and sprite; the width follows from the character shape
   starGlyphSize: number; // CSS px, one star glyph
-  edgeBrightness: number; // world glyphs along wall edges
 }
 
 type NumberSetting =
@@ -66,8 +65,7 @@ type NumberSetting =
   | 'splashChance'
   | 'splashSeconds'
   | 'glyphHeight'
-  | 'starGlyphSize'
-  | 'edgeBrightness';
+  | 'starGlyphSize';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -266,7 +264,6 @@ export function createDevMenu(
   settingSlider(animationPage, 'Splash time (s)', 'splashSeconds', 0.05, 2, 0.05);
   settingSlider(worldGlyphsPage, 'Glyph height (m)', 'glyphHeight', 0.3, 3.5, 0.05);
   settingSlider(worldGlyphsPage, 'Star glyph size (px)', 'starGlyphSize', 4, 30, 1);
-  settingSlider(worldGlyphsPage, 'Edge brightness', 'edgeBrightness', 0, 2, 0.05);
   // One group of sliders per scatter material, read by the scene pass every frame.
   for (const [name, scatter] of Object.entries(scatterSettings)) {
     if (!scatter) continue;

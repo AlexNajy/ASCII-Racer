@@ -4,7 +4,8 @@
 // but the corner.
 in vec3 a_centre;
 in vec2 a_corner; // -1 or 1 on each axis
-in vec2 a_size; // m, width and height
+in vec2 a_size; // m, width and height of the whole sprite
+in vec2 a_repeat; // copies of the glyph across and up
 in vec2 a_glyph; // atlas column and row
 in vec3 a_color;
 in float a_emission;
@@ -13,13 +14,14 @@ in vec3 a_right; // the glyph's right and up in the world; right (0, 0, 0) turns
 in vec3 a_up;
 in float a_twoSided; // 1: also seen from behind (mirrored), 0: hidden from behind
 
-uniform mat4 u_modelView;
+uniform mat4 u_model; // the car's sprites move with the car; identity for the city
+uniform mat4 u_modelView; // the view only: positions are made world positions first
 uniform mat4 u_projection;
 uniform vec3 u_cameraPosition;
-uniform vec2 u_atlasGrid;
 uniform highp usampler2D u_signals;
 
-out vec2 v_uv;
+out vec2 v_glyphPosition; // 0 to repeat across and up the sprite, one unit per glyph
+flat out vec2 v_glyph;
 out vec3 v_color;
 out float v_emission;
 out vec3 v_worldPosition;
@@ -27,6 +29,8 @@ out vec3 v_viewPosition;
 out vec3 v_normal;
 
 const float UNLIT = 0.2; // brightness of a lamp that is off
+// Glyphs turned towards the camera move this far towards it, so a | on a building's corner isn't half inside it.
+const float TURNED_LIFT = 0.15; // m
 
 void hide() {
   // Behind the far plane, clipped away.
@@ -55,15 +59,18 @@ void main() {
     }
   }
 
-  vec3 right = a_right;
-  vec3 up = a_up;
-  vec3 toCamera = u_cameraPosition - a_centre;
+  mat3 rotation = mat3(u_model);
+  vec3 centre = (u_model * vec4(a_centre, 1.0)).xyz;
+  vec3 right = rotation * a_right;
+  vec3 up = rotation * a_up;
+  vec3 toCamera = u_cameraPosition - centre;
   if (dot(right, right) == 0.0) {
     // Upright and turned towards the camera around the vertical.
     vec3 level = vec3(toCamera.x, 0.0, toCamera.z);
     vec3 forward = dot(level, level) > 1e-6 ? normalize(level) : vec3(0.0, 0.0, 1.0);
     right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
     up = vec3(0.0, 1.0, 0.0);
+    centre += forward * TURNED_LIFT;
   }
   v_normal = cross(right, up);
   if (a_twoSided < 0.5 && dot(v_normal, toCamera) < 0.0) {
@@ -71,9 +78,9 @@ void main() {
     return;
   }
 
-  vec3 position = a_centre + right * (a_corner.x * a_size.x / 2.0) + up * (a_corner.y * a_size.y / 2.0);
-  // Atlas rows run top-down.
-  v_uv = (a_glyph + vec2(a_corner.x, -a_corner.y) * 0.5 + 0.5) / u_atlasGrid;
+  vec3 position = centre + right * (a_corner.x * a_size.x / 2.0) + up * (a_corner.y * a_size.y / 2.0);
+  v_glyphPosition = (a_corner * 0.5 + 0.5) * a_repeat;
+  v_glyph = a_glyph;
   v_worldPosition = position;
   vec4 viewPosition = u_modelView * vec4(position, 1.0);
   v_viewPosition = viewPosition.xyz;

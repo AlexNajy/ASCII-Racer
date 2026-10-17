@@ -1,23 +1,21 @@
 // World glyphs prototype, inserted into triangle.frag.glsl when WORLD_GLYPHS is defined.
-// Every surface is drawn only as glyphs on black: building walls as a grid of windows fitted to the face with edge
-// glyphs around it, everything else as a grid in its own space. Small street things are glyph sprites instead
+// Every surface is drawn only as glyphs on black: building walls as a grid of windows fitted to the face, everything
+// else as a grid in its own space. Building outlines, street things, markings and the car are glyph sprites
 // (glyphSprite.*.glsl).
 
 in vec4 v_facade; // building walls: u, v in m from the face's bottom left, face width, box height
-in float v_building; // building number + 1; -1 for a panel (the car's sides): edges, but no windows; 0 for neither
+in float v_building; // building number + 1, 0 if not a building wall
 in vec3 v_objectPosition;
 in vec3 v_objectNormal;
 
-uniform sampler2D u_glyphs; // mipmapped distance field atlas: material ramps, window themes, edge glyphs, sprites
+uniform sampler2D u_glyphs; // mipmapped distance field atlas: material ramps, window themes, sprite glyphs
 uniform vec2 u_atlasGrid; // atlas columns and rows
 uniform vec2 u_cellTexels; // size of one atlas cell in texels
 uniform int u_rampLength;
 uniform int u_themeRow; // atlas row of the first window theme
 uniform int u_themeCount;
-uniform int u_edgeRow; // atlas row of the edge glyphs
 uniform vec2 u_glyphSize; // m, width and height of one glyph, the same on every surface
 uniform float u_densities[32]; // share of grid squares per material that get a glyph at all
-uniform float u_edgeBrightness;
 uniform mat3 u_normalMatrix; // the model's rotation, also set for the vertex shader
 
 // @glyph-ink
@@ -39,10 +37,6 @@ const vec3 WINDOW_TINTS[8] = vec3[8](
 );
 // Dark windows: their glyph is this much brighter than the face's lit colour, picked between the two per glyph.
 const vec2 DIM_GLYPH_BOOST = vec2(0.7, 1.4);
-// Columns of the edge row: [ ] =
-const int EDGE_LEFT = 0;
-const int EDGE_RIGHT = 1;
-const int EDGE_TOP = 2;
 // Glowing things use at least this many of the densest glyphs of their ramp.
 const int GLOW_LEVELS = 3;
 
@@ -86,13 +80,6 @@ float glyphMask(int column, int row, vec2 p, vec2 dpdx, vec2 dpdy) {
   return glyphInk(texel, texelsPerPixel);
 }
 
-// Edges in the surface's own hue, bright enough to read even on dark materials, dimmer on faces turned from the light.
-vec3 edgeColor(vec3 lit) {
-  float strongest = max(v_color.r, max(v_color.g, v_color.b));
-  float lighting = clamp(luma(lit) / max(luma(v_color), 0.01), 0.5, 1.5);
-  return v_color / max(strongest, 0.25) * u_edgeBrightness * lighting;
-}
-
 vec3 facade(vec3 normal, vec2 p, vec2 cellSize, ivec2 cells, int rowsPerFloor, vec2 dpdx, vec2 dpdy) {
   float cellDetail = smoothstep(CELL_FADE_END, CELL_FADE_START, pixelsPerGlyph(dpdx, dpdy));
 
@@ -108,18 +95,6 @@ vec3 facade(vec3 normal, vec2 p, vec2 cellSize, ivec2 cells, int rowsPerFloor, v
   glyphAxes(normal, u, v);
   vec2 toCentre = (vec2(cell) + 0.5 - p) * cellSize;
   vec3 lit = light(v_color, v_emission, v_worldPosition + toCentre.x * u + toCentre.y * v, normal);
-
-  // The face's outline is made of glyphs too: brackets down the sides, a row along the top.
-  int edge = cell.x == 0 ? EDGE_LEFT : cell.x == cells.x - 1 ? EDGE_RIGHT : cell.y == cells.y - 1 ? EDGE_TOP : -1;
-  if (edge >= 0) {
-    vec3 color = edgeColor(lit);
-    return mix(color * DIM_COVERAGE, color * glyphMask(edge, u_edgeRow, p, dpdx, dpdy), cellDetail);
-  }
-
-  if (v_building < -0.5) {
-    vec3 sharp = lit * glyphMask(levelOf(lit), int(v_material) - 1, p, dpdx, dpdy);
-    return mix(lit * DIM_COVERAGE, sharp, cellDetail);
-  }
 
   // A window spans the rows of one floor. Each face of a building gets its own pattern.
   uint salt = uint(building) * 8u + uint(int(normal.x * 2.0 + normal.z * 3.0) + 4);
@@ -170,10 +145,8 @@ void worldGlyphs(vec3 normal, float distance) {
   vec2 gridDx = dFdx(gridP);
   vec2 gridDy = dFdy(gridP);
   // Whole glyphs across the face, whole floors up the building and whole rows per floor, so no glyph is cut.
-  // Panels have no floors: each row is its own floor.
-  bool building = v_building > 0.5;
   float height = max(v_facade.w, 0.01);
-  float floorHeight = height / max(1.0, round(height / (building ? FLOOR_HEIGHT : u_glyphSize.y)));
+  float floorHeight = height / max(1.0, round(height / FLOOR_HEIGHT));
   int rowsPerFloor = max(1, int(round(floorHeight / u_glyphSize.y)));
   float rowHeight = floorHeight / float(rowsPerFloor);
   float faceWidth = max(v_facade.z, 0.01);
@@ -184,7 +157,7 @@ void worldGlyphs(vec3 normal, float distance) {
   vec2 facadeDx = dFdx(facadeP);
   vec2 facadeDy = dFdy(facadeP);
 
-  vec3 color = abs(v_building) > 0.5
+  vec3 color = v_building > 0.5
     ? facade(normal, facadeP, cellSize, cells, rowsPerFloor, facadeDx, facadeDy)
     : grid(normal, gridP, u, v, gridDx, gridDy);
   outColor = vec4(mix(color, u_fogColor, fogAt(distance)), 1.0);
