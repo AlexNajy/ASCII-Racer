@@ -118,7 +118,7 @@ npm run preview   # serve the production build locally
 - [ ] **12. Visual identity**: flicker-free glyphs at speed, speed streaks, particles, weather
   - [x] Particles: GL points of size 1 in the one-pixel-per-cell scene target, so each particle is exactly one glyph (crash debris as flying `#`); visual only, so they don't need to be deterministic
   - [x] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
-  - [ ] Speed streaks
+  - [x] Speed streaks
   - [ ] Tire marks: dark marks left on the road while drifting and smoke particles get kicked up as you drift
   - [ ] Weather toggle (none / rain / snow) in the dev menu: drops falling as a screen-space overlay in the ASCII pass (`|` or `/` for rain, `*` and `.` for snow), wet roads as an animated set
 - [ ] **13. Sound**: Web Audio API, no libraries; reads the simulation state, never feeds back into it
