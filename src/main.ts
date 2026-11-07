@@ -1,5 +1,5 @@
 import './style.css';
-import { createDevMenu, Movement, RenderMode, Weather, type DevSettings } from './dev/menu.ts';
+import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
 import { blendCars, CAR_WIDTH, collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings, type Impact } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
@@ -192,7 +192,7 @@ gl.enableVertexAttribArray(particleMaterialLocation);
 gl.vertexAttribPointer(particleMaterialLocation, 1, gl.FLOAT, false, FLOATS_PER_PARTICLE * 4, 6 * 4);
 gl.bindVertexArray(null);
 const DEBRIS: ParticleKind = { color: [1, 0.9, 0.7], material: MATERIAL.debris, life: 1.5, spread: 0.8, gravity: 1, drag: 0.2 };
-const DRIFT_SPARKS: ParticleKind = { color: [1, 0.75, 0.3], material: MATERIAL.driftSpark, life: 0.7, spread: 0.6, gravity: 1, drag: 0.3 };
+const DRIFT_SPARKS: ParticleKind = { color: [0.9, 0.9, 0.9], material: MATERIAL.driftSpark, life: 0.7, spread: 0.6, gravity: 1, drag: 0.3 };
 const DEBRIS_MIN_SPEED = 3; // m/s into a wall, softer bumps throw nothing
 const DEBRIS_PER_SPEED = 6; // particles per m/s into the wall
 const DEBRIS_SPEED_SHARE = 0.5; // debris flies off at up to this share of the impact speed
@@ -380,17 +380,6 @@ const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
 const asciiViewRotationLocation = gl.getUniformLocation(asciiProgram, 'u_viewRotation');
 const strokeMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_strokeMaterials');
 const strokeRowLocation = gl.getUniformLocation(asciiProgram, 'u_strokeRow');
-const weatherTimeLocation = gl.getUniformLocation(asciiProgram, 'u_weatherTime');
-const weatherLocation = gl.getUniformLocation(asciiProgram, 'u_weather');
-const weatherRowLocation = gl.getUniformLocation(asciiProgram, 'u_weatherRow');
-const rainSlantLocation = gl.getUniformLocation(asciiProgram, 'u_rainSlant');
-const roadMaterialLocation = gl.getUniformLocation(asciiProgram, 'u_roadMaterial');
-const wetRoadRowLocation = gl.getUniformLocation(asciiProgram, 'u_wetRoadRow');
-// Rain leans with speed, as if driving into it: straight when parked, this slant at top speed (cells per row).
-const RAIN_MAX_SLANT = 0.6;
-const RAIN_SLANT_STEPS = 3;
-// The weather clock loops so it stays a small float on the GPU.
-const WEATHER_LOOP_TICKS = 60 * TICKS_PER_SECOND;
 const fullscreenVao = gl.createVertexArray();
 const resolveProgram = createProgram(gl, fullscreenVertexSource, resolveFragmentSource);
 const resolveSceneLocation = gl.getUniformLocation(resolveProgram, 'u_scene');
@@ -422,7 +411,6 @@ const settings: DevSettings = {
   fogStart: 150,
   renderMode: RenderMode.Glyphs,
   movement: Movement.Car,
-  weather: Weather.None,
   noclip: false,
   ambient: 0.5,
   lightIntensity: 0.4,
@@ -692,15 +680,6 @@ function frame(timeMs: number) {
   gl!.uniform1f(glyphShadeLocation, settings.glyphShade);
   gl!.uniformMatrix3fv(asciiViewRotationLocation, false, [view[0], view[1], view[2], view[4], view[5], view[6], view[8], view[9], view[10]]);
   gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);
-  const carSpeed = Math.hypot(drawnCar.velocityX, drawnCar.velocityZ);
-  gl!.uniform1i(weatherLocation, settings.weather);
-  gl!.uniform1i(weatherRowLocation, MATERIAL.weather - 1);
-  // In steps: every change of slant reshuffles which column each drop is in.
-  const rainSlant = Math.round(RAIN_SLANT_STEPS * Math.min(1, carSpeed / carSettings.topSpeed)) / RAIN_SLANT_STEPS;
-  gl!.uniform1f(rainSlantLocation, RAIN_MAX_SLANT * rainSlant);
-  gl!.uniform1i(roadMaterialLocation, MATERIAL.defaultRoad);
-  gl!.uniform1i(wetRoadRowLocation, MATERIAL.wetRoad - 1);
-  gl!.uniform1f(weatherTimeLocation, ((clock.tick % WEATHER_LOOP_TICKS) + clock.leftover / TICK_SECONDS) / TICKS_PER_SECOND);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
   if (!crtImage) return;

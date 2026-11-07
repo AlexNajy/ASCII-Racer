@@ -23,7 +23,7 @@ npm run preview   # serve the production build locally
 - `Space` / `Shift`: fly up / down
 - `Q` (hold): fly 5× faster
 - `E` (hold): fly 10× faster
-- `` ` `` (backtick): toggle the dev menu, which frees the mouse while open (camera position, FOV, cell size, view distance, fog start, samples per cell, render mode, movement, weather; city and building sliders on their own pages)
+- `` ` `` (backtick): toggle the dev menu, which frees the mouse while open (camera position, FOV, cell size, view distance, fog start, samples per cell, render mode, movement; city and building sliders on their own pages)
 
 ## Roadmap
 
@@ -115,16 +115,15 @@ npm run preview   # serve the production build locally
   - [x] Spawn rules: which styles and prefabs each zone, lot and neighbourhood can get, and how often
   - [x] Colour palettes: a hand-picked palette per style, one colour per building from the seed
   - [x] Lit windows and neon: emissive faces in the models, seeded per building
-- [x] **12. Visual identity**: flicker-free glyphs at speed, particles, weather
+- [x] **12. Visual identity**: flicker-free glyphs at speed, particles
   - [x] Particles: GL points of size 1 in the one-pixel-per-cell scene target, so each particle is exactly one glyph (crash debris as flying `#`); visual only, so they don't need to be deterministic
   - [x] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
   - [x] Drift particles: bursts from the bottom of the rear tyres while sliding, like crash debris
-  - [x] Weather toggle (none / rain / snow) in the dev menu: drops falling as a screen-space overlay in the ASCII pass (`|` or `/` for rain, `*` and `.` for snow), wet roads as an animated set
 - [ ] **13. Sound**: Web Audio API, no libraries; reads the simulation state, never feeds back into it
   - [ ] Audio setup: audio context started on the first click or keypress, master volume and mute
   - [ ] Engine: a looped sound with pitch and volume from speed and throttle
   - [ ] Tires and impacts: a screech that fades in with drift, thuds by collision speed
-  - [ ] Ambience: a low city hum, plus rain and snow with weather
+  - [ ] Ambience: a low city hum
   - [ ] Positional sound: other players' cars panned and fading by distance (`PannerNode`), with multiplayer
 - [ ] **14. HUD**: drawn in the glyph grid, not as HTML
   - [ ] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass
