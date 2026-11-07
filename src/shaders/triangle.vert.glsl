@@ -6,6 +6,8 @@ in vec3 a_normal;
 in float a_emission;
 in float a_id; // -1 for nothing special; 0 and up for traffic signal lamps
 in float a_material; // 1-255, picks the glyph set
+in vec2 a_facadeUv; // window bays across, rows up
+in vec2 a_facade; // seed, style (0 = no windows)
 
 uniform mat4 u_model;
 uniform mat4 u_modelView;
@@ -14,6 +16,7 @@ uniform mat3 u_normalMatrix;
 // One texel per junction: r and g = column and row road lights (0 red, 1 yellow, 2 green),
 // b and a = crosswalk lights alongside each road (0 walking person, 1 hand, 2 off).
 uniform highp usampler2D u_signals;
+uniform bool u_beaconOn;
 
 out vec3 v_color;
 out vec3 v_viewPosition;
@@ -21,14 +24,24 @@ out vec3 v_worldPosition;
 out vec3 v_normal;
 out float v_emission;
 flat out float v_material;
+out vec2 v_facadeUv;
+flat out vec2 v_facade;
 
 const float UNLIT = 0.2; // brightness of a lamp that is off
+const float BEACON_ID = -2.0;
 
 void main() {
   v_color = a_color;
   v_normal = u_normalMatrix * a_normal;
   v_emission = a_emission;
   v_material = a_material;
+  v_facadeUv = a_facadeUv;
+  v_facade = a_facade;
+
+  if (a_id == BEACON_ID && !u_beaconOn) {
+    v_color *= UNLIT;
+    v_emission = 0.0;
+  }
 
   // Signal lamps: id = junction * 10 + road * 5 + lamp, as built in trafficLight.ts.
   if (a_id >= 0.0) {

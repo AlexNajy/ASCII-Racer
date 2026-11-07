@@ -1,9 +1,7 @@
-import { SETBACK, type Building } from './buildings.ts';
+import { centreFacingSide, SETBACK, type Building, type Side } from './buildings.ts';
 import { Zone, type Block, type Rect } from './city.ts';
 
 const ENTRANCE_WIDTH = 11; // m, the gap in the sidewalk where cars drive in
-
-type Side = 'minX' | 'maxX' | 'minZ' | 'maxZ';
 
 function centre(rect: Rect): [number, number] {
   return [(rect.minX + rect.maxX) / 2, (rect.minZ + rect.maxZ) / 2];
@@ -31,8 +29,7 @@ export function lotPavements(block: Block, buildings: Building[]): Rect[] {
       entrance = sz > z ? 'minZ' : 'maxZ';
     }
   } else {
-    // Facing the city centre.
-    entrance = Math.abs(x) > Math.abs(z) ? (x > 0 ? 'minX' : 'maxX') : z > 0 ? 'minZ' : 'maxZ';
+    entrance = centreFacingSide(rect);
   }
   return [...raised, ...sidewalk(rect, entrance)];
 }

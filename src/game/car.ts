@@ -152,7 +152,7 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
 // Round ends glance off corners instead of catching on them.
 const COLLISION_CIRCLES = 3;
 
-// Everything solid is taller than the car, so `top` is ignored.
+// A car can't drive over anything solid, however low, so `top` is ignored.
 export function collideCar(car: Car, colliders: Collider[], settings: CarSettings): void {
   const startX = car.x;
   const startZ = car.z;

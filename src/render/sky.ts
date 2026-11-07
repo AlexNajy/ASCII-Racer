@@ -12,7 +12,7 @@ export interface SkySettings {
 }
 
 export const DEFAULT_SKY_SETTINGS: SkySettings = {
-  starCount: 1500,
+  starCount: 1000,
   starSeed: 1,
   starMinY: 0.03,
   starMinBrightness: 0.15,

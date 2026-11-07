@@ -10,10 +10,13 @@ import {
   updateChaseCamera,
   type ChaseCameraSettings,
 } from './game/chaseCamera.ts';
-import { generateBuildings, inset, SETBACK, type Building } from './game/buildings.ts';
-import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, Zone, type City, type CitySettings, type Rect, type WallKind } from './game/city.ts';
-import { cityColliders, pushOutOfColliders } from './game/collision.ts';
+import { generateBuildings, inset, SETBACK, type Building, type Layout } from './game/buildings.ts';
+import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, subtract, Zone, type City, type CitySettings, type Rect } from './game/city.ts';
+import { cityColliders, pushOutOfColliders, type Collider } from './game/collision.ts';
+import { FENCE_HEIGHT, houseFences } from './game/fences.ts';
+import { houseDriveways } from './game/driveways.ts';
 import { lotPavements } from './game/lots.ts';
+import { POND_RADIUS } from './game/park.ts';
 import { generateIntersections, type Intersections } from './game/intersections.ts';
 import { signalOffsets, signalPhase } from './game/signals.ts';
 import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
@@ -31,7 +34,9 @@ import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS, STROKE_ROW, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
-import { box, flatDisc, FLOATS_PER_VERTEX, gableRoof, withMaterial, withSideColor, withSideMaterial } from './render/shapes.ts';
+import { box, flatDisc, FLOATS_PER_VERTEX, withMaterial, withSideColor, withSideMaterial } from './render/shapes.ts';
+import { windowStyleParams } from './render/models/facade.ts';
+import { cityModels } from './render/models/spawn.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
@@ -74,6 +79,12 @@ const normalLocation = gl.getAttribLocation(program, 'a_normal');
 const emissionLocation = gl.getAttribLocation(program, 'a_emission');
 const idLocation = gl.getAttribLocation(program, 'a_id');
 const materialLocation = gl.getAttribLocation(program, 'a_material');
+const facadeUvLocation = gl.getAttribLocation(program, 'a_facadeUv');
+const facadeLocation = gl.getAttribLocation(program, 'a_facade');
+const windowStylesLocation = gl.getUniformLocation(program, 'u_windowStyles');
+const windowLitMaterialLocation = gl.getUniformLocation(program, 'u_windowLitMaterial');
+const windowDarkMaterialLocation = gl.getUniformLocation(program, 'u_windowDarkMaterial');
+const beaconOnLocation = gl.getUniformLocation(program, 'u_beaconOn');
 const signalsTextureLocation = gl.getUniformLocation(program, 'u_signals');
 const sceneScatterMaterialsLocation = gl.getUniformLocation(program, 'u_scatterMaterials');
 const scatterParamsLocation = gl.getUniformLocation(program, 'u_scatterParams');
@@ -105,6 +116,10 @@ function uploadMesh(vertices: number[]): Mesh {
   gl!.vertexAttribPointer(idLocation, 1, gl!.FLOAT, false, stride, 10 * 4);
   gl!.enableVertexAttribArray(materialLocation);
   gl!.vertexAttribPointer(materialLocation, 1, gl!.FLOAT, false, stride, 11 * 4);
+  gl!.enableVertexAttribArray(facadeUvLocation);
+  gl!.vertexAttribPointer(facadeUvLocation, 2, gl!.FLOAT, false, stride, 12 * 4);
+  gl!.enableVertexAttribArray(facadeLocation);
+  gl!.vertexAttribPointer(facadeLocation, 2, gl!.FLOAT, false, stride, 14 * 4);
 
   gl!.bindVertexArray(null);
   return { vao, buffer, vertexCount: vertices.length / FLOATS_PER_VERTEX };
@@ -143,32 +158,12 @@ function uploadStars() {
 }
 uploadStars();
 
-// Test roofs for the screen direction glyphs.
-const ROOF_ANGLE = 30; // degrees
-
-function isHouse(city: City, rect: Rect): boolean {
-  const x = (rect.minX + rect.maxX) / 2;
-  const z = (rect.minZ + rect.maxZ) / 2;
-  return city.blocks.some(
-    (block) => block.zone === Zone.Houses && x > block.rect.minX && x < block.rect.maxX && z > block.rect.minZ && z < block.rect.maxZ,
-  );
-}
-
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
   return box([rect.minX, bottom, rect.minZ], [rect.maxX, top, rect.maxZ], color);
 }
 
-// Temporary wall tints, for checking the shuffled order.
-const WALL_COLORS: Record<WallKind, Vec3> = {
-  corner: [0.3, 0.3, 0.32],
-  narrow: [0.9, 0.85, 0.2],
-  medium: [0.95, 0.5, 0.1],
-  wide: [0.8, 0.15, 0.1],
-  flex: [0.2, 0.7, 0.9],
-};
-
 const ROAD_COLOR: Vec3 = [0.2, 0.2, 0.2];
-const CONCRETE_COLOR: Vec3 = [0.6, 0.6, 0.6];
+const CONCRETE_COLOR: Vec3 = [0.42, 0.42, 0.42];
 const GRASS_COLOR: Vec3 = [0.2, 0.45, 0.15];
 
 // What each block's ground is made of. With `sidewalk`, the setback in front of the buildings is concrete and the
@@ -184,14 +179,19 @@ const ZONE_SURFACES: Record<Zone, { material: Material; color: Vec3; sidewalk?: 
   [Zone.Plaza]: { material: 'concrete', color: CONCRETE_COLOR },
 };
 
-// Test pond in the middle of each park, for the animated water glyphs.
-const POND_RADIUS = 12;
+const WINDOW_STYLE_PARAMS = windowStyleParams();
+const BEACON_CYCLE_TICKS = 2 * TICKS_PER_SECOND;
+const BEACON_ON_TICKS = TICKS_PER_SECOND / 2;
 const POND_SIDES = 24;
 const POND_COLOR: Vec3 = [0.15, 0.3, 0.6];
+const FENCE_COLOR: Vec3 = [0.45, 0.35, 0.25];
 
 function buildCityMeshes(
   city: City,
   buildings: Building[],
+  driveways: Rect[],
+  models: number[],
+  fences: Rect[],
   streetLights: StreetLight[],
   { trafficLights, stopSigns }: Intersections,
 ): Mesh[] {
@@ -213,27 +213,24 @@ function buildCityMeshes(
         return withSideColor(withSideMaterial(withMaterial(vertices, MATERIAL[material]), MATERIAL.defaultCurbSide), CONCRETE_COLOR);
       }
       // Raised slightly so the ground doesn't fight the sidewalk under it for depth.
-      const ground = slab(inset(rect, SETBACK), CURB_HEIGHT, CURB_HEIGHT + 0.02, color);
+      // Driveways are holes in it, where the sidewalk shows through.
+      const ground = subtract(inset(rect, SETBACK), driveways).flatMap((r) => slab(r, CURB_HEIGHT, CURB_HEIGHT + 0.02, color));
       return [...curb(slab(rect, 0, CURB_HEIGHT, CONCRETE_COLOR)), ...withMaterial(ground, MATERIAL[material])];
     }),
   );
   const wall = uploadMesh(
     curb([
       ...city.wallPavement.flatMap((strip) => slab(strip, 0, CURB_HEIGHT, CONCRETE_COLOR)),
-      ...city.wall.flatMap(({ rect, kind }) => slab(rect, 0, CURB_HEIGHT, WALL_COLORS[kind])),
+      ...city.wall.flatMap(({ rect }) => slab(rect, 0, CURB_HEIGHT, CONCRETE_COLOR)),
     ]),
   );
-  // All buildings in one mesh, with corners already in world position, so they draw in a single call.
-  const buildingMesh = uploadMesh(
-    buildings.flatMap(({ rect, height }) => {
-      const walls = withMaterial(slab(rect, CURB_HEIGHT, CURB_HEIGHT + height, [0.75, 0.7, 0.65]), MATERIAL.defaultBuilding);
-      if (!isHouse(city, rect)) return walls;
-      const { minX, minZ, maxX, maxZ } = rect;
-      const roofHeight = (Math.tan((ROOF_ANGLE * Math.PI) / 180) * Math.min(maxX - minX, maxZ - minZ)) / 2;
-      const roof = gableRoof(minX, minZ, maxX, maxZ, CURB_HEIGHT + height, roofHeight, [0.75, 0.7, 0.65]);
-      // Only the slopes are roof; the gable ends are wall.
-      return [...walls, ...withSideMaterial(withMaterial(roof, MATERIAL.houseRoof), MATERIAL.defaultBuilding)];
-    }),
+  // Everything on the lots in one mesh, with corners already in world position, so it draws in a single call.
+  const modelMesh = uploadMesh(models);
+  const fenceMesh = uploadMesh(
+    withMaterial(
+      fences.flatMap((rect) => slab(rect, CURB_HEIGHT, CURB_HEIGHT + FENCE_HEIGHT, FENCE_COLOR)),
+      MATERIAL.default,
+    ),
   );
   const ponds = uploadMesh(
     withMaterial(
@@ -251,33 +248,53 @@ function buildCityMeshes(
     ...trafficLights.flatMap((light) => trafficLightVertices(light)),
     ...stopSigns.flatMap((sign) => stopSignVertices(sign)),
   ]);
-  return [road, markings, pavements, wall, buildingMesh, ponds, lights, signals];
+  return [road, markings, pavements, wall, modelMesh, fenceMesh, ponds, lights, signals];
 }
 
 const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
 const carSettings: CarSettings = { ...DEFAULT_CAR_SETTINGS };
 const chaseSettings: ChaseCameraSettings = { ...DEFAULT_CHASE_CAMERA_SETTINGS };
-let city = generateCity(citySettings);
-let buildings = generateBuildings(city, citySettings);
-let streetLights = generateStreetLights(city, citySettings);
-let intersections = generateIntersections(city, citySettings);
-let offsets = signalOffsets(city, citySettings.seed);
-let signals = createSignalTexture(gl, city.junctions.length);
-let colliders = cityColliders(buildings, streetLights, intersections);
-let cityMeshes = buildCityMeshes(city, buildings, streetLights, intersections);
+
+interface World {
+  city: City;
+  layout: Layout;
+  fences: Rect[];
+  streetLights: StreetLight[];
+  intersections: Intersections;
+  offsets: number[];
+  colliders: Collider[];
+  meshes: Mesh[];
+}
 
 // The data is kept, not just the meshes, so the game can collide with it.
+function generateWorld(): World {
+  const city = generateCity(citySettings);
+  const layout = generateBuildings(city, citySettings);
+  const fences = houseFences(city, layout.buildings);
+  const driveways = houseDriveways(city, layout.buildings);
+  const streetLights = generateStreetLights(city, citySettings);
+  const intersections = generateIntersections(city, citySettings);
+  const models = cityModels(city, layout, driveways, citySettings.seed);
+  return {
+    city,
+    layout,
+    fences,
+    streetLights,
+    intersections,
+    offsets: signalOffsets(city, citySettings.seed),
+    colliders: cityColliders(models.colliders, fences, streetLights, intersections),
+    meshes: buildCityMeshes(city, layout.buildings, driveways, models.vertices, fences, streetLights, intersections),
+  };
+}
+
+let world = generateWorld();
+let signals = createSignalTexture(gl, world.city.junctions.length);
+
 function regenerateCity() {
-  city = generateCity(citySettings);
-  buildings = generateBuildings(city, citySettings);
-  streetLights = generateStreetLights(city, citySettings);
-  intersections = generateIntersections(city, citySettings);
-  colliders = cityColliders(buildings, streetLights, intersections);
-  offsets = signalOffsets(city, citySettings.seed);
+  world.meshes.forEach(deleteMesh);
+  world = generateWorld();
   gl!.deleteTexture(signals.texture);
-  signals = createSignalTexture(gl!, city.junctions.length);
-  cityMeshes.forEach(deleteMesh);
-  cityMeshes = buildCityMeshes(city, buildings, streetLights, intersections);
+  signals = createSignalTexture(gl!, world.city.junctions.length);
 }
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
@@ -439,16 +456,16 @@ function frame(timeMs: number) {
     previousCar = { ...car };
     carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
     stepCar(car, carInput, carSettings);
-    collideCar(car, colliders, carSettings);
+    collideCar(car, world.colliders, carSettings);
   });
   // Drawn between the last two ticks by the time left over, so motion is smooth on any refresh rate.
   const drawnCar = blendCars(previousCar, car, clock.leftover / TICK_SECONDS);
   let fovBoost = 0;
   if (settings.movement === Movement.FlyCamera) {
     updateFlyCamera(camera, dt);
-    if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, colliders);
+    if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, world.colliders);
   } else {
-    fovBoost = updateChaseCamera(camera, chase, drawnCar, carSettings, chaseSettings, colliders, dt);
+    fovBoost = updateChaseCamera(camera, chase, drawnCar, carSettings, chaseSettings, world.colliders, dt);
   }
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
@@ -490,11 +507,15 @@ function frame(timeMs: number) {
   gl!.uniform1f(headlightIntensityLocation, headlightsOn ? settings.headlightIntensity : 0);
   gl!.uniform1i(sceneScatterMaterialsLocation, SCATTER_MATERIALS);
   gl!.uniform3fv(scatterParamsLocation, scatterParams());
+  gl!.uniform4fv(windowStylesLocation, WINDOW_STYLE_PARAMS);
+  gl!.uniform1f(windowLitMaterialLocation, MATERIAL.windowLit);
+  gl!.uniform1f(windowDarkMaterialLocation, MATERIAL.windowDark);
+  gl!.uniform1i(beaconOnLocation, clock.tick % BEACON_CYCLE_TICKS < BEACON_ON_TICKS ? 1 : 0);
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
   gl!.activeTexture(gl!.TEXTURE3);
-  updateSignalTexture(gl!, signals, offsets.map((offset) => signalPhase(clock.tick, offset)));
+  updateSignalTexture(gl!, signals, world.offsets.map((offset) => signalPhase(clock.tick, offset)));
   gl!.uniform1i(signalsTextureLocation, 3);
   const view = viewMatrix(camera);
 
@@ -509,7 +530,7 @@ function frame(timeMs: number) {
   gl!.enable(gl!.DEPTH_TEST);
   gl!.useProgram(program);
 
-  for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
+  for (const mesh of world.meshes) draw(mesh, gl!.TRIANGLES, view);
   draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
   if (fullResolution) return;
 
