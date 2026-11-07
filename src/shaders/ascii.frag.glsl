@@ -24,8 +24,7 @@ uniform float u_glyphShade;
 uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene, 5 normal texture, 6 CRT scene, 8 screen normals
 // Turns world directions into view space: x right, y up, z towards the camera.
 uniform mat3 u_viewRotation;
-uniform float u_streakStrength; // 0 = no speed streaks, 1 = as many as there can be
-uniform float u_streakTime; // s, loops; whole streaks come and go, so a jump at the loop doesn't show
+uniform float u_weatherTime; // s, loops; whole drops come and go, so a jump at the loop doesn't show
 uniform int u_weather; // 0 none, 1 rain, 2 snow
 uniform int u_weatherRow; // atlas row with the rain and snow glyphs
 uniform float u_rainSlant; // cells sideways per row a drop falls, 0 straight down
@@ -132,42 +131,8 @@ bool splashing(ivec2 cell) {
   return hash(uvec3(c, uint(slot) + 1u)) < u_splashChance;
 }
 
-// Speed streaks: lines running out from the screen centre, as if the world rushes past. The screen is cut into
-// lanes by angle; now and then a lane gets a streak that flies outwards from the inner radius off the screen.
-const float STREAK_LANES = 360.0;
-const float STREAK_INNER = 0.35; // share of the half diagonal kept clear around the centre
-const float STREAK_LENGTH = 0.25; // share of the half diagonal
-const float STREAK_SPEED = 1.5; // half diagonals per second
-const float STREAK_CHANCE = 0.12; // share of lanes with a streak at full strength
-const vec3 STREAK_COLOR = vec3(0.75, 0.85, 1.0);
-
-// How bright the streak is in this cell (0 for none) and its stroke direction (0 |, 1 \, 2 -, 3 /).
-float streak(out int direction) {
-  vec2 half_ = vec2(textureSize(u_scene, 0) * u_cellSize) / 2.0;
-  vec2 cellCentre = (floor(gl_FragCoord.xy / vec2(u_cellSize)) + 0.5) * vec2(u_cellSize);
-  vec2 p = cellCentre - half_;
-  float r = length(p) / length(half_);
-  if (r < STREAK_INNER) return 0.0;
-  float angle = atan(p.y, p.x);
-  uint lane = uint(floor((angle / 6.2831853 + 0.5) * STREAK_LANES));
-  // Each lane runs on its own clock, so streaks don't all start together.
-  float travel = u_streakTime * STREAK_SPEED / (1.0 + STREAK_LENGTH) + hash(uvec3(lane, 7u, 0u));
-  uint slot = uint(floor(travel));
-  if (hash(uvec3(lane, slot, 1u)) >= STREAK_CHANCE * u_streakStrength) return 0.0;
-  float head = STREAK_INNER + fract(travel) * (1.0 - STREAK_INNER + STREAK_LENGTH);
-  float along = (head - r) / STREAK_LENGTH; // 0 at the head, 1 at the tail
-  if (along < 0.0 || along > 1.0) return 0.0;
-  // A line has no front or back, so fold into 0 to 180°.
-  float lineAngle = degrees(angle);
-  if (lineAngle < 0.0) lineAngle += 180.0;
-  if (abs(lineAngle - 90.0) < 22.5) direction = 0;
-  else if (lineAngle < 22.5 || lineAngle > 157.5) direction = 2;
-  else direction = lineAngle < 90.0 ? 3 : 1;
-  return 1.0 - along;
-}
-
 // Rain and snow: drops falling down the screen, drawn over everything. Each column (sheared by the slant for rain,
-// wobbling for snow) has its own clock and a hashed chance per pass, like the streak lanes.
+// wobbling for snow) has its own clock and a hashed chance per pass.
 const int WEATHER_RAIN_STRAIGHT = 2; // | in the weather row
 const int WEATHER_RAIN_SLANTED = 3; // /
 const int WEATHER_FLAKE_NEAR = 4; // *
@@ -197,13 +162,13 @@ int weatherGlyph(out vec3 color) {
     color = RAIN_COLOR;
   } else {
     // All flakes sway together, like a gust; a sway per flake would need its column, which is what's being found.
-    column = cell.x - round(SNOW_WOBBLE * sin(cell.y * 0.15 + u_streakTime * 0.8));
+    column = cell.x - round(SNOW_WOBBLE * sin(cell.y * 0.15 + u_weatherTime * 0.8));
     speed = SNOW_SPEED; period = SNOW_PERIOD; length_ = 1.0; chance = SNOW_CHANCE;
     color = SNOW_COLOR;
   }
   uint lane = uint(int(column) + 100000);
   // Screen rows count upwards, so adding time moves the pattern down.
-  float y = (cell.y + u_streakTime * speed) / period + hash(uvec3(lane, 5u, 0u));
+  float y = (cell.y + u_weatherTime * speed) / period + hash(uvec3(lane, 5u, 0u));
   uint slot = uint(floor(y));
   if (fract(y) * period >= length_) return -1;
   float pick = hash(uvec3(lane, slot, 2u));
@@ -247,16 +212,6 @@ void main() {
   vec3 color = scene.rgb;
   ivec2 inCell = ivec2(gl_FragCoord.xy) - cell * u_cellSize;
 
-  // Streaks are drawn over everything, in the stroke sets, fading down the ramp towards the tail.
-  int streakDirection = 0;
-  float streakLevel = u_renderMode == 0 && u_streakStrength > 0.0 ? streak(streakDirection) : 0.0;
-  if (streakLevel > 0.0) {
-    int column = max(1, int(streakLevel * float(u_rampLength - 1)));
-    ivec2 atlasPixel = ivec2(column * u_cellSize.x + inCell.x, (u_strokeRow + streakDirection + 1) * u_cellSize.y - 1 - inCell.y);
-    float glyph = texelFetch(u_glyphs, atlasPixel, 0).r;
-    outColor = vec4(mix(u_background, STREAK_COLOR * (0.4 + 0.6 * streakLevel), glyph), 1.0);
-    return;
-  }
   if (u_renderMode == 0 && u_weather != 0) {
     vec3 weatherColor;
     int weather = weatherGlyph(weatherColor);

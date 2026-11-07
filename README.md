@@ -115,10 +115,9 @@ npm run preview   # serve the production build locally
   - [x] Spawn rules: which styles and prefabs each zone, lot and neighbourhood can get, and how often
   - [x] Colour palettes: a hand-picked palette per style, one colour per building from the seed
   - [x] Lit windows and neon: emissive faces in the models, seeded per building
-- [x] **12. Visual identity**: flicker-free glyphs at speed, speed streaks, particles, weather
+- [x] **12. Visual identity**: flicker-free glyphs at speed, particles, weather
   - [x] Particles: GL points of size 1 in the one-pixel-per-cell scene target, so each particle is exactly one glyph (crash debris as flying `#`); visual only, so they don't need to be deterministic
   - [x] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
-  - [x] Speed streaks
   - [x] Tire marks: dark marks left on the road while drifting and smoke particles get kicked up as you drift
   - [x] Weather toggle (none / rain / snow) in the dev menu: drops falling as a screen-space overlay in the ASCII pass (`|` or `/` for rain, `*` and `.` for snow), wet roads as an animated set
 - [ ] **13. Sound**: Web Audio API, no libraries; reads the simulation state, never feeds back into it

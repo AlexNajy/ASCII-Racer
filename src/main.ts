@@ -382,8 +382,7 @@ const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
 const asciiViewRotationLocation = gl.getUniformLocation(asciiProgram, 'u_viewRotation');
 const strokeMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_strokeMaterials');
 const strokeRowLocation = gl.getUniformLocation(asciiProgram, 'u_strokeRow');
-const streakStrengthLocation = gl.getUniformLocation(asciiProgram, 'u_streakStrength');
-const streakTimeLocation = gl.getUniformLocation(asciiProgram, 'u_streakTime');
+const weatherTimeLocation = gl.getUniformLocation(asciiProgram, 'u_weatherTime');
 const weatherLocation = gl.getUniformLocation(asciiProgram, 'u_weather');
 const weatherRowLocation = gl.getUniformLocation(asciiProgram, 'u_weatherRow');
 const rainSlantLocation = gl.getUniformLocation(asciiProgram, 'u_rainSlant');
@@ -392,11 +391,8 @@ const wetRoadRowLocation = gl.getUniformLocation(asciiProgram, 'u_wetRoadRow');
 // Rain leans with speed, as if driving into it: straight when parked, this slant at top speed (cells per row).
 const RAIN_MAX_SLANT = 0.6;
 const RAIN_SLANT_STEPS = 3;
-// Speed streaks start at the first speed and are at full strength at the second, m/s.
-const STREAK_MIN_SPEED = 15;
-const STREAK_FULL_SPEED = 30;
-// The streak clock loops so it stays a small float on the GPU.
-const STREAK_LOOP_TICKS = 60 * TICKS_PER_SECOND;
+// The weather clock loops so it stays a small float on the GPU.
+const WEATHER_LOOP_TICKS = 60 * TICKS_PER_SECOND;
 const fullscreenVao = gl.createVertexArray();
 const resolveProgram = createProgram(gl, fullscreenVertexSource, resolveFragmentSource);
 const resolveSceneLocation = gl.getUniformLocation(resolveProgram, 'u_scene');
@@ -705,8 +701,6 @@ function frame(timeMs: number) {
   gl!.uniformMatrix3fv(asciiViewRotationLocation, false, [view[0], view[1], view[2], view[4], view[5], view[6], view[8], view[9], view[10]]);
   gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);
   const carSpeed = Math.hypot(drawnCar.velocityX, drawnCar.velocityZ);
-  const streakStrength = settings.movement === Movement.Car ? (carSpeed - STREAK_MIN_SPEED) / (STREAK_FULL_SPEED - STREAK_MIN_SPEED) : 0;
-  gl!.uniform1f(streakStrengthLocation, Math.min(1, Math.max(0, streakStrength)));
   gl!.uniform1i(weatherLocation, settings.weather);
   gl!.uniform1i(weatherRowLocation, MATERIAL.weather - 1);
   // In steps: every change of slant reshuffles which column each drop is in.
@@ -714,7 +708,7 @@ function frame(timeMs: number) {
   gl!.uniform1f(rainSlantLocation, RAIN_MAX_SLANT * rainSlant);
   gl!.uniform1i(roadMaterialLocation, MATERIAL.defaultRoad);
   gl!.uniform1i(wetRoadRowLocation, MATERIAL.wetRoad - 1);
-  gl!.uniform1f(streakTimeLocation, ((clock.tick % STREAK_LOOP_TICKS) + clock.leftover / TICK_SECONDS) / TICKS_PER_SECOND);
+  gl!.uniform1f(weatherTimeLocation, ((clock.tick % WEATHER_LOOP_TICKS) + clock.leftover / TICK_SECONDS) / TICKS_PER_SECOND);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
   if (!crtImage) return;
