@@ -43,6 +43,8 @@ export interface DevSettings {
   waveScale: number; // how tightly packed the waves are across cells
   splashChance: number; // share of shore cells splashing at any moment, 0 to 1
   splashSeconds: number; // how long one splash lasts
+  supersample: number; // scene samples per cell along each axis, 1 to 4
+  coverageDimming: number; // how much a partly covered cell dims by the share covered, 0 to 1
 }
 
 type NumberSetting =
@@ -60,7 +62,9 @@ type NumberSetting =
   | 'animationSeconds'
   | 'waveScale'
   | 'splashChance'
-  | 'splashSeconds';
+  | 'splashSeconds'
+  | 'supersample'
+  | 'coverageDimming';
 
 export interface DevMenu {
   setInfo(text: string): void;
@@ -225,6 +229,8 @@ export function createDevMenu(
   settingSlider(viewPage, 'Cell width', 'cellWidth', 4, 16, 1);
   settingSlider(viewPage, 'View distance', 'viewDistance', 5, 1000, 1);
   settingSlider(viewPage, 'Fog start', 'fogStart', 0, 1000, 1);
+  settingSlider(viewPage, 'Samples per cell (each axis)', 'supersample', 1, 4, 1);
+  settingSlider(viewPage, 'Coverage dimming', 'coverageDimming', 0, 1, 0.05);
   settingSlider(lightingPage, 'Ambient', 'ambient', 0, 1, 0.01);
   settingSlider(lightingPage, 'Directional light', 'lightIntensity', 0, 1, 0.01);
   settingSlider(lightingPage, 'Glyph shade', 'glyphShade', 0, 1, 0.01);

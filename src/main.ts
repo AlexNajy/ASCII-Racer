@@ -49,6 +49,7 @@ import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
 import asciiFragmentSource from './shaders/ascii.frag.glsl?raw';
 import crtFragmentSource from './shaders/crt.frag.glsl?raw';
+import resolveFragmentSource from './shaders/resolve.frag.glsl?raw';
 import skyVertexSource from './shaders/sky.vert.glsl?raw';
 import skyFragmentSource from './shaders/sky.frag.glsl?raw';
 import particleVertexSource from './shaders/particle.vert.glsl?raw';
@@ -91,6 +92,7 @@ const beaconOnLocation = gl.getUniformLocation(program, 'u_beaconOn');
 const signalsTextureLocation = gl.getUniformLocation(program, 'u_signals');
 const sceneScatterMaterialsLocation = gl.getUniformLocation(program, 'u_scatterMaterials');
 const scatterParamsLocation = gl.getUniformLocation(program, 'u_scatterParams');
+const supersampleLocation = gl.getUniformLocation(program, 'u_supersample');
 
 interface Mesh {
   vao: WebGLVertexArrayObject;
@@ -139,6 +141,8 @@ const skyProgram = createProgram(gl, skyVertexSource, skyFragmentSource);
 const skyViewRotationLocation = gl.getUniformLocation(skyProgram, 'u_viewRotation');
 const skyProjectionLocation = gl.getUniformLocation(skyProgram, 'u_projection');
 const skyMaterialLocation = gl.getUniformLocation(skyProgram, 'u_material');
+const skyCellsLocation = gl.getUniformLocation(skyProgram, 'u_cells');
+const skyPointSizeLocation = gl.getUniformLocation(skyProgram, 'u_pointSize');
 const skySettings: SkySettings = { ...DEFAULT_SKY_SETTINGS };
 let starCount = 0;
 const starBuffer = gl.createBuffer();
@@ -168,6 +172,8 @@ const particleMaterialLocation = gl.getUniformLocation(particleProgram, 'u_mater
 const particleFogColorLocation = gl.getUniformLocation(particleProgram, 'u_fogColor');
 const particleFogStartLocation = gl.getUniformLocation(particleProgram, 'u_fogStart');
 const particleFogEndLocation = gl.getUniformLocation(particleProgram, 'u_fogEnd');
+const particleCellsLocation = gl.getUniformLocation(particleProgram, 'u_cells');
+const particlePointSizeLocation = gl.getUniformLocation(particleProgram, 'u_pointSize');
 const particles = createParticles();
 // Sized once for the most particles there can be; each frame only overwrites the part in use.
 const particleBuffer = gl.createBuffer();
@@ -360,6 +366,12 @@ const asciiViewRotationLocation = gl.getUniformLocation(asciiProgram, 'u_viewRot
 const strokeMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_strokeMaterials');
 const strokeRowLocation = gl.getUniformLocation(asciiProgram, 'u_strokeRow');
 const fullscreenVao = gl.createVertexArray();
+const resolveProgram = createProgram(gl, fullscreenVertexSource, resolveFragmentSource);
+const resolveSceneLocation = gl.getUniformLocation(resolveProgram, 'u_scene');
+const resolveNormalsLocation = gl.getUniformLocation(resolveProgram, 'u_normals');
+const resolveScatterLocation = gl.getUniformLocation(resolveProgram, 'u_scatter');
+const resolveSupersampleLocation = gl.getUniformLocation(resolveProgram, 'u_supersample');
+const resolveCoverageDimmingLocation = gl.getUniformLocation(resolveProgram, 'u_coverageDimming');
 const crtProgram = createProgram(gl, fullscreenVertexSource, crtFragmentSource);
 const crtImageLocation = gl.getUniformLocation(crtProgram, 'u_image');
 // For the CRT glyphs view: the glyph picture is drawn here first, then blurred to the screen. It only exists
@@ -396,11 +408,16 @@ const settings: DevSettings = {
   waveScale: 2,
   splashChance: 0.4,
   splashSeconds: 1.2,
+  supersample: 3,
+  coverageDimming: 0.5,
 };
 
 const dpr = window.devicePixelRatio || 1;
 const CELL_ASPECT = 1.75;
+// The scene is drawn into `scene` with `supersample` × `supersample` samples per cell, then resolved into `cells`,
+// one pixel per cell, which the ASCII pass reads.
 const scene = createRenderTarget(gl);
+const cells = createRenderTarget(gl);
 
 let cellWidth = 0;
 let cellHeight = 0;
@@ -416,12 +433,10 @@ function buildCells() {
 function resize() {
   canvas.width = Math.floor(canvas.clientWidth * dpr);
   canvas.height = Math.floor(canvas.clientHeight * dpr);
-  resizeRenderTarget(
-    gl!,
-    scene,
-    Math.ceil(canvas.width / cellWidth),
-    Math.ceil(canvas.height / cellHeight),
-  );
+  const columns = Math.ceil(canvas.width / cellWidth);
+  const rows = Math.ceil(canvas.height / cellHeight);
+  resizeRenderTarget(gl!, cells, columns, rows);
+  resizeRenderTarget(gl!, scene, columns * settings.supersample, rows * settings.supersample);
 }
 
 buildCells();
@@ -436,10 +451,8 @@ const devMenu = createDevMenu(
   skySettings,
   SCATTER_SETTINGS,
   (setting) => {
-    if (setting === 'cellWidth') {
-      buildCells();
-      resize();
-    }
+    if (setting === 'cellWidth') buildCells();
+    if (setting === 'cellWidth' || setting === 'supersample') resize();
   },
   regenerateCity,
   uploadStars,
@@ -552,6 +565,10 @@ function frame(timeMs: number) {
   gl!.uniform4fv(windowStylesLocation, WINDOW_STYLE_PARAMS);
   gl!.uniform1f(windowLitMaterialLocation, MATERIAL.windowLit);
   gl!.uniform1f(windowDarkMaterialLocation, MATERIAL.windowDark);
+  // Full resolution draws straight to the screen, where each pixel stands in for a cell.
+  const samples = fullResolution ? 1 : settings.supersample;
+  const pointCells = [target.width / samples, target.height / samples];
+  gl!.uniform1f(supersampleLocation, samples);
   gl!.uniform1i(beaconOnLocation, clock.tick % BEACON_CYCLE_TICKS < BEACON_ON_TICKS ? 1 : 0);
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
@@ -566,6 +583,8 @@ function frame(timeMs: number) {
   gl!.uniformMatrix4fv(skyViewRotationLocation, false, viewMatrix({ ...camera, position: [0, 0, 0] }));
   gl!.uniformMatrix4fv(skyProjectionLocation, false, projection);
   gl!.uniform1f(skyMaterialLocation, MATERIAL.star);
+  gl!.uniform2fv(skyCellsLocation, pointCells);
+  gl!.uniform1f(skyPointSizeLocation, samples);
   gl!.disable(gl!.DEPTH_TEST);
   gl!.bindVertexArray(starVao);
   gl!.drawArrays(gl!.POINTS, 0, starCount);
@@ -584,6 +603,8 @@ function frame(timeMs: number) {
     gl!.uniform3fv(particleFogColorLocation, background);
     gl!.uniform1f(particleFogStartLocation, settings.fogStart);
     gl!.uniform1f(particleFogEndLocation, settings.viewDistance);
+    gl!.uniform2fv(particleCellsLocation, pointCells);
+    gl!.uniform1f(particlePointSizeLocation, samples);
     gl!.bindBuffer(gl!.ARRAY_BUFFER, particleBuffer);
     gl!.bufferSubData(gl!.ARRAY_BUFFER, 0, particles.vertices, 0, particleCount * FLOATS_PER_PARTICLE);
     gl!.bindVertexArray(particleVao);
@@ -591,23 +612,41 @@ function frame(timeMs: number) {
   }
   if (fullResolution) return;
 
+  gl!.bindFramebuffer(gl!.FRAMEBUFFER, cells.framebuffer);
+  gl!.viewport(0, 0, cells.width, cells.height);
+  gl!.disable(gl!.DEPTH_TEST);
+  gl!.useProgram(resolveProgram);
+  gl!.activeTexture(gl!.TEXTURE0);
+  gl!.bindTexture(gl!.TEXTURE_2D, scene.colorTexture);
+  gl!.uniform1i(resolveSceneLocation, 0);
+  gl!.activeTexture(gl!.TEXTURE2);
+  gl!.bindTexture(gl!.TEXTURE_2D, scene.normalTexture);
+  gl!.uniform1i(resolveNormalsLocation, 2);
+  gl!.activeTexture(gl!.TEXTURE4);
+  gl!.bindTexture(gl!.TEXTURE_2D, scene.scatterTexture);
+  gl!.uniform1i(resolveScatterLocation, 4);
+  gl!.uniform1i(resolveSupersampleLocation, settings.supersample);
+  gl!.uniform1f(resolveCoverageDimmingLocation, settings.coverageDimming);
+  gl!.bindVertexArray(fullscreenVao);
+  gl!.drawArrays(gl!.TRIANGLES, 0, 3);
+
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, crtImage ? crtImage.framebuffer : null);
   gl!.viewport(0, 0, canvas.width, canvas.height);
   gl!.disable(gl!.DEPTH_TEST);
 
   gl!.useProgram(asciiProgram);
   gl!.activeTexture(gl!.TEXTURE0);
-  gl!.bindTexture(gl!.TEXTURE_2D, scene.colorTexture);
+  gl!.bindTexture(gl!.TEXTURE_2D, cells.colorTexture);
   gl!.uniform1i(sceneTextureLocation, 0);
   gl!.uniform2i(cellSizeLocation, cellWidth, cellHeight);
   gl!.activeTexture(gl!.TEXTURE1);
   gl!.bindTexture(gl!.TEXTURE_2D, glyphAtlas);
   gl!.uniform1i(glyphsLocation, 1);
   gl!.activeTexture(gl!.TEXTURE2);
-  gl!.bindTexture(gl!.TEXTURE_2D, scene.normalTexture);
+  gl!.bindTexture(gl!.TEXTURE_2D, cells.normalTexture);
   gl!.uniform1i(normalTextureLocation, 2);
   gl!.activeTexture(gl!.TEXTURE4);
-  gl!.bindTexture(gl!.TEXTURE_2D, scene.scatterTexture);
+  gl!.bindTexture(gl!.TEXTURE_2D, cells.scatterTexture);
   gl!.uniform1i(scatterTextureLocation, 4);
   gl!.uniform1i(scatterMaterialsLocation, SCATTER_MATERIALS);
   gl!.uniform1i(rampLengthLocation, RAMP_LENGTH);

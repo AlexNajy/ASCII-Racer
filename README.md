@@ -117,7 +117,7 @@ npm run preview   # serve the production build locally
   - [x] Lit windows and neon: emissive faces in the models, seeded per building
 - [ ] **12. Visual identity**: flicker-free glyphs at speed, speed streaks, particles, weather
   - [x] Particles: GL points of size 1 in the one-pixel-per-cell scene target, so each particle is exactly one glyph (crash debris as flying `#`); visual only, so they don't need to be deterministic
-  - [ ] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
+  - [x] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
   - [ ] Speed streaks
   - [ ] Tire marks: dark marks left on the road while drifting and smoke particles get kicked up as you drift
   - [ ] Weather toggle (none / rain / snow) in the dev menu: drops falling as a screen-space overlay in the ASCII pass (`|` or `/` for rain, `*` and `.` for snow), wet roads as an animated set
