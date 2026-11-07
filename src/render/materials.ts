@@ -52,6 +52,10 @@ const SETS = {
   debris: { ramp: ' .,:;+*%##' },
   smoke: { ramp: ' .:~oOO@@@' },
   tireMark: { ramp: ' .,:;;====' },
+  // Not a surface: the ASCII pass reads fixed glyphs from this row for rain and snow (WEATHER_* in ascii.frag.glsl).
+  weather: { ramp: ' .|/*.....' },
+  // The road's glyphs while it rains, animated so the wet surface shimmers.
+  wetRoad: { ramp: ' .,,~~~===' },
   // Stroke sets, in the order the ASCII pass numbers the directions.
   strokeVertical: { ramp: ' .:!!|||||' },
   strokeBackslash: { ramp: ' .`\\\\\\\\\\\\\\' },

@@ -26,6 +26,11 @@ uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene, 5 normal texture, 
 uniform mat3 u_viewRotation;
 uniform float u_streakStrength; // 0 = no speed streaks, 1 = as many as there can be
 uniform float u_streakTime; // s, loops; whole streaks come and go, so a jump at the loop doesn't show
+uniform int u_weather; // 0 none, 1 rain, 2 snow
+uniform int u_weatherRow; // atlas row with the rain and snow glyphs
+uniform float u_rainSlant; // cells sideways per row a drop falls, 0 straight down
+uniform int u_roadMaterial;
+uniform int u_wetRoadRow; // the road's glyphs while it rains
 
 
 out vec4 outColor;
@@ -161,6 +166,52 @@ float streak(out int direction) {
   return 1.0 - along;
 }
 
+// Rain and snow: drops falling down the screen, drawn over everything. Each column (sheared by the slant for rain,
+// wobbling for snow) has its own clock and a hashed chance per pass, like the streak lanes.
+const int WEATHER_RAIN_STRAIGHT = 2; // | in the weather row
+const int WEATHER_RAIN_SLANTED = 3; // /
+const int WEATHER_FLAKE_NEAR = 4; // *
+const int WEATHER_FLAKE_FAR = 1; // .
+const float RAIN_SPEED = 40.0; // rows per second
+const float RAIN_PERIOD = 30.0; // rows between the starts of two drops in a column
+const float RAIN_LENGTH = 2.0; // rows
+const float RAIN_CHANCE = 0.25; // share of passes with a drop
+const float RAIN_SLANTED = 0.3; // slant from which drops use / instead of |
+const vec3 RAIN_COLOR = vec3(0.45, 0.55, 0.7);
+const float SNOW_SPEED = 4.0;
+const float SNOW_PERIOD = 18.0;
+const float SNOW_CHANCE = 0.3;
+const float SNOW_WOBBLE = 1.5; // cells either side
+const float SNOW_NEAR_SHARE = 0.4; // share of flakes drawn big
+const vec3 SNOW_COLOR = vec3(0.85, 0.88, 0.95);
+
+// Which weather glyph this cell shows (-1 for none), and its colour.
+int weatherGlyph(out vec3 color) {
+  vec2 cell = floor(gl_FragCoord.xy / vec2(u_cellSize));
+  float column;
+  float speed, period, length_, chance;
+  if (u_weather == 1) {
+    // Shifting the column by the row makes each drop's column lean: falling, it moves the other way, so / at a slant.
+    column = floor(cell.x - cell.y * u_rainSlant);
+    speed = RAIN_SPEED; period = RAIN_PERIOD; length_ = RAIN_LENGTH; chance = RAIN_CHANCE;
+    color = RAIN_COLOR;
+  } else {
+    // All flakes sway together, like a gust; a sway per flake would need its column, which is what's being found.
+    column = cell.x - round(SNOW_WOBBLE * sin(cell.y * 0.15 + u_streakTime * 0.8));
+    speed = SNOW_SPEED; period = SNOW_PERIOD; length_ = 1.0; chance = SNOW_CHANCE;
+    color = SNOW_COLOR;
+  }
+  uint lane = uint(int(column) + 100000);
+  // Screen rows count upwards, so adding time moves the pattern down.
+  float y = (cell.y + u_streakTime * speed) / period + hash(uvec3(lane, 5u, 0u));
+  uint slot = uint(floor(y));
+  if (fract(y) * period >= length_) return -1;
+  float pick = hash(uvec3(lane, slot, 2u));
+  if (pick >= chance) return -1;
+  if (u_weather == 1) return u_rainSlant >= RAIN_SLANTED ? WEATHER_RAIN_SLANTED : WEATHER_RAIN_STRAIGHT;
+  return pick < chance * SNOW_NEAR_SHARE ? WEATHER_FLAKE_NEAR : WEATHER_FLAKE_FAR;
+}
+
 // Dev view, like an old TV: each scene pixel is a soft blob that bleeds into its neighbours (wider
 // sideways, like a CRT beam), with darker gaps between rows as scanlines.
 const vec2 CRT_SPREAD = vec2(0.6, 0.4); // blob size in scene pixels, x and y
@@ -206,6 +257,16 @@ void main() {
     outColor = vec4(mix(u_background, STREAK_COLOR * (0.4 + 0.6 * streakLevel), glyph), 1.0);
     return;
   }
+  if (u_renderMode == 0 && u_weather != 0) {
+    vec3 weatherColor;
+    int weather = weatherGlyph(weatherColor);
+    if (weather >= 0) {
+      ivec2 atlasPixel = ivec2(weather * u_cellSize.x + inCell.x, (u_weatherRow + 1) * u_cellSize.y - 1 - inCell.y);
+      float glyph = texelFetch(u_glyphs, atlasPixel, 0).r;
+      outColor = vec4(mix(u_background, weatherColor, glyph), 1.0);
+      return;
+    }
+  }
 
   // Alpha 0 means nothing was drawn here: show the background as a solid colour.
   if (scene.a == 0.0) {
@@ -242,7 +303,11 @@ void main() {
   int material = int(round(scene.a * 255.0));
   int row = material - 1;
 
-  if (level > 0 && (u_animatedMaterials & (1 << material)) != 0) {
+  // A wet road shimmers like water, but without splashes along its edges.
+  if (u_weather == 1 && material == u_roadMaterial) {
+    row = u_wetRoadRow;
+    if (level > 0) level = clamp(level + int(round(wave(cell) * u_animationLevels)), 1, u_rampLength - 1);
+  } else if (level > 0 && (u_animatedMaterials & (1 << material)) != 0) {
     level = clamp(level + int(round(wave(cell) * u_animationLevels)), 1, u_rampLength - 1);
     if (isShore(cell, material) && splashing(cell)) level = u_rampLength - 1;
   }
