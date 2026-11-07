@@ -46,30 +46,13 @@ function alongside(garage: Rect, door: Side, entrance: Side, yard: Rect): Rect {
   return { ...garage, ...fronts[door], ...toStreet[entrance] };
 }
 
-function cut(rect: Rect, hole: Rect): Rect[] {
-  if (hole.minX >= rect.maxX || hole.maxX <= rect.minX || hole.minZ >= rect.maxZ || hole.maxZ <= rect.minZ) return [rect];
-  const minZ = Math.max(rect.minZ, hole.minZ);
-  const maxZ = Math.min(rect.maxZ, hole.maxZ);
-  return [
-    { ...rect, maxZ: minZ },
-    { ...rect, minZ: maxZ },
-    { minX: rect.minX, maxX: hole.minX, minZ, maxZ },
-    { minX: hole.maxX, maxX: rect.maxX, minZ, maxZ },
-  ].filter((piece) => piece.maxX > piece.minX && piece.maxZ > piece.minZ);
-}
-
-// What is left of `rect` with the holes cut out, as rectangles that don't overlap.
-export function subtract(rect: Rect, holes: Rect[]): Rect[] {
-  return holes.reduce((pieces, hole) => pieces.flatMap((piece) => cut(piece, hole)), [rect]);
-}
-
 // A strip from each garage door to the sidewalk of the street its lot opens to, and the dead ends of houses
 // without a garage.
 export function houseDriveways(city: City, buildings: Building[]): Rect[] {
   const yards = city.blocks.filter(({ zone }) => zone === Zone.Houses).map(({ rect }) => inset(rect, SETBACK));
   const deadEnds = buildings.flatMap(({ driveway }) => (driveway ? [driveway] : []));
   const garageDriveways = buildings
-    .filter(({ part }) => part === 'garage')
+    .filter(({ kind }) => kind === 'garage')
     .flatMap(({ rect, entrance, door }) => {
       const yard = yards.find((y) => rect.minX >= y.minX && rect.maxX <= y.maxX && rect.minZ >= y.minZ && rect.maxZ <= y.maxZ);
       if (!yard || !entrance || !door) return [];

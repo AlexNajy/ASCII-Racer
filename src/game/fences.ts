@@ -34,7 +34,7 @@ export function houseFences(city: City, buildings: Building[]): Rect[] {
       ];
       const blockBuildings = buildings.filter((building) => inside(building.rect, rect));
       const edges = blockBuildings
-        .filter(({ part }) => part === 'house')
+        .filter(({ kind }) => kind === 'house')
         .flatMap(({ rect: house, entrance }) => {
           // The quarter, or for a big house the half, of the block the house stands on.
           const lot: Rect = {

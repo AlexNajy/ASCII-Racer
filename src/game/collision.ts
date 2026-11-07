@@ -1,5 +1,4 @@
 import type { Vec3 } from '../math/mat4.ts';
-import type { Building } from './buildings.ts';
 import { FENCE_HEIGHT } from './fences.ts';
 import { CURB_HEIGHT, type Rect } from './city.ts';
 import {
@@ -55,13 +54,13 @@ function pole(x: number, z: number, width: number, height: number): Collider {
 // Everything in the city the camera (later the car) can bump into. Only poles for the street furniture:
 // arms, signal heads and signs hang overhead, above anything driving.
 export function cityColliders(
-  buildings: Building[],
+  models: Collider[],
   fences: Rect[],
   streetLights: StreetLight[],
   intersections: Intersections,
 ): Collider[] {
   return [
-    ...buildings.map(({ rect, height }) => ({ rect, top: CURB_HEIGHT + height })),
+    ...models,
     ...fences.map((rect) => ({ rect, top: CURB_HEIGHT + FENCE_HEIGHT })),
     ...streetLights.map(({ x, z }) => pole(x, z, STREET_LIGHT_POLE_WIDTH, STREET_LIGHT_POLE_HEIGHT)),
     ...intersections.trafficLights.map(({ x, z, heads }) =>

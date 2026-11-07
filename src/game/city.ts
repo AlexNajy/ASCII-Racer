@@ -9,6 +9,23 @@ export interface Rect {
   maxZ: number;
 }
 
+function cut(rect: Rect, hole: Rect): Rect[] {
+  if (hole.minX >= rect.maxX || hole.maxX <= rect.minX || hole.minZ >= rect.maxZ || hole.maxZ <= rect.minZ) return [rect];
+  const minZ = Math.max(rect.minZ, hole.minZ);
+  const maxZ = Math.min(rect.maxZ, hole.maxZ);
+  return [
+    { ...rect, maxZ: minZ },
+    { ...rect, minZ: maxZ },
+    { minX: rect.minX, maxX: hole.minX, minZ, maxZ },
+    { minX: hole.maxX, maxX: rect.maxX, minZ, maxZ },
+  ].filter((piece) => piece.maxX > piece.minX && piece.maxZ > piece.minZ);
+}
+
+// What is left of `rect` with the holes cut out, as rectangles that don't overlap.
+export function subtract(rect: Rect, holes: Rect[]): Rect[] {
+  return holes.reduce((pieces, hole) => pieces.flatMap((piece) => cut(piece, hole)), [rect]);
+}
+
 export const Zone = {
   LowDensity: 0,
   MidDensity: 1,
@@ -57,6 +74,7 @@ export interface CitySettings {
   supermarketFloors: number;
   ceilingHeight: number; // multiplier on every floor height
   midDensityAlleyChance: number; // per direction, 0 to 1
+  midDensityMergeChance: number; // per pair of touching lots, 0 to 1
   lowDensityEmptyChance: number; // per shop lot, 0 to 1
   lowDensityMergeChance: number; // per side and corner, 0 to 1
   lowDensityStripMallChance: number; // per block, 0 to 1
@@ -82,6 +100,7 @@ export const DEFAULT_CITY_SETTINGS: CitySettings = {
   supermarketFloors: 1,
   ceilingHeight: 1,
   midDensityAlleyChance: 0.5,
+  midDensityMergeChance: 0.35,
   lowDensityEmptyChance: 0.0625,
   lowDensityMergeChance: 0.4,
   lowDensityStripMallChance: 0.1,

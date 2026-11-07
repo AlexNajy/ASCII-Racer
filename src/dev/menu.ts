@@ -338,6 +338,7 @@ export function createDevMenu(
   citySlider(buildingsPage, 'Supermarket floors ×', 'supermarketFloors', 0.1, 3, 0.1);
   citySlider(buildingsPage, 'Ceiling height ×', 'ceilingHeight', 0.5, 2, 0.05);
   citySlider(buildingsPage, 'Mid alley chance', 'midDensityAlleyChance', 0, 1, 0.025);
+  citySlider(buildingsPage, 'Mid merge chance', 'midDensityMergeChance', 0, 1, 0.025);
   citySlider(buildingsPage, 'Low empty lot chance', 'lowDensityEmptyChance', 0, 1, 0.025);
   citySlider(buildingsPage, 'Low merge chance', 'lowDensityMergeChance', 0, 1, 0.025);
   citySlider(buildingsPage, 'Low strip mall chance', 'lowDensityStripMallChance', 0, 1, 0.025);

@@ -1,13 +1,16 @@
 import type { Vec3 } from '../math/mat4.ts';
 import { MATERIAL } from './materials.ts';
 
-// Vertex layout: x, y, z, r, g, b, nx, ny, nz, emission, id, material.
+// Vertex layout: x, y, z, r, g, b, nx, ny, nz, emission, id, material, facade u, facade v, facade seed, facade style.
 // Emission 1 shows the colour at full strength whatever the lighting, for things that glow.
 // Id says which one a vertex belongs to, for things whose state changes: for now only traffic signal lamps
 // (0 and up). NO_ID for everything else.
 // Material (1-255, see materials.ts) picks the glyph set; the scene pass writes it into the colour target's alpha, 0 = empty.
-export const FLOATS_PER_VERTEX = 12;
+// Facade (see models/facade.ts): u and v count window bays and rows across a wall, style 0 = no windows.
+export const FLOATS_PER_VERTEX = 16;
 export const NO_ID = -1;
+export const BEACON_ID = -2; // shown only while u_beaconOn is set
+const NO_FACADE = [0, 0, 0, 0];
 const COLOR_OFFSET = 3;
 const NORMAL_Y_OFFSET = 7;
 const ID_OFFSET = 10;
@@ -55,7 +58,94 @@ export function box(min: Vec3, max: Vec3, color: Vec3, emission = 0): number[] {
   ];
   const vertices: number[] = [];
   for (const [a, b, c, d, normal] of faces) {
-    for (const corner of [a, b, c, a, c, d]) vertices.push(...corner, ...color, ...normal, emission, NO_ID, MATERIAL.default);
+    for (const corner of [a, b, c, a, c, d]) vertices.push(...corner, ...color, ...normal, emission, NO_ID, MATERIAL.default, ...NO_FACADE);
+  }
+  return vertices;
+}
+
+// Four corners counter-clockwise or clockwise, one normal. `uvs` (with seed and style) are for facades.
+export function quad(
+  corners: readonly [Vec3, Vec3, Vec3, Vec3],
+  normal: Vec3,
+  color: Vec3,
+  emission = 0,
+  uvs?: readonly [[number, number], [number, number], [number, number], [number, number]],
+  seed = 0,
+  style = 0,
+): number[] {
+  const vertices: number[] = [];
+  for (const i of [0, 1, 2, 0, 2, 3]) {
+    vertices.push(...corners[i], ...color, ...normal, emission, NO_ID, MATERIAL.default, uvs?.[i][0] ?? 0, uvs?.[i][1] ?? 0, seed, style);
+  }
+  return vertices;
+}
+
+function triangle(a: Vec3, b: Vec3, c: Vec3, outside: Vec3, color: Vec3, emission: number): number[] {
+  const u: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const v: Vec3 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+  const n = cross(u, v);
+  const length = Math.hypot(...n);
+  // A hip roof over a square has no ridge, so two of its triangles have no area.
+  if (length === 0) return [];
+  const flip = n[0] * outside[0] + n[1] * outside[1] + n[2] * outside[2] < 0 ? -1 : 1;
+  const normal: Vec3 = [(flip * n[0]) / length, (flip * n[1]) / length, (flip * n[2]) / length];
+  const vertices: number[] = [];
+  for (const point of [a, b, c]) vertices.push(...point, ...color, ...normal, emission, NO_ID, MATERIAL.default, ...NO_FACADE);
+  return vertices;
+}
+
+// A roof over a rectangle rising to a ridge `inset` shorter than its long side at each end; half its short side makes
+// a pyramid. Four sloped faces.
+export function hipRoof(x0: number, z0: number, x1: number, z1: number, bottom: number, height: number, inset: number, color: Vec3, emission = 0): number[] {
+  const alongX = x1 - x0 >= z1 - z0;
+  const [a0, a1, b0, b1] = alongX ? [x0, x1, z0, z1] : [z0, z1, x0, x1];
+  const point = (a: number, y: number, b: number): Vec3 => (alongX ? [a, y, b] : [b, y, a]);
+  const top = bottom + height;
+  const mid = (b0 + b1) / 2;
+  const middle = point((a0 + a1) / 2, bottom, mid);
+  const corners = [point(a0, bottom, b0), point(a1, bottom, b0), point(a1, bottom, b1), point(a0, bottom, b1)];
+  const ridgeA = point(a0 + inset, top, mid);
+  const ridgeB = point(a1 - inset, top, mid);
+  const outward = (p: Vec3): Vec3 => [p[0] - middle[0], 0, p[2] - middle[2]];
+  return [
+    ...triangle(corners[0], corners[1], ridgeB, outward(point((a0 + a1) / 2, 0, b0)), color, emission),
+    ...triangle(corners[0], ridgeB, ridgeA, outward(point((a0 + a1) / 2, 0, b0)), color, emission),
+    ...triangle(corners[3], corners[2], ridgeB, outward(point((a0 + a1) / 2, 0, b1)), color, emission),
+    ...triangle(corners[3], ridgeB, ridgeA, outward(point((a0 + a1) / 2, 0, b1)), color, emission),
+    ...triangle(corners[0], corners[3], ridgeA, outward(point(a0, 0, mid)), color, emission),
+    ...triangle(corners[1], corners[2], ridgeB, outward(point(a1, 0, mid)), color, emission),
+  ];
+}
+
+// A cone standing on the ground plane at `base`, faceted.
+export function cone(base: Vec3, radius: number, height: number, sides: number, color: Vec3): number[] {
+  const rim = (corner: number): Vec3 => {
+    const angle = (2 * Math.PI * corner) / sides;
+    return [base[0] + Math.cos(angle) * radius, base[1], base[2] + Math.sin(angle) * radius];
+  };
+  const tip: Vec3 = [base[0], base[1] + height, base[2]];
+  const vertices: number[] = [];
+  for (let corner = 0; corner < sides; corner++) {
+    const a = rim(corner);
+    const b = rim(corner + 1);
+    vertices.push(...triangle(a, b, tip, [(a[0] + b[0]) / 2 - base[0], 0, (a[2] + b[2]) / 2 - base[2]], color, 0));
+  }
+  return vertices;
+}
+
+// An upright polygon column (water tanks), its side faces and a top.
+export function column(base: Vec3, radius: number, height: number, sides: number, color: Vec3): number[] {
+  const at = (corner: number, y: number): Vec3 => {
+    const angle = (2 * Math.PI * corner) / sides;
+    return [base[0] + Math.cos(angle) * radius, y, base[2] + Math.sin(angle) * radius];
+  };
+  const top = base[1] + height;
+  const vertices: number[] = [];
+  for (let corner = 0; corner < sides; corner++) {
+    const middle = (2 * Math.PI * (corner + 0.5)) / sides;
+    const corners = [at(corner, base[1]), at(corner + 1, base[1]), at(corner + 1, top), at(corner, top)] as const;
+    vertices.push(...quad(corners, [Math.cos(middle), 0, Math.sin(middle)], color));
+    vertices.push(...triangle([base[0], top, base[2]], at(corner, top), at(corner + 1, top), [0, 1, 0], color, 0));
   }
   return vertices;
 }
@@ -81,7 +171,7 @@ export function gableRoof(x0: number, z0: number, x1: number, z1: number, bottom
   ];
   const vertices: number[] = [];
   for (const [a, b, c, normal] of triangles) {
-    for (const corner of [a, b, c]) vertices.push(...corner, ...color, ...normal, 0, NO_ID, MATERIAL.default);
+    for (const corner of [a, b, c]) vertices.push(...corner, ...color, ...normal, 0, NO_ID, MATERIAL.default, ...NO_FACADE);
   }
   return vertices;
 }
@@ -133,7 +223,7 @@ export function pixelArt(
       const v0 = top - (r + 1) * pixel;
       const v1 = top - r * pixel;
       const corners = [position(u0, v0, offset), position(u1, v0, offset), position(u1, v1, offset), position(u0, v1, offset)];
-      for (const i of [0, 1, 2, 0, 2, 3]) vertices.push(...corners[i], ...color, ...facing, emission, NO_ID, MATERIAL.default);
+      for (const i of [0, 1, 2, 0, 2, 3]) vertices.push(...corners[i], ...color, ...facing, emission, NO_ID, MATERIAL.default, ...NO_FACADE);
     }
   });
   return vertices;
@@ -174,7 +264,7 @@ export function disc(
     along(centre, [right, Math.cos(angle(corner)) * radius], [up, Math.sin(angle(corner)) * radius], [facing, offset]);
   const vertices: number[] = [];
   const triangle = (a: Vec3, b: Vec3, c: Vec3, normal: Vec3) => {
-    for (const point of [a, b, c]) vertices.push(...point, ...color, ...normal, emission, NO_ID, MATERIAL.default);
+    for (const point of [a, b, c]) vertices.push(...point, ...color, ...normal, emission, NO_ID, MATERIAL.default, ...NO_FACADE);
   };
   for (let corner = 0; corner < sides; corner++) {
     triangle(along(centre, [facing, half]), rim(corner, half), rim(corner + 1, half), facing);
@@ -196,7 +286,7 @@ export function flatDisc(centre: Vec3, radius: number, sides: number, color: Vec
   const vertices: number[] = [];
   for (let corner = 0; corner < sides; corner++) {
     for (const point of [centre, rim(corner), rim(corner + 1)]) {
-      vertices.push(...point, ...color, 0, 1, 0, emission, NO_ID, MATERIAL.default);
+      vertices.push(...point, ...color, 0, 1, 0, emission, NO_ID, MATERIAL.default, ...NO_FACADE);
     }
   }
   return vertices;
@@ -222,7 +312,7 @@ export function beam(from: Vec3, to: Vec3, thickness: number, color: Vec3, emiss
   ];
   const vertices: number[] = [];
   for (const [a, b, c, d, normal] of faces) {
-    for (const point of [a, b, c, a, c, d]) vertices.push(...point, ...color, ...normal, emission, NO_ID, MATERIAL.default);
+    for (const point of [a, b, c, a, c, d]) vertices.push(...point, ...color, ...normal, emission, NO_ID, MATERIAL.default, ...NO_FACADE);
   }
   return vertices;
 }

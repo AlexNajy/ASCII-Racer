@@ -1,20 +1,42 @@
 import { blockSeed, createRandom } from '../math/random.ts';
-import { Zone, type City, type CitySettings, type Rect, type WallPiece } from './city.ts';
+import { subtract, Zone, type Block, type City, type CitySettings, type Rect, type WallPiece } from './city.ts';
+
+export type BuildingKind = 'shop' | 'midRise' | 'tower' | 'mall' | 'supermarket' | 'house' | 'garage' | 'wall';
 
 export interface Building {
+  kind: BuildingKind;
   rect: Rect;
   base: number; // m, a raised ground floor (house steps)
   floors: number;
   floorHeight: number; // m
   height: number; // base + floors × floorHeight
-  part?: 'house' | 'garage'; // only on houses blocks
-  entrance?: Side; // the street a house's lot opens to
+  merged?: boolean; // made of several lots
+  entrance?: Side; // the street a house's lot opens to, the car park a supermarket opens to
   door?: Side; // garages only: the wall the door is on
+  garage?: Rect; // houses only: the garage against it, so the front door can keep clear
   driveway?: Rect; // houses without a garage: a dead-end driveway
-  streets?: Side[]; // block buildings: the sides on the block's street edge, so 2 is a corner
+  streets: Side[]; // the sides on the block's street edge, so 2 is a corner
+  avenues: Side[]; // the ones of `streets` that face an avenue
+  zone?: Zone; // block buildings only
+  neighbourhood: number; // 0 to 1, shared by nearby blocks, so styles and colours cluster
 }
 
 export type Side = 'minX' | 'maxX' | 'minZ' | 'maxZ';
+
+// Ground without a building, kept as data so models know what to put there.
+export type OpenUse = 'yard' | 'parking' | 'seating' | 'plaza' | 'park' | 'alley';
+
+export interface OpenLot {
+  use: OpenUse;
+  rect: Rect;
+  entrance?: Side; // car parks: the side cars come in from, so no bays go there
+}
+
+// What a filler or block puts on its ground.
+export interface Layout {
+  buildings: Building[];
+  open: OpenLot[];
+}
 
 // One floor height is picked from the list per building. Floors are whole, both ends included.
 interface FloorPlan {
@@ -28,7 +50,17 @@ interface Range {
   max: number;
 }
 
-type BlockBuilder = (rect: Rect, random: () => number, settings: CitySettings) => Building[];
+// Builders give everything but what depends on the block around them; generateBuildings fills that in.
+type Placed = Omit<Building, 'streets' | 'avenues' | 'neighbourhood'>;
+
+interface PlacedLayout {
+  buildings: Placed[];
+  open: OpenLot[];
+}
+
+// Fills one lot. Zones are made of these, so they can mix.
+type Filler = (lot: Rect, random: () => number, settings: CitySettings) => PlacedLayout;
+type BlockBuilder = Filler;
 
 export const SETBACK = 3;
 const EDGE_TOLERANCE = 1e-6; // m, lot edges come from sums that can miss the block edge by rounding
@@ -37,7 +69,10 @@ const SHOP: FloorPlan = { floorHeights: [6, 7, 8], floors: { min: 1, max: 2 } };
 const MERGED_SHOP: FloorPlan = { ...SHOP, floors: { min: 1, max: 3 } };
 const STRIP_MALL_SHOP: FloorPlan = { ...SHOP, floors: { min: 1, max: 1 } };
 const MID_RISE: FloorPlan = { floorHeights: [3, 3.5], floors: { min: 5, max: 10 } };
-const TOWER: FloorPlan = { floorHeights: [3.5, 4], floors: { min: 15, max: 30 } };
+const MERGED_MID_RISE: FloorPlan = { ...MID_RISE, floors: { min: 8, max: 14 } };
+const TOWER: FloorPlan = { floorHeights: [3.5, 4], floors: { min: 15, max: 40 } };
+const BIG_TOWER: FloorPlan = { ...TOWER, floors: { min: 12, max: 26 } };
+const MALL: FloorPlan = { floorHeights: [6, 7], floors: { min: 2, max: 3 } };
 const HOUSE: FloorPlan = { floorHeights: [3.4, 3.7, 4], floors: { min: 1, max: 1 }, base: { min: 0.5, max: 1.2 } };
 const TWO_STOREY_HOUSE: FloorPlan = { ...HOUSE, floors: { min: 2, max: 2 } };
 const HOUSE_TWO_STOREY_CHANCE = 0.15;
@@ -46,6 +81,8 @@ const SUPERMARKET: FloorPlan = { floorHeights: [6, 7, 8], floors: { min: 1, max:
 const WALL: FloorPlan = { floorHeights: [3, 3.5], floors: { min: 3, max: 10 } };
 const NARROW_WALL: FloorPlan = { floorHeights: [3, 3.5], floors: { min: 5, max: 9 } };
 const TOWER_SIZE: Range = { min: 0.5, max: 0.7 }; // fraction of the block's width and depth
+const FILLER_TOWER_SIZE: Range = { min: 0.8, max: 1 }; // fraction of a quarter of the block
+const WIDE_SIDEWALK = 5; // m, around one big building
 const HOUSE_SIZE: Range = { min: 10, max: 13 };
 const WIDE_HOUSE_CHANCE = 0.5;
 const WIDE_HOUSE_LENGTH: Range = { min: 16, max: 20 };
@@ -63,7 +100,7 @@ function between(range: Range, random: () => number): number {
   return range.min + random() * (range.max - range.min);
 }
 
-type Storeys = Omit<Building, 'rect'>;
+type Storeys = Pick<Building, 'base' | 'floors' | 'floorHeight' | 'height'>;
 
 function storeys(plan: FloorPlan, random: () => number): Storeys {
   const floorHeight = plan.floorHeights[Math.floor(random() * plan.floorHeights.length)];
@@ -114,11 +151,57 @@ function alleyGaps(chance: number, random: () => number): [number, number] {
   return [northSouth ? ALLEY_WIDTH : 0, eastWest ? ALLEY_WIDTH : 0];
 }
 
-const midRise: BlockBuilder = (rect, random, settings) =>
-  split(rect, 2, 2, ...alleyGaps(settings.midDensityAlleyChance, random)).map((lot) => ({
-    rect: lot,
-    ...storeys(MID_RISE, random),
-  }));
+// The strips between the lots of a 2×2 split, for alleys.
+function alleys(rect: Rect, [columnGap, rowGap]: [number, number]): OpenLot[] {
+  const x = (rect.minX + rect.maxX) / 2;
+  const z = (rect.minZ + rect.maxZ) / 2;
+  const open: OpenLot[] = [];
+  if (columnGap > 0) open.push({ use: 'alley', rect: { ...rect, minX: x - columnGap / 2, maxX: x + columnGap / 2 } });
+  if (rowGap > 0) open.push({ use: 'alley', rect: { ...rect, minZ: z - rowGap / 2, maxZ: z + rowGap / 2 } });
+  return open;
+}
+
+// Neighbours in a 2×2 split, in the order they are checked: north, south, west and east pairs.
+const MID_RISE_PAIRS = [
+  [0, 1, 'x'],
+  [2, 3, 'x'],
+  [0, 2, 'z'],
+  [1, 3, 'z'],
+] as const;
+
+// Four mid-rises. Neighbours with no alley between them can merge into one taller building; each lot joins at most one.
+const midRises: BlockBuilder = (rect, random, settings) => {
+  const gaps = alleyGaps(settings.midDensityAlleyChance, random);
+  const lots = split(rect, 2, 2, ...gaps);
+  const lotStoreys = lots.map(() => storeys(MID_RISE, random));
+  const used = lots.map(() => false);
+  const buildings: Placed[] = [];
+  for (const [first, second, axis] of MID_RISE_PAIRS) {
+    const merge = random() < settings.midDensityMergeChance;
+    const mergedStoreys = storeys(MERGED_MID_RISE, random);
+    const touching = (axis === 'x' ? gaps[0] : gaps[1]) === 0;
+    if (!merge || !touching || used[first] || used[second]) continue;
+    used[first] = used[second] = true;
+    buildings.push({ kind: 'midRise', rect: union([lots[first], lots[second]]), merged: true, ...mergedStoreys });
+  }
+  lots.forEach((lot, index) => {
+    if (!used[index]) buildings.push({ kind: 'midRise', rect: lot, ...lotStoreys[index] });
+  });
+  return { buildings, open: alleys(rect, gaps) };
+};
+
+const midRise: Filler = (lot, random) => ({ buildings: [{ kind: 'midRise', rect: lot, ...storeys(MID_RISE, random) }], open: [] });
+
+const mall: Filler = (lot, random) => ({ buildings: [{ kind: 'mall', rect: lot, ...storeys(MALL, random) }], open: [] });
+
+// Two touching low-rises along the lot's longer side.
+const lowRises: Filler = (lot, random) => {
+  const alongX = lot.maxX - lot.minX >= lot.maxZ - lot.minZ;
+  const pieces = split(lot, alongX ? 2 : 1, alongX ? 1 : 2, 0, 0);
+  return { buildings: pieces.map((rect) => ({ kind: 'shop' as const, rect, ...storeys(SHOP, random) })), open: [] };
+};
+
+const seating: Filler = (lot) => ({ buildings: [], open: [{ use: 'seating', rect: lot }] });
 
 // Lot indices of the 3×3 grid along each side of the block, corner to corner.
 const SHOP_SIDES = [
@@ -153,7 +236,7 @@ const shops: BlockBuilder = (rect, random, settings) => {
   const shopPlan = stripMall ? STRIP_MALL_SHOP : SHOP;
   const lotStoreys = lots.map(() => storeys(shopPlan, random));
   const used = lots.map(() => false);
-  const result: Building[] = [];
+  const result: Placed[] = [];
   for (const [first, middle, last] of SHOP_SIDES) {
     const joinFirst = random() < settings.lowDensityMergeChance;
     const joinLast = random() < settings.lowDensityMergeChance;
@@ -163,22 +246,97 @@ const shops: BlockBuilder = (rect, random, settings) => {
     if (joinFirst && filled[first] && !used[first]) group.push(first);
     if (joinLast && filled[last] && !used[last]) group.push(last);
     group.forEach((index) => (used[index] = true));
-    result.push({ rect: union(group.map((index) => lots[index])), ...(group.length > 1 ? mergedStoreys : lotStoreys[middle]) });
+    const merged = group.length > 1;
+    result.push({ kind: 'shop', rect: union(group.map((index) => lots[index])), merged, ...(merged ? mergedStoreys : lotStoreys[middle]) });
   }
   for (const corner of SHOP_CORNERS) {
-    if (filled[corner] && !used[corner]) result.push({ rect: lots[corner], ...lotStoreys[corner] });
+    if (filled[corner] && !used[corner]) result.push({ kind: 'shop', rect: lots[corner], ...lotStoreys[corner] });
   }
-  return result;
+  // The back yard is walled in; the other empty lots are small car parks.
+  const open = lots.flatMap((rect, index): OpenLot[] => {
+    if (index === 4) return [{ use: 'yard', rect }];
+    return filled[index] ? [] : [{ use: 'parking', rect }];
+  });
+  return { buildings: result, open };
 };
 
-// One tower at a random size and position inside the block.
-const tower: BlockBuilder = (rect, random) => {
-  const width = (rect.maxX - rect.minX) * between(TOWER_SIZE, random);
-  const depth = (rect.maxZ - rect.minZ) * between(TOWER_SIZE, random);
+// A rectangle of the given size at a random spot inside `rect`.
+function placedIn(rect: Rect, width: number, depth: number, random: () => number): Rect {
   const minX = rect.minX + random() * (rect.maxX - rect.minX - width);
   const minZ = rect.minZ + random() * (rect.maxZ - rect.minZ - depth);
-  return [{ rect: { minX, minZ, maxX: minX + width, maxZ: minZ + depth }, ...storeys(TOWER, random) }];
+  return { minX, minZ, maxX: minX + width, maxZ: minZ + depth };
+}
+
+// A tower `size` of the lot's width and depth at a random spot in it; what is left around it is for seating.
+function towerIn(lot: Rect, size: Range, random: () => number): PlacedLayout {
+  const width = (lot.maxX - lot.minX) * between(size, random);
+  const depth = (lot.maxZ - lot.minZ) * between(size, random);
+  const rect = placedIn(lot, width, depth, random);
+  return { buildings: [{ kind: 'tower', rect, ...storeys(TOWER, random) }], open: subtract(lot, [rect]).map((r) => ({ use: 'seating', rect: r })) };
+}
+
+const combine = (layouts: PlacedLayout[]): PlacedLayout => ({
+  buildings: layouts.flatMap(({ buildings }) => buildings),
+  open: layouts.flatMap(({ open }) => open),
+});
+
+// Weighted: picks an item by its share of the total weight.
+function weighted<T>(items: readonly (readonly [number, T])[], roll: number): T {
+  let left = roll * items.reduce((sum, [weight]) => sum + weight, 0);
+  for (const [weight, item] of items) {
+    left -= weight;
+    if (left < 0) return item;
+  }
+  return items[items.length - 1][1];
+}
+
+const singleTower: BlockBuilder = (rect, random) => towerIn(rect, TOWER_SIZE, random);
+
+// One big building with wide sidewalks all round.
+const bigTower: BlockBuilder = (rect, random) => {
+  const footprint = inset(rect, WIDE_SIDEWALK);
+  return {
+    buildings: [{ kind: 'tower', rect: footprint, ...storeys(BIG_TOWER, random) }],
+    open: subtract(rect, [footprint]).map((r) => ({ use: 'seating', rect: r })),
+  };
 };
+
+const TOWER_NEIGHBOURS: readonly (readonly [number, Filler])[] = [
+  [3, mall],
+  [3, midRise],
+  [3, lowRises],
+  [2, seating],
+];
+
+// A tower on one quarter of the block, a filler each on the other three.
+const towerAndFillers: BlockBuilder = (rect, random, settings) => {
+  const gaps = alleyGaps(settings.midDensityAlleyChance, random);
+  const quarters = split(rect, 2, 2, ...gaps);
+  const towerQuarter = Math.floor(random() * quarters.length);
+  const layouts = quarters.map((quarter, index) => {
+    const filler = weighted(TOWER_NEIGHBOURS, random());
+    return index === towerQuarter ? towerIn(quarter, FILLER_TOWER_SIZE, random) : filler(quarter, random, settings);
+  });
+  return combine([...layouts, { buildings: [], open: alleys(rect, gaps) }]);
+};
+
+// Two towers on opposite corners with an alley between them, seating on the other two.
+const twoTowers: BlockBuilder = (rect, random) => {
+  const gaps: [number, number] = [ALLEY_WIDTH, ALLEY_WIDTH];
+  const quarters = split(rect, 2, 2, ...gaps);
+  const [first, second, ...others] = random() < 0.5 ? [0, 3, 1, 2] : [1, 2, 0, 3];
+  const open: OpenLot[] = [...others.map((index) => ({ use: 'seating' as const, rect: quarters[index] })), ...alleys(rect, gaps)];
+  return combine([towerIn(quarters[first], FILLER_TOWER_SIZE, random), towerIn(quarters[second], FILLER_TOWER_SIZE, random), { buildings: [], open }]);
+};
+
+const HIGH_RISE_LAYOUTS: readonly (readonly [number, BlockBuilder])[] = [
+  [2, singleTower],
+  [2, bigTower],
+  [4, towerAndFillers],
+  [3, twoTowers],
+];
+
+const highRise: BlockBuilder = (rect, random, settings) => weighted(HIGH_RISE_LAYOUTS, random())(rect, random, settings);
 
 // Neighbouring houses either side of a block centre line, and the street a big house of them faces:
 // north, south, west and east pairs.
@@ -314,10 +472,10 @@ const houses: BlockBuilder = (rect, random, settings) => {
     }
   }
   const used = homes.map(() => false);
-  const result: Building[] = [];
+  const result: Placed[] = [];
   const addHome = ({ house, entrance, storeys, garage, garageDoor, deadEnd, garageStoreys }: Omit<Home, 'core'>) => {
-    result.push({ rect: house, part: 'house', entrance, driveway: deadEnd, ...storeys });
-    if (garage) result.push({ rect: garage, part: 'garage', entrance, door: garageDoor, ...garageStoreys });
+    result.push({ kind: 'house', rect: house, entrance, driveway: deadEnd, garage, ...storeys });
+    if (garage) result.push({ kind: 'garage', rect: garage, entrance, door: garageDoor, ...garageStoreys });
   };
   for (const [first, second, front] of HOUSE_PAIRS) {
     const bigHouse = random() < settings.housesBigHouseChance;
@@ -356,7 +514,7 @@ const houses: BlockBuilder = (rect, random, settings) => {
   homes.forEach((home, index) => {
     if (!used[index]) addHome(home);
   });
-  return result;
+  return { buildings: result, open: [] };
 };
 
 // The store fills the half of the block away from a random street, the other half is its car park.
@@ -369,20 +527,36 @@ const supermarket: BlockBuilder = (rect, random) => {
     { ...rect, maxX: midX },
     { ...rect, minX: midX },
   ];
-  return [{ rect: halves[Math.floor(random() * halves.length)], ...storeys(SUPERMARKET, random) }];
+  const store = Math.floor(random() * halves.length);
+  // Opposite halves are neighbours in the list. The car park opens away from the store, where the sidewalk has its gap.
+  const OTHER_HALF = [1, 0, 3, 2];
+  const ENTRANCES: Side[] = ['maxZ', 'minZ', 'maxX', 'minX'];
+  return {
+    buildings: [{ kind: 'supermarket', rect: halves[store], entrance: ENTRANCES[store], ...storeys(SUPERMARKET, random) }],
+    open: [{ use: 'parking', rect: halves[OTHER_HALF[store]], entrance: ENTRANCES[store] }],
+  };
 };
 
-const noBuildings: BlockBuilder = () => [];
+const openGround = (use: OpenUse): BlockBuilder => (rect) => ({ buildings: [], open: [{ use, rect }] });
+
+// The side of a car park block that faces the city centre.
+export function centreFacingSide(rect: Rect): Side {
+  const x = (rect.minX + rect.maxX) / 2;
+  const z = (rect.minZ + rect.maxZ) / 2;
+  return Math.abs(x) > Math.abs(z) ? (x > 0 ? 'minX' : 'maxX') : z > 0 ? 'minZ' : 'maxZ';
+}
+
+const carPark: BlockBuilder = (rect) => ({ buildings: [], open: [{ use: 'parking', rect, entrance: centreFacingSide(rect) }] });
 
 const BUILDERS: Record<Zone, BlockBuilder> = {
   [Zone.LowDensity]: shops,
-  [Zone.MidDensity]: midRise,
-  [Zone.HighRise]: tower,
+  [Zone.MidDensity]: midRises,
+  [Zone.HighRise]: highRise,
   [Zone.Houses]: houses,
-  [Zone.Park]: noBuildings,
+  [Zone.Park]: openGround('park'),
   [Zone.Supermarket]: supermarket,
-  [Zone.ParkingLot]: noBuildings,
-  [Zone.Plaza]: noBuildings,
+  [Zone.ParkingLot]: carPark,
+  [Zone.Plaza]: openGround('plaza'),
 };
 
 // The side facing into the city. Only for side pieces: a corner piece is outside two sides of the bounds.
@@ -396,7 +570,7 @@ function wallStreet(rect: Rect, bounds: Rect): Side {
 // Corner pieces sit behind the ends of two sides and only touch the pavement at a point, so they face no street.
 function wallBuilding({ rect, kind }: WallPiece, random: () => number, bounds: Rect): Building {
   const streets = kind === 'corner' ? [] : [wallStreet(rect, bounds)];
-  return { rect, ...storeys(kind === 'narrow' ? NARROW_WALL : WALL, random), streets };
+  return { kind: 'wall', rect, ...storeys(kind === 'narrow' ? NARROW_WALL : WALL, random), streets, avenues: [], neighbourhood: random() };
 }
 
 const SIDES: Side[] = ['minX', 'maxX', 'minZ', 'maxZ'];
@@ -420,22 +594,54 @@ function floorScales(settings: CitySettings): Record<Zone, number> {
 }
 
 // Floors stay whole, at least 1.
-function scaled(building: Building, floorScale: number, ceilingScale: number): Building {
+function scaled<T extends Storeys>(building: T, floorScale: number, ceilingScale: number): T {
   const floors = Math.max(1, Math.round(building.floors * floorScale));
   const floorHeight = building.floorHeight * ceilingScale;
   return { ...building, floors, floorHeight, height: building.base + floors * floorHeight };
 }
 
+const NEIGHBOURHOOD_BLOCKS = 3; // blocks per side of a neighbourhood
+const NEIGHBOURHOOD_SEED = 1 << 20; // above any block index
+
+// Blocks in the same square of the grid share a value.
+function neighbourhood(block: Block, seed: number): number {
+  const x = Math.floor(block.column / NEIGHBOURHOOD_BLOCKS);
+  const z = Math.floor(block.row / NEIGHBOURHOOD_BLOCKS);
+  return createRandom(blockSeed(seed, NEIGHBOURHOOD_SEED + z * 256 + x))();
+}
+
+// A block's sides lie along the road lines west and east of its column, north and south of its row.
+function avenueSides({ column, row }: Block, { avenues }: City): Side[] {
+  const sides: [Side, boolean][] = [
+    ['minX', avenues.columns.has(column)],
+    ['maxX', avenues.columns.has(column + 1)],
+    ['minZ', avenues.rows.has(row)],
+    ['maxZ', avenues.rows.has(row + 1)],
+  ];
+  return sides.flatMap(([side, avenue]) => (avenue ? [side] : []));
+}
+
 // Scaled after generation, so a multiplier doesn't change the random calls or the layout.
-export function generateBuildings(city: City, settings: CitySettings): Building[] {
+export function generateBuildings(city: City, settings: CitySettings): Layout {
   const { seed } = settings;
   const scales = floorScales(settings);
-  const blockBuildings = city.blocks.flatMap((block, index) => {
+  const blocks = city.blocks.map((block, index) => {
     const lots = inset(block.rect, SETBACK);
-    return BUILDERS[block.zone](lots, createRandom(blockSeed(seed, index)), settings).map((building) => ({
-      ...scaled(building, scales[block.zone], settings.ceilingHeight),
-      streets: streetSides(building.rect, lots),
-    }));
+    const { buildings, open } = BUILDERS[block.zone](lots, createRandom(blockSeed(seed, index)), settings);
+    const blockAvenues = avenueSides(block, city);
+    return {
+      open,
+      buildings: buildings.map((building) => {
+        const streets = streetSides(building.rect, lots);
+        return {
+          ...scaled(building, scales[block.zone], settings.ceilingHeight),
+          streets,
+          avenues: streets.filter((side) => blockAvenues.includes(side)),
+          zone: block.zone,
+          neighbourhood: neighbourhood(block, seed),
+        };
+      }),
+    };
   });
   // Seeds after the block and wall side seeds used in city.ts.
   const wallSeedStart = city.blocks.length + 4;
@@ -451,5 +657,8 @@ export function generateBuildings(city: City, settings: CitySettings): Building[
           ),
         ],
   );
-  return [...blockBuildings, ...wallBuildings];
+  return {
+    buildings: [...blocks.flatMap(({ buildings }) => buildings), ...wallBuildings],
+    open: blocks.flatMap(({ open }) => open),
+  };
 }
