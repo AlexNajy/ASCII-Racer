@@ -44,7 +44,7 @@ import { carVertices } from './render/models/car.ts';
 import { DEFAULT_SKY_SETTINGS, FLOATS_PER_STAR, starVertices, type SkySettings } from './render/sky.ts';
 import { headlight, HEADLIGHT_SOFT_EDGE } from './render/headlights.ts';
 import { burst, createParticles, FLOATS_PER_PARTICLE, MAX_PARTICLES, particleVertices, updateParticles, type ParticleKind } from './render/particles.ts';
-import { DRIFT_SLIDE_SPEED, rearWheels, slideSpeed } from './render/drift.ts';
+import { DRIFT_SLIDE_SPEED, rearTyreSprays, slideSpeed } from './render/drift.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
@@ -207,16 +207,20 @@ function crashDebris({ speed, normalX, normalZ }: Impact) {
   burst(particles, DEBRIS, contact, [normalX, 0, normalZ], count, speed * DEBRIS_SPEED_SHARE);
 }
 
-const DRIFT_PARTICLES_PER_SLIDE_SPEED = 0.25; // per wheel per tick, per m/s sideways
-const DRIFT_PARTICLE_SPEED_SHARE = 0.6; // particles fly up at up to this share of the slide speed
+const DRIFT_PARTICLES_PER_SLIDE_SPEED = 0.4; // per wheel per tick, per m/s sideways
+const DRIFT_PARTICLE_SPEED_SHARE = 0.6; // particles fly out at up to this share of the slide speed
+// Share of the car's velocity the particles keep. Left standing in the world they fall behind the chase camera
+// within a fraction of a second; carried along, they trail behind the car where it can see them.
+const DRIFT_PARTICLE_CARRY = 0.7;
 
-// Bursts from the bottom of the rear tyres while sliding, like crash debris: more and faster the harder the slide.
+// Bursts from the rear tyres while sliding, like crash debris: more and faster the harder the slide.
 function driftParticles() {
   const slide = slideSpeed(car);
   if (slide <= DRIFT_SLIDE_SPEED) return;
   const count = Math.max(1, Math.round(slide * DRIFT_PARTICLES_PER_SLIDE_SPEED));
-  for (const [x, z] of rearWheels(car)) {
-    burst(particles, DRIFT_SPARKS, [x, 0, z], [0, 1, 0], count, slide * DRIFT_PARTICLE_SPEED_SHARE);
+  const carried: Vec3 = [car.velocityX * DRIFT_PARTICLE_CARRY, 0, car.velocityZ * DRIFT_PARTICLE_CARRY];
+  for (const { position, direction } of rearTyreSprays(car)) {
+    burst(particles, DRIFT_SPARKS, position, direction, count, slide * DRIFT_PARTICLE_SPEED_SHARE, carried);
   }
 }
 
