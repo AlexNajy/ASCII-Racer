@@ -152,8 +152,15 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
 // Round ends glance off corners instead of catching on them.
 const COLLISION_CIRCLES = 3;
 
+// How hard the car hit something this tick: the speed it had into the wall, and the wall's outward direction.
+export interface Impact {
+  speed: number; // m/s
+  normalX: number;
+  normalZ: number;
+}
+
 // A car can't drive over anything solid, however low, so `top` is ignored.
-export function collideCar(car: Car, colliders: Collider[], settings: CarSettings): void {
+export function collideCar(car: Car, colliders: Collider[], settings: CarSettings): Impact | null {
   const startX = car.x;
   const startZ = car.z;
   const radius = CAR_WIDTH / 2;
@@ -174,12 +181,13 @@ export function collideCar(car: Car, colliders: Collider[], settings: CarSetting
   const pushX = car.x - startX;
   const pushZ = car.z - startZ;
   const push = hypot(pushX, pushZ);
-  if (push === 0) return;
+  if (push === 0) return null;
   const normalX = pushX / push;
   const normalZ = pushZ / push;
   const into = car.velocityX * normalX + car.velocityZ * normalZ; // negative when moving into the wall
-  if (into >= 0) return;
+  if (into >= 0) return null;
   // Remove the speed into the wall and send some of it back; the speed along the wall is kept, so the car scrapes along.
   car.velocityX -= (1 + settings.wallBounce) * into * normalX;
   car.velocityZ -= (1 + settings.wallBounce) * into * normalZ;
+  return { speed: -into, normalX, normalZ };
 }

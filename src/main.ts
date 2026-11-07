@@ -1,7 +1,7 @@
 import './style.css';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
-import { blendCars, collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings } from './game/car.ts';
+import { blendCars, CAR_WIDTH, collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings, type Impact } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import {
@@ -43,6 +43,7 @@ import { trafficLightVertices } from './render/models/street/trafficLight.ts';
 import { carVertices } from './render/models/car.ts';
 import { DEFAULT_SKY_SETTINGS, FLOATS_PER_STAR, starVertices, type SkySettings } from './render/sky.ts';
 import { headlight, HEADLIGHT_SOFT_EDGE } from './render/headlights.ts';
+import { burst, createParticles, FLOATS_PER_PARTICLE, MAX_PARTICLES, particleVertices, updateParticles } from './render/particles.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
@@ -50,6 +51,8 @@ import asciiFragmentSource from './shaders/ascii.frag.glsl?raw';
 import crtFragmentSource from './shaders/crt.frag.glsl?raw';
 import skyVertexSource from './shaders/sky.vert.glsl?raw';
 import skyFragmentSource from './shaders/sky.frag.glsl?raw';
+import particleVertexSource from './shaders/particle.vert.glsl?raw';
+import particleFragmentSource from './shaders/particle.frag.glsl?raw';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const gl = canvas.getContext('webgl2', { antialias: false });
@@ -157,6 +160,43 @@ function uploadStars() {
   gl!.bufferData(gl!.ARRAY_BUFFER, new Float32Array(stars), gl!.STATIC_DRAW);
 }
 uploadStars();
+
+const particleProgram = createProgram(gl, particleVertexSource, particleFragmentSource);
+const particleViewLocation = gl.getUniformLocation(particleProgram, 'u_view');
+const particleProjectionLocation = gl.getUniformLocation(particleProgram, 'u_projection');
+const particleMaterialLocation = gl.getUniformLocation(particleProgram, 'u_material');
+const particleFogColorLocation = gl.getUniformLocation(particleProgram, 'u_fogColor');
+const particleFogStartLocation = gl.getUniformLocation(particleProgram, 'u_fogStart');
+const particleFogEndLocation = gl.getUniformLocation(particleProgram, 'u_fogEnd');
+const particles = createParticles();
+// Sized once for the most particles there can be; each frame only overwrites the part in use.
+const particleBuffer = gl.createBuffer();
+const particleVao = gl.createVertexArray();
+gl.bindVertexArray(particleVao);
+gl.bindBuffer(gl.ARRAY_BUFFER, particleBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, MAX_PARTICLES * FLOATS_PER_PARTICLE * 4, gl.DYNAMIC_DRAW);
+const particlePositionLocation = gl.getAttribLocation(particleProgram, 'a_position');
+const particleColorLocation = gl.getAttribLocation(particleProgram, 'a_color');
+gl.enableVertexAttribArray(particlePositionLocation);
+gl.vertexAttribPointer(particlePositionLocation, 3, gl.FLOAT, false, FLOATS_PER_PARTICLE * 4, 0);
+gl.enableVertexAttribArray(particleColorLocation);
+gl.vertexAttribPointer(particleColorLocation, 3, gl.FLOAT, false, FLOATS_PER_PARTICLE * 4, 3 * 4);
+gl.bindVertexArray(null);
+const DEBRIS_COLOR: Vec3 = [1, 0.9, 0.7];
+const DEBRIS_MIN_SPEED = 3; // m/s into a wall, softer bumps throw nothing
+const DEBRIS_PER_SPEED = 6; // particles per m/s into the wall
+const DEBRIS_SPEED_SHARE = 0.5; // debris flies off at up to this share of the impact speed
+const DEBRIS_SPREAD = 0.8;
+const DEBRIS_LIFE = 1.5; // s
+const DEBRIS_HEIGHT = 0.7; // m, about the bumper
+
+// Debris flies back off the wall from where the car touched it, more and faster the harder it hit.
+function crashDebris({ speed, normalX, normalZ }: Impact) {
+  if (speed < DEBRIS_MIN_SPEED) return;
+  const contact: Vec3 = [car.x - normalX * (CAR_WIDTH / 2), DEBRIS_HEIGHT, car.z - normalZ * (CAR_WIDTH / 2)];
+  const count = Math.round(speed * DEBRIS_PER_SPEED);
+  burst(particles, contact, [normalX, 0, normalZ], count, speed * DEBRIS_SPEED_SHARE, DEBRIS_SPREAD, DEBRIS_COLOR, DEBRIS_LIFE);
+}
 
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
   return box([rect.minX, bottom, rect.minZ], [rect.maxX, top, rect.maxZ], color);
@@ -456,8 +496,10 @@ function frame(timeMs: number) {
     previousCar = { ...car };
     carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
     stepCar(car, carInput, carSettings);
-    collideCar(car, world.colliders, carSettings);
+    const impact = collideCar(car, world.colliders, carSettings);
+    if (impact) crashDebris(impact);
   });
+  updateParticles(particles, dt);
   // Drawn between the last two ticks by the time left over, so motion is smooth on any refresh rate.
   const drawnCar = blendCars(previousCar, car, clock.leftover / TICK_SECONDS);
   let fovBoost = 0;
@@ -532,6 +574,21 @@ function frame(timeMs: number) {
 
   for (const mesh of world.meshes) draw(mesh, gl!.TRIANGLES, view);
   draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
+
+  const particleCount = particleVertices(particles);
+  if (particleCount > 0) {
+    gl!.useProgram(particleProgram);
+    gl!.uniformMatrix4fv(particleViewLocation, false, view);
+    gl!.uniformMatrix4fv(particleProjectionLocation, false, projection);
+    gl!.uniform1f(particleMaterialLocation, MATERIAL.debris);
+    gl!.uniform3fv(particleFogColorLocation, background);
+    gl!.uniform1f(particleFogStartLocation, settings.fogStart);
+    gl!.uniform1f(particleFogEndLocation, settings.viewDistance);
+    gl!.bindBuffer(gl!.ARRAY_BUFFER, particleBuffer);
+    gl!.bufferSubData(gl!.ARRAY_BUFFER, 0, particles.vertices, 0, particleCount * FLOATS_PER_PARTICLE);
+    gl!.bindVertexArray(particleVao);
+    gl!.drawArrays(gl!.POINTS, 0, particleCount);
+  }
   if (fullResolution) return;
 
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, crtImage ? crtImage.framebuffer : null);
