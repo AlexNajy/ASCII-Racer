@@ -3,17 +3,27 @@ import type { Vec3 } from '../math/mat4.ts';
 
 // Visual only: stepped with the frame time, not the simulation tick, so they don't need to be deterministic.
 export const MAX_PARTICLES = 2000;
-export const FLOATS_PER_PARTICLE = 6; // x, y, z, r, g, b
+export const FLOATS_PER_PARTICLE = 7; // x, y, z, r, g, b, material
 
 const GRAVITY = 9.8; // m/s²
 const GROUND_BOUNCE = 0.3; // share of the downward speed kept on hitting the ground
 const GROUND_FRICTION = 0.6; // share of the sideways speed kept on hitting the ground
 const UPWARD_KICK = 0.5; // share of a burst's speed added upwards at most, so bursts arc instead of skimming
 
+// What a burst throws: debris, smoke...
+export interface ParticleKind {
+  color: Vec3;
+  material: number;
+  life: number; // s, on average
+  spread: number; // 0 = all along the burst's direction, 1 = as much sideways as forwards
+  gravity: number; // share of real gravity; negative rises
+  drag: number; // share of the speed lost per second, 0 to 1
+}
+
 interface Particle {
+  kind: ParticleKind;
   position: Vec3;
   velocity: Vec3;
-  color: Vec3;
   age: number; // s
   life: number; // s, removed at this age
 }
@@ -28,20 +38,11 @@ export function createParticles(): Particles {
   return { list: [], vertices: new Float32Array(MAX_PARTICLES * FLOATS_PER_PARTICLE), random: createRandom(1) };
 }
 
-// `count` particles flying out of `position` along `direction` (unit length) at up to `speed` m/s, scattered by
-// `spread` (0 = all along the direction, 1 = as much sideways as forwards), with a kick upwards.
-export function burst(
-  particles: Particles,
-  position: Vec3,
-  direction: Vec3,
-  count: number,
-  speed: number,
-  spread: number,
-  color: Vec3,
-  life: number,
-) {
+// `count` particles flying out of `position` along `direction` (unit length) at up to `speed` m/s, scattered by the
+// kind's spread, with a kick upwards.
+export function burst(particles: Particles, kind: ParticleKind, position: Vec3, direction: Vec3, count: number, speed: number) {
   const { random } = particles;
-  const jitter = () => (2 * random() - 1) * spread;
+  const jitter = () => (2 * random() - 1) * kind.spread;
   for (let i = 0; i < count && particles.list.length < MAX_PARTICLES; i++) {
     const v = speed * (0.3 + 0.7 * random());
     particles.list.push({
@@ -51,9 +52,9 @@ export function burst(
         v * (direction[1] + jitter()) + speed * UPWARD_KICK * random(),
         v * (direction[2] + jitter()),
       ],
-      color,
+      kind,
       age: 0,
-      life: life * (0.5 + random()),
+      life: kind.life * (0.5 + random()),
     });
   }
 }
@@ -69,8 +70,12 @@ export function updateParticles(particles: Particles, dt: number) {
       list.pop();
       continue;
     }
-    p.velocity[1] -= GRAVITY * dt;
-    for (let axis = 0; axis < 3; axis++) p.position[axis] += p.velocity[axis] * dt;
+    p.velocity[1] -= p.kind.gravity * GRAVITY * dt;
+    const keep = Math.max(0, 1 - p.kind.drag * dt);
+    for (let axis = 0; axis < 3; axis++) {
+      p.velocity[axis] *= keep;
+      p.position[axis] += p.velocity[axis] * dt;
+    }
     if (p.position[1] < 0) {
       p.position[1] = 0;
       p.velocity[1] *= -GROUND_BOUNCE;
@@ -86,7 +91,8 @@ export function particleVertices(particles: Particles): number {
   const { list, vertices } = particles;
   list.forEach((p, i) => {
     const fade = 1 - p.age / p.life;
-    vertices.set([...p.position, p.color[0] * fade, p.color[1] * fade, p.color[2] * fade], i * FLOATS_PER_PARTICLE);
+    const [r, g, b] = p.kind.color;
+    vertices.set([...p.position, r * fade, g * fade, b * fade, p.kind.material], i * FLOATS_PER_PARTICLE);
   });
   return list.length;
 }

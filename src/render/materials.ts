@@ -50,6 +50,8 @@ const SETS = {
   awning: { ramp: ' .-~=~=~=~' },
   roofGravel: { ramp: ` .,.:.,.:.`, scatter: { square: 0.6, patch: 5, patchiness: 0.5 } },
   debris: { ramp: ' .,:;+*%##' },
+  smoke: { ramp: ' .:~oOO@@@' },
+  tireMark: { ramp: ' .,:;;====' },
   // Stroke sets, in the order the ASCII pass numbers the directions.
   strokeVertical: { ramp: ' .:!!|||||' },
   strokeBackslash: { ramp: ' .`\\\\\\\\\\\\\\' },

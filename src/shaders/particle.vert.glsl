@@ -2,6 +2,7 @@
 
 in vec3 a_position;
 in vec3 a_color;
+in float a_material;
 
 uniform mat4 u_view;
 uniform mat4 u_projection;
@@ -10,6 +11,7 @@ uniform float u_pointSize; // samples per cell, so each point is exactly one gly
 
 out vec3 v_color;
 out vec3 v_viewPosition;
+flat out float v_material;
 
 // Moves a point to the middle of its character cell, so a point u_supersample samples wide fills exactly one cell.
 vec4 snapToCell(vec4 clip) {
@@ -19,6 +21,7 @@ vec4 snapToCell(vec4 clip) {
 
 void main() {
   v_color = a_color;
+  v_material = a_material;
   vec4 viewPosition = u_view * vec4(a_position, 1.0);
   v_viewPosition = viewPosition.xyz;
   gl_Position = snapToCell(u_projection * viewPosition);
