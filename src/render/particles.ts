@@ -39,16 +39,8 @@ export function createParticles(): Particles {
 }
 
 // `count` particles flying out of `position` along `direction` (unit length) at up to `speed` m/s, scattered by the
-// kind's spread, with a kick upwards, on top of `carried` (m/s): what they keep of whatever threw them.
-export function burst(
-  particles: Particles,
-  kind: ParticleKind,
-  position: Vec3,
-  direction: Vec3,
-  count: number,
-  speed: number,
-  carried: Vec3 = [0, 0, 0],
-) {
+// kind's spread, with a kick upwards.
+export function burst(particles: Particles, kind: ParticleKind, position: Vec3, direction: Vec3, count: number, speed: number) {
   const { random } = particles;
   const jitter = () => (2 * random() - 1) * kind.spread;
   for (let i = 0; i < count && particles.list.length < MAX_PARTICLES; i++) {
@@ -56,9 +48,9 @@ export function burst(
     particles.list.push({
       position: [...position],
       velocity: [
-        carried[0] + v * (direction[0] + jitter()),
-        carried[1] + v * (direction[1] + jitter()) + speed * UPWARD_KICK * random(),
-        carried[2] + v * (direction[2] + jitter()),
+        v * (direction[0] + jitter()),
+        v * (direction[1] + jitter()) + speed * UPWARD_KICK * random(),
+        v * (direction[2] + jitter()),
       ],
       kind,
       age: 0,
