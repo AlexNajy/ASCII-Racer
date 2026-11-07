@@ -1,5 +1,5 @@
 import './style.css';
-import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
+import { createDevMenu, Movement, RenderMode, Weather, type DevSettings } from './dev/menu.ts';
 import { advanceClock, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
 import { blendCars, CAR_WIDTH, collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings, type Impact } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
@@ -381,6 +381,17 @@ const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
 const asciiViewRotationLocation = gl.getUniformLocation(asciiProgram, 'u_viewRotation');
 const strokeMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_strokeMaterials');
 const strokeRowLocation = gl.getUniformLocation(asciiProgram, 'u_strokeRow');
+const weatherLocation = gl.getUniformLocation(asciiProgram, 'u_weather');
+const weatherTimeLocation = gl.getUniformLocation(asciiProgram, 'u_weatherTime');
+const tanHalfFovLocation = gl.getUniformLocation(asciiProgram, 'u_tanHalfFov');
+const cameraHeightLocation = gl.getUniformLocation(asciiProgram, 'u_cameraHeight');
+const carVelocityLocation = gl.getUniformLocation(asciiProgram, 'u_carVelocity');
+const asciiViewDistanceLocation = gl.getUniformLocation(asciiProgram, 'u_viewDistance');
+const weatherRowLocation = gl.getUniformLocation(asciiProgram, 'u_weatherRow');
+const roadMaterialLocation = gl.getUniformLocation(asciiProgram, 'u_roadMaterial');
+const wetRoadRowLocation = gl.getUniformLocation(asciiProgram, 'u_wetRoadRow');
+// The weather clock loops so it stays a small float on the GPU; the drops jump once per loop.
+const WEATHER_LOOP_TICKS = 60 * TICKS_PER_SECOND;
 const fullscreenVao = gl.createVertexArray();
 const resolveProgram = createProgram(gl, fullscreenVertexSource, resolveFragmentSource);
 const resolveSceneLocation = gl.getUniformLocation(resolveProgram, 'u_scene');
@@ -412,6 +423,7 @@ const settings: DevSettings = {
   fogStart: 150,
   renderMode: RenderMode.Glyphs,
   movement: Movement.Car,
+  weather: Weather.None,
   noclip: false,
   ambient: 0.5,
   lightIntensity: 0.4,
@@ -589,7 +601,8 @@ function frame(timeMs: number) {
   gl!.uniform1i(beaconOnLocation, clock.tick % BEACON_CYCLE_TICKS < BEACON_ON_TICKS ? 1 : 0);
   gl!.uniform1i(brakingLocation, carInput.brake > 0 ? 1 : 0);
   const aspect = canvas.width / canvas.height;
-  const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
+  const fovRadians = ((settings.fovDegrees + fovBoost) * Math.PI) / 180;
+  const projection = perspective(fovRadians, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
   gl!.activeTexture(gl!.TEXTURE3);
   updateSignalTexture(gl!, signals, world.offsets.map((offset) => signalPhase(clock.tick, offset)));
@@ -682,6 +695,17 @@ function frame(timeMs: number) {
   gl!.uniform1f(glyphShadeLocation, settings.glyphShade);
   gl!.uniformMatrix3fv(asciiViewRotationLocation, false, [view[0], view[1], view[2], view[4], view[5], view[6], view[8], view[9], view[10]]);
   gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);
+  gl!.uniform1i(weatherLocation, settings.weather);
+  gl!.uniform1f(weatherTimeLocation, ((clock.tick % WEATHER_LOOP_TICKS) + clock.leftover / TICK_SECONDS) / TICKS_PER_SECOND);
+  const tanHalfFov = Math.tan(fovRadians / 2);
+  gl!.uniform2f(tanHalfFovLocation, tanHalfFov * aspect, tanHalfFov);
+  gl!.uniform1f(cameraHeightLocation, camera.position[1]);
+  const driving = settings.movement === Movement.Car;
+  gl!.uniform2f(carVelocityLocation, driving ? drawnCar.velocityX : 0, driving ? drawnCar.velocityZ : 0);
+  gl!.uniform1f(asciiViewDistanceLocation, settings.viewDistance);
+  gl!.uniform1i(weatherRowLocation, MATERIAL.weather - 1);
+  gl!.uniform1i(roadMaterialLocation, MATERIAL.defaultRoad);
+  gl!.uniform1i(wetRoadRowLocation, MATERIAL.wetRoad - 1);
   gl!.bindVertexArray(fullscreenVao);
   gl!.drawArrays(gl!.TRIANGLES, 0, 3);
   if (!crtImage) return;

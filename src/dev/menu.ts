@@ -24,6 +24,13 @@ export const Movement = {
 } as const;
 export type Movement = (typeof Movement)[keyof typeof Movement];
 
+export const Weather = {
+  None: 0,
+  Rain: 1,
+  Snow: 2,
+} as const;
+export type Weather = (typeof Weather)[keyof typeof Weather];
+
 
 export interface DevSettings {
   fovDegrees: number;
@@ -32,6 +39,7 @@ export interface DevSettings {
   fogStart: number; // fog begins here
   renderMode: RenderMode;
   movement: Movement;
+  weather: Weather;
   noclip: boolean; 
   ambient: number; // light every surface gets, from 0 (black) to 1
   lightIntensity: number; // strength of the directional light
@@ -276,7 +284,7 @@ export function createDevMenu(
   skySlider(skyPage, 'Min brightness', 'starMinBrightness', 0, 1, 0.01);
   skySlider(skyPage, 'Brightness power', 'starBrightnessPower', 0.5, 10, 0.1);
 
-  function dropdown<K extends 'renderMode' | 'movement'>(
+  function dropdown<K extends 'renderMode' | 'movement' | 'weather'>(
     parent: HTMLElement,
     label: string,
     key: K,
@@ -306,6 +314,7 @@ export function createDevMenu(
 
   dropdown(viewPage, 'Render mode', 'renderMode', RenderMode);
   const movementSelect = dropdown(viewPage, 'Movement', 'movement', Movement);
+  dropdown(viewPage, 'Weather', 'weather', Weather);
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'KeyC') return;
     settings.movement = settings.movement === Movement.FlyCamera ? Movement.Car : Movement.FlyCamera;

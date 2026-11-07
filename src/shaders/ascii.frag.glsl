@@ -24,6 +24,15 @@ uniform float u_glyphShade;
 uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene, 5 normal texture, 6 CRT scene, 8 screen normals
 // Turns world directions into view space: x right, y up, z towards the camera.
 uniform mat3 u_viewRotation;
+uniform int u_weather; // 0 none, 1 rain, 2 snow
+uniform float u_weatherTime; // s, loops
+uniform vec2 u_tanHalfFov; // tangent of half the field of view, across and up
+uniform float u_cameraHeight; // m
+uniform vec2 u_carVelocity; // m/s, world x and z
+uniform float u_viewDistance; // m, what a distance of 1 in the normals alpha means
+uniform int u_weatherRow; // atlas row with the snow and splash glyphs
+uniform int u_roadMaterial;
+uniform int u_wetRoadRow; // the road's glyphs while it rains
 
 
 out vec4 outColor;
@@ -63,6 +72,9 @@ const float STROKE_MIN_LEAN = 0.3;
 const float STROKE_VERTICAL_RANGE = 20.0;
 const float STROKE_HORIZONTAL_RANGE = 20.0;
 
+int lineDirection(vec2 line);
+float hash(uvec3 v);
+
 // The direction a face's strokes run on screen, along its fall line (straight downhill on the face):
 // 0 |, 1 \, 2 -, 3 /, or -1 for none.
 int strokeDirection(ivec2 cell) {
@@ -72,6 +84,114 @@ int strokeDirection(ivec2 cell) {
   vec3 fall = normalize(vec3(0.0, -1.0, 0.0) + world.y * world);
   vec2 line = (u_viewRotation * fall).xy;
   if (length(line) < STROKE_MIN_LEAN) return -1;
+  return lineDirection(line);
+}
+
+// Rain and snow look like they're in the world, but are only a mask over the finished scene. The drops lie on
+// rings around the camera (LAYER_RADIUS); each cell finds where its view ray crosses each ring, so turning slides the
+// drops across the screen, and they fall in metres, so near ones move faster than far ones. A ring is only drawn
+// where the scene is further away than it, so buildings and the car hide the drops behind them.
+const float LAYER_RADIUS[3] = float[3](4.0, 11.0, 30.0); // m, nearest first
+const float LAYER_BRIGHTNESS[3] = float[3](1.0, 0.65, 0.4);
+// Angles, so every ring is as dense on screen: between two columns, and between the starts of two drops in a column.
+const float RAIN_SPACING = 0.035; // radians
+const float RAIN_PERIOD = 0.4; // radians
+const float SNOW_SPACING = 0.04;
+const float SNOW_PERIOD = 0.08;
+const float RAIN_FALL = 9.0; // m/s
+const float RAIN_LENGTH = 0.6; // m
+const float RAIN_CHANCE = 0.5; // share of places in a column with a drop
+const vec3 RAIN_COLOR = vec3(0.6, 0.68, 0.8);
+const float SNOW_FALL = 1.2; // m/s
+const float SNOW_CHANCE = 0.3;
+const float SNOW_SWAY = 0.4; // m either side
+const vec3 SNOW_COLOR = vec3(0.9, 0.92, 0.97);
+const float MAX_LEAN = 3.0; // m sideways per m fallen, so snow at speed doesn't lie flat
+// Glyphs in the weather row.
+const int SNOW_GLYPHS[3] = int[3](2, 3, 1); // *, +, . from near to far
+const int SPLASH_GLYPH = 4;
+const float SPLASH_RANGE = 25.0; // m, further splashes are smaller than a cell
+const float SPLASH_CHANCE = 0.03; // share of ground cells splashing at any moment
+const int SPLASH_TICKS = 8;
+
+// A cell's view ray in world space (not unit length). u_viewRotation turns world into view, so its transpose turns back.
+vec3 viewRay(vec2 cell) {
+  vec2 cells = vec2(textureSize(u_scene, 0));
+  return transpose(u_viewRotation) * vec3(((cell + 0.5) / cells * 2.0 - 1.0) * u_tanHalfFov, -1.0);
+}
+
+// The glyph a drop covering this cell shows (atlas column and row) and its colour; false for no drop.
+bool weatherGlyph(ivec2 cell, out ivec2 glyph, out vec3 color) {
+  vec3 ray = viewRay(vec2(cell));
+  float across = length(ray.xz);
+  if (across < 0.001) return false;
+  // How much azimuth and height (per m of radius) one cell covers here, from the next cell's ray.
+  vec3 right = viewRay(vec2(cell) + vec2(1.0, 0.0));
+  vec3 up = viewRay(vec2(cell) + vec2(0.0, 1.0));
+  float cellAzimuth = abs(atan(right.z * ray.x - right.x * ray.z, dot(right.xz, ray.xz)));
+  float cellHeight = abs(up.y / length(up.xz) - ray.y / across);
+  vec4 normal = texelFetch(u_normals, cell, 0);
+  float sceneDistance = normal.a * normal.a * u_viewDistance;
+  float azimuth = atan(ray.z, ray.x);
+  vec3 tangent = vec3(-sin(azimuth), 0.0, cos(azimuth)); // along the ring, the way the azimuth grows
+  bool rain = u_weather == 1;
+  float fall = rain ? RAIN_FALL : SNOW_FALL;
+  // Seen from the moving car the drops also move against its velocity; only the part along the ring shows.
+  float sideways = -dot(u_carVelocity, tangent.xz);
+  float lean = clamp(sideways / fall, -MAX_LEAN, MAX_LEAN);
+
+  for (int i = 0; i < 3; i++) {
+    float radius = LAYER_RADIUS[i];
+    float t = radius / across;
+    // Rings are nearest first, so once one is hidden the rest are too.
+    if (t * length(ray) > sceneDistance) return false;
+    float height = u_cameraHeight + ray.y * t;
+    // Both stay the same along one drop's path: c picks its column, w its place in the column.
+    float c = azimuth * radius + height * lean;
+    if (!rain) c -= SNOW_SWAY * sin(height * 0.6 + u_weatherTime * 0.9);
+    float w = height + fall * u_weatherTime;
+
+    float spacing = radius * (rain ? RAIN_SPACING : SNOW_SPACING);
+    float column = floor(c / spacing);
+    uint lane = uint(int(column) + 1000000);
+    uint layer = uint(i);
+    float centre = (column + 0.2 + 0.6 * hash(uvec3(lane, layer, 11u))) * spacing;
+    if (abs(c - centre) > radius * cellAzimuth * 0.5) continue;
+    float period = radius * (rain ? RAIN_PERIOD : SNOW_PERIOD);
+    float place = w / period + hash(uvec3(lane, layer, 12u));
+    uint slot = uint(int(floor(place)) + 1000000);
+    if (hash(uvec3(lane, slot, layer + 13u)) >= (rain ? RAIN_CHANCE : SNOW_CHANCE)) continue;
+    // At least a row, so far drops and flakes don't fall between rows.
+    float length_ = max(rain ? RAIN_LENGTH : 0.0, radius * cellHeight);
+    if (fract(place) * period > length_) continue;
+
+    float brightness = LAYER_BRIGHTNESS[i];
+    if (rain) {
+      vec3 streak = normalize(tangent * sideways + vec3(0.0, -fall, 0.0));
+      int direction = lineDirection((u_viewRotation * streak).xy);
+      glyph = ivec2(int(brightness * float(u_rampLength - 1)), u_strokeRow + direction);
+      color = RAIN_COLOR * brightness;
+    } else {
+      glyph = ivec2(SNOW_GLYPHS[i], u_weatherRow);
+      color = SNOW_COLOR * brightness;
+    }
+    return true;
+  }
+  return false;
+}
+
+// Rain hitting nearby ground: now and then a flat cell flicks up a splash.
+bool splashes(ivec2 cell) {
+  vec4 normal = texelFetch(u_normals, cell, 0);
+  if (normal.g * 2.0 - 1.0 < FLAT_NORMAL_Y || normal.a * normal.a * u_viewDistance > SPLASH_RANGE) return false;
+  uvec2 c = uvec2(cell);
+  int start = int(hash(uvec3(c, 21u)) * float(SPLASH_TICKS));
+  int slot = (u_tick + start) / SPLASH_TICKS;
+  return hash(uvec3(c, uint(slot) + 22u)) < SPLASH_CHANCE;
+}
+
+// The direction a line runs on screen: 0 |, 1 \, 2 -, 3 /.
+int lineDirection(vec2 line) {
   // A line has no front or back, so angles half a turn apart are the same: fold into 0 to 180°.
   float angle = degrees(atan(line.y, line.x));
   if (angle < 0.0) angle += 180.0;
@@ -160,6 +280,21 @@ void main() {
   vec3 color = scene.rgb;
   ivec2 inCell = ivec2(gl_FragCoord.xy) - cell * u_cellSize;
 
+  if (u_renderMode == 0 && u_weather != 0) {
+    ivec2 glyph;
+    vec3 weatherColor;
+    bool drop = weatherGlyph(cell, glyph, weatherColor);
+    if (!drop && u_weather == 1 && scene.a != 0.0 && splashes(cell)) {
+      drop = true;
+      glyph = ivec2(SPLASH_GLYPH, u_weatherRow);
+      weatherColor = RAIN_COLOR;
+    }
+    if (drop) {
+      ivec2 atlasPixel = ivec2(glyph.x * u_cellSize.x + inCell.x, (glyph.y + 1) * u_cellSize.y - 1 - inCell.y);
+      outColor = vec4(mix(u_background, weatherColor, texelFetch(u_glyphs, atlasPixel, 0).r), 1.0);
+      return;
+    }
+  }
 
   // Alpha 0 means nothing was drawn here: show the background as a solid colour.
   if (scene.a == 0.0) {
@@ -196,7 +331,11 @@ void main() {
   int material = int(round(scene.a * 255.0));
   int row = material - 1;
 
-  if (level > 0 && (u_animatedMaterials & (1 << material)) != 0) {
+  // A wet road shimmers like water, but without splashes along its edges.
+  if (u_weather == 1 && material == u_roadMaterial) {
+    row = u_wetRoadRow;
+    if (level > 0) level = clamp(level + int(round(wave(cell) * u_animationLevels)), 1, u_rampLength - 1);
+  } else if (level > 0 && (u_animatedMaterials & (1 << material)) != 0) {
     level = clamp(level + int(round(wave(cell) * u_animationLevels)), 1, u_rampLength - 1);
     if (isShore(cell, material) && splashing(cell)) level = u_rampLength - 1;
   }
