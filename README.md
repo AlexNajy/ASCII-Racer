@@ -119,7 +119,7 @@ npm run preview   # serve the production build locally
   - [x] Particles: GL points of size 1 in the one-pixel-per-cell scene target, so each particle is exactly one glyph (crash debris as flying `#`); visual only, so they don't need to be deterministic
   - [x] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
   - [x] Car model: body, cabin with glass, wheels, glowing headlights and tail lights that brighten while braking, on the same collision box
-  - [x] Weather toggle (none / rain / snow) in the dev menu: a mask in the ASCII pass that looks like it's in the world: drops on rings around the camera, hidden by anything nearer, leaning with the car's motion; rain splashes and a shimmering wet road
+  - [x] Weather toggle (none / rain / snow) in the dev menu: a mask in the ASCII pass that looks like it's in the world: drops on rings around the camera, hidden by anything nearer, leaning in a steady wind; rain splashes and a shimmering wet road
   - [x] Drift particles: bursts from the bottom of the rear tyres while sliding, like crash debris
 - [ ] **13. Sound**: Web Audio API, no libraries; reads the simulation state, never feeds back into it
   - [ ] Audio setup: audio context started on the first click or keypress, master volume and mute

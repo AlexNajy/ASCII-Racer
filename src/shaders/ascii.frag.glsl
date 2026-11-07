@@ -28,7 +28,6 @@ uniform int u_weather; // 0 none, 1 rain, 2 snow
 uniform float u_weatherTime; // s, loops
 uniform vec2 u_tanHalfFov; // tangent of half the field of view, across and up
 uniform float u_cameraHeight; // m
-uniform vec2 u_carVelocity; // m/s, world x and z
 uniform float u_viewDistance; // m, what a distance of 1 in the normals alpha means
 uniform int u_weatherRow; // atlas row with the snow and splash glyphs
 uniform int u_roadMaterial;
@@ -104,9 +103,14 @@ const float RAIN_CHANCE = 0.5; // share of places in a column with a drop
 const vec3 RAIN_COLOR = vec3(0.6, 0.68, 0.8);
 const float SNOW_FALL = 1.2; // m/s
 const float SNOW_CHANCE = 0.3;
-const float SNOW_SWAY = 0.4; // m either side
+const float SNOW_SWAY = 0.8; // either side, in shares of the space between columns
+const float SNOW_SWAY_RATE = 1.5; // radians of sway per m fallen
 const vec3 SNOW_COLOR = vec3(0.9, 0.92, 0.97);
-const float MAX_LEAN = 3.0; // m sideways per m fallen, so snow at speed doesn't lie flat
+// A steady wind in the world, m/s, x and z. Every drop leans the same way in the world, so the screen shows no
+// pattern; leaning by the car's own speed was tried and dropped: it tilts drops away from the screen centre, like a
+// jump to hyperspace.
+const vec2 RAIN_WIND = vec2(1.5, 0.6);
+const vec2 SNOW_WIND = vec2(0.4, 0.15);
 // Glyphs in the weather row.
 const int SNOW_GLYPHS[3] = int[3](2, 3, 1); // *, +, . from near to far
 const int SPLASH_GLYPH = 4;
@@ -136,9 +140,9 @@ bool weatherGlyph(ivec2 cell, out ivec2 glyph, out vec3 color) {
   vec3 tangent = vec3(-sin(azimuth), 0.0, cos(azimuth)); // along the ring, the way the azimuth grows
   bool rain = u_weather == 1;
   float fall = rain ? RAIN_FALL : SNOW_FALL;
-  // Seen from the moving car the drops also move against its velocity; only the part along the ring shows.
-  float sideways = -dot(u_carVelocity, tangent.xz);
-  float lean = clamp(sideways / fall, -MAX_LEAN, MAX_LEAN);
+  // Only the wind along the ring shows; the part towards or away from the camera doesn't move a drop on screen.
+  float sideways = dot(rain ? RAIN_WIND : SNOW_WIND, tangent.xz);
+  float lean = sideways / fall;
 
   for (int i = 0; i < 3; i++) {
     float radius = LAYER_RADIUS[i];
@@ -148,22 +152,27 @@ bool weatherGlyph(ivec2 cell, out ivec2 glyph, out vec3 color) {
     float height = u_cameraHeight + ray.y * t;
     // Both stay the same along one drop's path: c picks its column, w its place in the column.
     float c = azimuth * radius + height * lean;
-    if (!rain) c -= SNOW_SWAY * sin(height * 0.6 + u_weatherTime * 0.9);
     float w = height + fall * u_weatherTime;
-
     float spacing = radius * (rain ? RAIN_SPACING : SNOW_SPACING);
-    float column = floor(c / spacing);
-    uint lane = uint(int(column) + 1000000);
-    uint layer = uint(i);
-    float centre = (column + 0.2 + 0.6 * hash(uvec3(lane, layer, 11u))) * spacing;
-    if (abs(c - centre) > radius * cellAzimuth * 0.5) continue;
     float period = radius * (rain ? RAIN_PERIOD : SNOW_PERIOD);
-    float place = w / period + hash(uvec3(lane, layer, 12u));
-    uint slot = uint(int(floor(place)) + 1000000);
-    if (hash(uvec3(lane, slot, layer + 13u)) >= (rain ? RAIN_CHANCE : SNOW_CHANCE)) continue;
     // At least a row, so far drops and flakes don't fall between rows.
     float length_ = max(rain ? RAIN_LENGTH : 0.0, radius * cellHeight);
-    if (fract(place) * period > length_) continue;
+    uint layer = uint(i);
+    // Each flake sways on its own, so it can reach into the next column: check those too.
+    int reach = rain ? 0 : 1;
+    bool hit = false;
+    for (int k = -reach; k <= reach && !hit; k++) {
+      float column = floor(c / spacing) + float(k);
+      uint lane = uint(int(column) + 1000000);
+      float place = w / period + hash(uvec3(lane, layer, 12u));
+      uint slot = uint(int(floor(place)) + 1000000);
+      if (hash(uvec3(lane, slot, layer + 13u)) >= (rain ? RAIN_CHANCE : SNOW_CHANCE)) continue;
+      if (fract(place) * period > length_) continue;
+      float centre = (column + 0.2 + 0.6 * hash(uvec3(lane, layer, 11u))) * spacing;
+      if (!rain) centre += SNOW_SWAY * spacing * sin(height * SNOW_SWAY_RATE + 6.2831853 * hash(uvec3(lane, slot, 14u)));
+      hit = abs(c - centre) <= radius * cellAzimuth * 0.5;
+    }
+    if (!hit) continue;
 
     float brightness = LAYER_BRIGHTNESS[i];
     if (rain) {

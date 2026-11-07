@@ -385,7 +385,6 @@ const weatherLocation = gl.getUniformLocation(asciiProgram, 'u_weather');
 const weatherTimeLocation = gl.getUniformLocation(asciiProgram, 'u_weatherTime');
 const tanHalfFovLocation = gl.getUniformLocation(asciiProgram, 'u_tanHalfFov');
 const cameraHeightLocation = gl.getUniformLocation(asciiProgram, 'u_cameraHeight');
-const carVelocityLocation = gl.getUniformLocation(asciiProgram, 'u_carVelocity');
 const asciiViewDistanceLocation = gl.getUniformLocation(asciiProgram, 'u_viewDistance');
 const weatherRowLocation = gl.getUniformLocation(asciiProgram, 'u_weatherRow');
 const roadMaterialLocation = gl.getUniformLocation(asciiProgram, 'u_roadMaterial');
@@ -700,8 +699,6 @@ function frame(timeMs: number) {
   const tanHalfFov = Math.tan(fovRadians / 2);
   gl!.uniform2f(tanHalfFovLocation, tanHalfFov * aspect, tanHalfFov);
   gl!.uniform1f(cameraHeightLocation, camera.position[1]);
-  const driving = settings.movement === Movement.Car;
-  gl!.uniform2f(carVelocityLocation, driving ? drawnCar.velocityX : 0, driving ? drawnCar.velocityZ : 0);
   gl!.uniform1f(asciiViewDistanceLocation, settings.viewDistance);
   gl!.uniform1i(weatherRowLocation, MATERIAL.weather - 1);
   gl!.uniform1i(roadMaterialLocation, MATERIAL.defaultRoad);
