@@ -10,7 +10,7 @@ const GROUND_BOUNCE = 0.3; // share of the downward speed kept on hitting the gr
 const GROUND_FRICTION = 0.6; // share of the sideways speed kept on hitting the ground
 const UPWARD_KICK = 0.5; // share of a burst's speed added upwards at most, so bursts arc instead of skimming
 
-// What a burst throws: debris, smoke...
+// What a burst throws: crash debris, drift sparks...
 export interface ParticleKind {
   color: Vec3;
   material: number;

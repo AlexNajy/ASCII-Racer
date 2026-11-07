@@ -113,7 +113,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 - **Signal rendering**: lamp and walk symbol vertices are built lit and tagged with `id = junction * 10 + road * 5 + lamp` (road 0 column, 1 row; lamps red, yellow, green, walking person, hand). Every frame `render/signalTexture.ts` uploads one RGBA8UI texel per junction (road lights and walk lights) and the scene vertex shader dims lamps that are off and clips the walk symbol that is off, so the mesh is never rebuilt. The tick itself never goes to the GPU (floats lose whole numbers past ~77 hours of ticks).
 - Ground surfaces (`ZONE_SURFACES` in `main.ts`): each zone's material and colour. Concrete for shops, mid-rise, towers and plaza, grass for houses (inside a concrete sidewalk `SETBACK` wide) and park. Curb sides are concrete grey (`withSideColor`). Supermarket and parking lot are lots (`game/lots.ts`): only a sidewalk ring with an 11 m entrance gap is raised, plus the supermarket's store half; inside, the road slab shows at road level. Parking lot entrances face the city centre, supermarket entrances the car park side.
 - Particles (`render/particles.ts`, `particle.*.glsl`): visual only, stepped with frame time and drawn as 1-pixel GL points after the car, so each is one glyph; they fade as they age, so the glyph walks down the `debris` ramp. One dynamic buffer sized for `MAX_PARTICLES`, overwritten with `bufferSubData` each frame. Each particle has a `ParticleKind` (colour, material, life, spread, gravity, drag); the material is in the vertex data. `collideCar` returns an `Impact` (speed into the wall, wall normal); hits above `DEBRIS_MIN_SPEED` throw debris off the wall (`crashDebris` in `main.ts`).
-- Tire marks (`render/tireMarks.ts`): while the car slides sideways faster than `MARK_SLIDE_SPEED`, each tick every rear wheel adds a flat quad from where it was last tick, 3 cm above the road, `tireMark` material. A ring buffer of `MAX_TIRE_MARKS` segments in one dynamic mesh; new segments wait in `pending` and are written with `bufferSubData`. Drift smoke (`driftSmoke` in `main.ts`) bursts from the same wheels, thicker with the slide.
+- Drift particles (`driftParticles` in `main.ts`, wheel positions and slide speed in `render/drift.ts`): while the car slides sideways faster than `DRIFT_SLIDE_SPEED`, each tick bursts `driftSpark` particles upwards from the bottom of each rear tyre, more and faster the harder the slide. Tire marks were tried and dropped: a persistent trail per car is too much to track for multiple players.
 - A pond (`flatDisc`, animated `water` set) sits in the middle of the park; `POND_RADIUS` is in `game/park.ts`, so the trees keep clear of it.
 
 ### Known limits
@@ -135,7 +135,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 9. A drivable car: keyboard input, arcade acceleration, steering and drift (Mario Kart style), headlights
 10. Per-material glyph sets: material IDs in the scene buffer pick an atlas row per cell
 11. Building models: parametric styles and fixed prefabs in place of the boxes, with seeded spawning rules per zone, lot and neighbourhood
-12. Visual identity: temporally stable glyphs (no flicker at speed), particles, tire marks, weather (rain / snow)
+12. Visual identity: temporally stable glyphs (no flicker at speed), particles, drift particles, weather (rain / snow)
 13. Sound: Web Audio API, engine, tires, impacts, ambience
 14. HUD: a text layer drawn in the glyph grid (speedometer first)
 15. Menu + game modes

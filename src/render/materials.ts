@@ -50,8 +50,7 @@ const SETS = {
   awning: { ramp: ' .-~=~=~=~' },
   roofGravel: { ramp: ` .,.:.,.:.`, scatter: { square: 0.6, patch: 5, patchiness: 0.5 } },
   debris: { ramp: ' .,:;+*%##' },
-  smoke: { ramp: ' .:~oOO@@@' },
-  tireMark: { ramp: ' .,:;;====' },
+  driftSpark: { ramp: " .'`:+*#@@" },
   // Not a surface: the ASCII pass reads fixed glyphs from this row for rain and snow (WEATHER_* in ascii.frag.glsl).
   weather: { ramp: ' .|/*.....' },
   // The road's glyphs while it rains, animated so the wet surface shimmers.

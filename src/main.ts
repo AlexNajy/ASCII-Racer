@@ -44,7 +44,7 @@ import { carVertices } from './render/models/car.ts';
 import { DEFAULT_SKY_SETTINGS, FLOATS_PER_STAR, starVertices, type SkySettings } from './render/sky.ts';
 import { headlight, HEADLIGHT_SOFT_EDGE } from './render/headlights.ts';
 import { burst, createParticles, FLOATS_PER_PARTICLE, MAX_PARTICLES, particleVertices, updateParticles, type ParticleKind } from './render/particles.ts';
-import { createTireMarks, FLOATS_PER_MARK, MARK_SLIDE_SPEED, MAX_TIRE_MARKS, rearWheels, slideSpeed, updateTireMarks } from './render/tireMarks.ts';
+import { DRIFT_SLIDE_SPEED, rearWheels, slideSpeed } from './render/drift.ts';
 import vertexSource from './shaders/triangle.vert.glsl?raw';
 import fragmentSource from './shaders/triangle.frag.glsl?raw';
 import fullscreenVertexSource from './shaders/fullscreen.vert.glsl?raw';
@@ -101,14 +101,13 @@ interface Mesh {
   vertexCount: number;
 }
 
-// Dynamic meshes start as zeros of the size they can grow to and get parts overwritten with bufferSubData.
-function uploadMesh(vertices: number[] | Float32Array, usage: GLenum = gl!.STATIC_DRAW): Mesh {
+function uploadMesh(vertices: number[]): Mesh {
   const vao = gl!.createVertexArray();
   gl!.bindVertexArray(vao);
 
   const buffer = gl!.createBuffer();
   gl!.bindBuffer(gl!.ARRAY_BUFFER, buffer);
-  gl!.bufferData(gl!.ARRAY_BUFFER, vertices instanceof Float32Array ? vertices : new Float32Array(vertices), usage);
+  gl!.bufferData(gl!.ARRAY_BUFFER, new Float32Array(vertices), gl!.STATIC_DRAW);
 
   const stride = FLOATS_PER_VERTEX * 4;
   gl!.enableVertexAttribArray(positionLocation);
@@ -193,7 +192,7 @@ gl.enableVertexAttribArray(particleMaterialLocation);
 gl.vertexAttribPointer(particleMaterialLocation, 1, gl.FLOAT, false, FLOATS_PER_PARTICLE * 4, 6 * 4);
 gl.bindVertexArray(null);
 const DEBRIS: ParticleKind = { color: [1, 0.9, 0.7], material: MATERIAL.debris, life: 1.5, spread: 0.8, gravity: 1, drag: 0.2 };
-const SMOKE: ParticleKind = { color: [0.45, 0.45, 0.5], material: MATERIAL.smoke, life: 1.2, spread: 0.6, gravity: -0.05, drag: 1.5 };
+const DRIFT_SPARKS: ParticleKind = { color: [1, 0.75, 0.3], material: MATERIAL.driftSpark, life: 0.7, spread: 0.6, gravity: 1, drag: 0.3 };
 const DEBRIS_MIN_SPEED = 3; // m/s into a wall, softer bumps throw nothing
 const DEBRIS_PER_SPEED = 6; // particles per m/s into the wall
 const DEBRIS_SPEED_SHARE = 0.5; // debris flies off at up to this share of the impact speed
@@ -207,18 +206,17 @@ function crashDebris({ speed, normalX, normalZ }: Impact) {
   burst(particles, DEBRIS, contact, [normalX, 0, normalZ], count, speed * DEBRIS_SPEED_SHARE);
 }
 
-const tireMarks = createTireMarks();
-const tireMarkMesh = uploadMesh(new Float32Array(MAX_TIRE_MARKS * FLOATS_PER_MARK), gl.DYNAMIC_DRAW);
-const SMOKE_PER_SLIDE_SPEED = 0.15; // particles per wheel per tick, per m/s sideways
-const SMOKE_SPEED = 1.5; // m/s
-const SMOKE_HEIGHT = 0.3; // m
+const DRIFT_PARTICLES_PER_SLIDE_SPEED = 0.25; // per wheel per tick, per m/s sideways
+const DRIFT_PARTICLE_SPEED_SHARE = 0.6; // particles fly up at up to this share of the slide speed
 
-// Smoke kicked up at the rear wheels while sliding, thicker the harder the slide.
-function driftSmoke() {
+// Bursts from the bottom of the rear tyres while sliding, like crash debris: more and faster the harder the slide.
+function driftParticles() {
   const slide = slideSpeed(car);
-  if (slide <= MARK_SLIDE_SPEED) return;
-  const count = Math.max(1, Math.round(slide * SMOKE_PER_SLIDE_SPEED));
-  for (const [x, z] of rearWheels(car)) burst(particles, SMOKE, [x, SMOKE_HEIGHT, z], [0, 1, 0], count, SMOKE_SPEED);
+  if (slide <= DRIFT_SLIDE_SPEED) return;
+  const count = Math.max(1, Math.round(slide * DRIFT_PARTICLES_PER_SLIDE_SPEED));
+  for (const [x, z] of rearWheels(car)) {
+    burst(particles, DRIFT_SPARKS, [x, 0, z], [0, 1, 0], count, slide * DRIFT_PARTICLE_SPEED_SHARE);
+  }
 }
 
 function slab(rect: Rect, bottom: number, top: number, color: Vec3): number[] {
@@ -540,8 +538,7 @@ function frame(timeMs: number) {
     stepCar(car, carInput, carSettings);
     const impact = collideCar(car, world.colliders, carSettings);
     if (impact) crashDebris(impact);
-    updateTireMarks(tireMarks, car);
-    driftSmoke();
+    driftParticles();
   });
   updateParticles(particles, dt);
   // Drawn between the last two ticks by the time left over, so motion is smooth on any refresh rate.
@@ -623,11 +620,6 @@ function frame(timeMs: number) {
   gl!.useProgram(program);
 
   for (const mesh of world.meshes) draw(mesh, gl!.TRIANGLES, view);
-  gl!.bindBuffer(gl!.ARRAY_BUFFER, tireMarkMesh.buffer);
-  for (const { index, vertices } of tireMarks.pending) gl!.bufferSubData(gl!.ARRAY_BUFFER, index * FLOATS_PER_MARK * 4, vertices);
-  tireMarks.pending.length = 0;
-  tireMarkMesh.vertexCount = (tireMarks.count * FLOATS_PER_MARK) / FLOATS_PER_VERTEX;
-  if (tireMarkMesh.vertexCount > 0) draw(tireMarkMesh, gl!.TRIANGLES, view);
   draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
 
   const particleCount = particleVertices(particles);
