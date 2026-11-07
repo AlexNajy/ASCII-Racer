@@ -90,6 +90,7 @@ const windowStylesLocation = gl.getUniformLocation(program, 'u_windowStyles');
 const windowLitMaterialLocation = gl.getUniformLocation(program, 'u_windowLitMaterial');
 const windowDarkMaterialLocation = gl.getUniformLocation(program, 'u_windowDarkMaterial');
 const beaconOnLocation = gl.getUniformLocation(program, 'u_beaconOn');
+const brakingLocation = gl.getUniformLocation(program, 'u_braking');
 const signalsTextureLocation = gl.getUniformLocation(program, 'u_signals');
 const sceneScatterMaterialsLocation = gl.getUniformLocation(program, 'u_scatterMaterials');
 const scatterParamsLocation = gl.getUniformLocation(program, 'u_scatterParams');
@@ -586,6 +587,7 @@ function frame(timeMs: number) {
   const pointCells = [target.width / samples, target.height / samples];
   gl!.uniform1f(supersampleLocation, samples);
   gl!.uniform1i(beaconOnLocation, clock.tick % BEACON_CYCLE_TICKS < BEACON_ON_TICKS ? 1 : 0);
+  gl!.uniform1i(brakingLocation, carInput.brake > 0 ? 1 : 0);
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);

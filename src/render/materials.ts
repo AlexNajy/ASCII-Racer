@@ -49,6 +49,7 @@ const SETS = {
   foliage: { ramp: `.,:;'"^*,.`, scatter: { square: 0.35, patch: 2, patchiness: 0.4 } },
   awning: { ramp: ' .-~=~=~=~' },
   roofGravel: { ramp: ` .,.:.,.:.`, scatter: { square: 0.6, patch: 5, patchiness: 0.5 } },
+  carBody: { ramp: ' .:=+*%#&@', edges: '|[]' },
   debris: { ramp: ' .,:;+*%##' },
   driftSpark: { ramp: " .'`:+*#@@" },
   // Stroke sets, in the order the ASCII pass numbers the directions.

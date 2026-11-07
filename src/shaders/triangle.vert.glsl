@@ -17,6 +17,7 @@ uniform mat3 u_normalMatrix;
 // b and a = crosswalk lights alongside each road (0 walking person, 1 hand, 2 off).
 uniform highp usampler2D u_signals;
 uniform bool u_beaconOn;
+uniform bool u_braking;
 
 out vec3 v_color;
 out vec3 v_viewPosition;
@@ -29,6 +30,8 @@ flat out vec2 v_facade;
 
 const float UNLIT = 0.2; // brightness of a lamp that is off
 const float BEACON_ID = -2.0;
+const float BRAKE_ID = -3.0;
+const float TAIL_LIGHT_DIM = 0.75; // tail lights while not braking: still glowing, but dimmer
 
 void main() {
   v_color = a_color;
@@ -37,6 +40,8 @@ void main() {
   v_material = a_material;
   v_facadeUv = a_facadeUv;
   v_facade = a_facade;
+
+  if (a_id == BRAKE_ID && !u_braking) v_color *= TAIL_LIGHT_DIM;
 
   if (a_id == BEACON_ID && !u_beaconOn) {
     v_color *= UNLIT;
