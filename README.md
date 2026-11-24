@@ -1,6 +1,6 @@
 # ASCII Racer
 
-A 3D multiplayer driving game set in a city at night, running in the browser and drawn entirely in ASCII characters. The scene is rendered in 3D on the GPU with WebGL2, then a shader pass turns every frame into a grid of text glyphs. Darkness is empty space; headlights, street lamps and neon light up the city in characters.
+A daily 3D racing game set in a city at night, running in the browser and drawn entirely in ASCII characters. The scene is rendered in 3D on the GPU with WebGL2, then a shader pass turns every frame into a grid of text glyphs. Darkness is empty space; headlights, street lamps and neon light up the city in characters.
 
 Built from scratch with TypeScript, WebGL2 and GLSL. No 3D libraries.
 
@@ -79,7 +79,7 @@ npm run preview   # serve the production build locally
   - [x] Intersections: traffic lights on avenues, all-way or two-way stop signs on streets depending on how many corner blocks are busy, and crosswalks
   - [x] Signal phases: a fixed 60 Hz world tick, a deterministic phase cycle (green, yellow, all red, walk and flashing hand), seeded offsets with green waves along avenues, switched on the GPU from a per-frame signal texture
   - [x] Pole collisions: street lights, traffic lights and stop signs collide like buildings
-- [ ] **9. Drivable car**: keyboard input, arcade acceleration, steering and drift, headlights (the only real lights: a few cones that light what they hit)
+- [x] **9. Drivable car**: keyboard input, arcade acceleration, steering and drift, headlights (the only real lights: a few cones that light what they hit)
   - [x] Car state: position, heading and velocity as plain data, stepped once per 60 Hz tick
   - [x] Car model: the collision box drawn from the car state (a real model later)
   - [x] Chase camera: in Car movement mode the camera follows behind the car at driving height
@@ -120,17 +120,61 @@ npm run preview   # serve the production build locally
   - [x] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
   - [x] Car model: body, cabin with glass, wheels, glowing headlights and tail lights that brighten while braking, on the same collision box
   - [x] Drift particles: bursts from the bottom of the rear tyres while sliding, like crash debris
-- [ ] **13. Sound**: Web Audio API, no libraries; reads the simulation state, never feeds back into it
+- [ ] **13. Checks**: what the loop uses to know a change works, see `SPEC.md` for the finished game
+  - [ ] Test runner: Vitest as a dev dependency, `npm test`, and `npm run check` running type check, tests and build
+  - [ ] Headless world: setup and the per-tick step moved out of `main.ts` into `game/world.ts` (no WebGL, no DOM), so Node can build a city and drive a car in it
+  - [ ] Determinism tests: the same seed and inputs give the same car state after thousands of ticks, and a stored hash of a reference run that only changes on purpose
+  - [ ] City tests over 200 seeds: nothing solid on a road, every junction reachable, no way out of the city, no props inside buildings
+  - [ ] Screenshots: `npm run shots` builds the game and saves glyph mode pictures from fixed camera spots with headless Chrome (URL parameters for seed, camera and mode), for looking at changes
+  - [ ] CI: a GitHub Action running `npm run check` on every pull request
+  - [ ] Deploy: a GitHub Action publishing `dist/` to GitHub Pages on every merge to `main`
+- [ ] **14. HUD**: drawn in the glyph grid, not as HTML
+  - [ ] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass
+  - [ ] Speedometer
+  - [ ] Minimap: roads and the car, in a corner
+- [ ] **15. Routes**: a race from a seed
+  - [ ] Road graph: junctions and the segments between them as plain data from the city
+  - [ ] Route generator: start, ordered checkpoints and finish from a seed, by target length, no segment twice, with turns
+  - [ ] Route tests over 1000 seeds: every route valid, connected and inside the length range
+  - [ ] Gates: glowing checkpoint and finish gates across the road, only the next one lit
+  - [ ] Race state in the simulation: countdown, running, finished, checkpoints crossed in order and direction, time in ticks
+  - [ ] Race HUD: timer, checkpoint count, the route on the minimap, arrow to the next gate
+  - [ ] Test driver: a simple waypoint follower that finishes any route headless, used by the tests to prove routes can be driven and to tune `ROUTE_LENGTH`
+- [ ] **16. Menu and unlimited**
+  - [ ] Game states: menu, pre-race, race, results, with the dev fly camera kept behind the dev menu
+  - [ ] Main menu on the text layer over a camera flight through the city
+  - [ ] Unlimited: random city and route, finish screen with again, next and menu
+  - [ ] Settings: nickname, volume, glyph size, fullscreen, key list, saved in the browser
+  - [ ] Garage: body shapes on the same collision box, colour list, turning preview, saved in the browser
+  - [ ] Loading line while a city builds
+- [ ] **17. Daily**: the main mode
+  - [ ] Day number from the UTC date, city seed and route from the day number
+  - [ ] Input recording: one input per tick packed into a compact log, and a headless replay that gives the same finish tick
+  - [ ] Simulation version constant, bumped by any change to simulation or generation (a test fails when the reference run changes without it)
+  - [ ] Daily flow without a backend: pre-race screen, one try kept in the browser, results with time, countdown to the next day
+  - [ ] Supabase project files: migrations for attempts and runs with row level security, anonymous sign-ins, local config
+  - [ ] Edge Functions: start an attempt, check a run by replaying its inputs with the game's own simulation, tested with Deno
+  - [ ] Deploy action for migrations and functions, skipped when the secrets are missing
+  - [ ] Client: sign in, start attempt, send run, handle offline and errors
+  - [ ] Results: rank, percentile, top times, bell curve histogram in glyphs with the player marked
+  - [ ] Share text copied to the clipboard
+- [ ] **18. Sound**: Web Audio API, no libraries, no sound files; reads the simulation state, never feeds back into it
   - [ ] Audio setup: audio context started on the first click or keypress, master volume and mute
   - [ ] Engine: a looped sound with pitch and volume from speed and throttle
   - [ ] Tires and impacts: a screech that fades in with drift, thuds by collision speed
   - [ ] Ambience: a low city hum
-  - [ ] Positional sound: other players' cars panned and fading by distance (`PannerNode`), with multiplayer
-- [ ] **14. HUD**: drawn in the glyph grid, not as HTML
-  - [ ] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass
-  - [ ] Speedometer
-  - [ ] Timers and a minimap
-- [ ] **15. Menu + game modes**
-  - [ ] Menus drawn with the HUD's text layer
-  - [ ] Game modes
-- [ ] **16. Multiplayer**: a small server to connect players, other players' cars, rollback netcode
+  - [ ] Race sounds: countdown, checkpoint, finish
+- [ ] **19. Lobbies**
+  - [ ] Create lobby screen: settings, generated city, lobby code
+  - [ ] Join lobby screen and lobby presence over Supabase Realtime
+  - [ ] WebRTC data channels between players, signalled through the lobby
+  - [ ] Other players' cars: garage look and nickname, driven from their inputs
+  - [ ] Car against car collisions in the simulation
+  - [ ] Rollback: late inputs rewind and replay the simulation, tested headless with simulated delay and loss
+  - [ ] Lobby races: host starts a route, start grid, results board, back to free driving
+  - [ ] Positional sound for other cars (`PannerNode`)
+- [ ] **20. Release**
+  - [ ] Page title, description, social preview image, favicon
+  - [ ] Performance pass: 60 fps at default settings, first load size and time
+  - [ ] Play through every mode from the built site and fix what breaks
+  - [ ] README: what the game is, how to play, the link
