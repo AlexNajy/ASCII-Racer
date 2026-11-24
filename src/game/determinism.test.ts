@@ -43,8 +43,8 @@ function defaultRun(seed: number) {
 
 // Update these on purpose only: they are the hash of generation plus driving for the default settings.
 const REFERENCE_HASHES: Record<number, number> = {
-  1: 3343919308,
-  42: 3000599772,
+  1: 858219843,
+  42: 3437657928,
 };
 
 describe('determinism', () => {

@@ -126,7 +126,7 @@ npm run check     # type check, tests and build
   - [x] Test runner: Vitest as a dev dependency, `npm test`, and `npm run check` running type check, tests and build
   - [x] Headless world: setup and the per-tick step moved out of `main.ts` into `game/world.ts` (no WebGL, no DOM), so Node can build a city and drive a car in it
   - [x] Determinism tests: the same seed and inputs give the same car state after thousands of ticks, and a stored hash of a reference run that only changes on purpose
-  - [ ] City tests over 200 seeds: nothing solid on a road, every junction reachable, no way out of the city, no props inside buildings
+  - [x] City tests over 200 seeds: nothing solid on a road, every junction reachable, no way out of the city, no props inside buildings
   - [ ] Screenshots: `npm run shots` builds the game and saves glyph mode pictures from fixed camera spots with headless Chrome (URL parameters for seed, camera and mode), for looking at changes
   - [ ] CI: a GitHub Action running `npm run check` on every pull request
   - [ ] Deploy: a GitHub Action publishing `dist/` to GitHub Pages on every merge to `main`

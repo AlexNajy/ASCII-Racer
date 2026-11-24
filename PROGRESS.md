@@ -29,4 +29,13 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Review: first verdict `fix` (the stored hash missed the car's start; the tick-grouping test could not fail). Both fixed by a second builder and checked by the lead: `START_X = 1` now fails the stored hashes. The reviewer's mutation tests (car, fence and tree constants) all failed the hash as they should.
 - Open: the hashes were computed on this Mac's Node. If CI's Node disagrees, that is a real cross-engine leak to chase.
 - Generating one city takes about 1.1 s in Node, which matters for the 200-seed city tests next.
-- Next: "City tests over 200 seeds".
+
+## 2026-11-24: step 13, city tests over 200 seeds
+
+- `cityRules.test.ts`, seeds 1 to 200 with default settings, about 5 s: nothing solid on a road, every junction reachable down a car-wide corridor, a 0.5 m flood fill can't get past the outer wall, no prop in a building or in another prop (only a planter's own tree and fence against fence allowed), the start is on a clear road.
+- To make 200 cities affordable: `withoutVertices` in `render/shapes.ts` makes every shape return nothing, so `generateCityData(settings, false)` gives the same colliders and random calls in about 4 ms instead of 380 ms. `Collider` got an optional `building` tag.
+- Bugs the tests found, fixed in generation: the car started at the origin, which is inside a block on seeds 38, 70 and 182 (it now starts on the middle junction, see `SPEC.md` decisions); yard trees in fences and porches; park trees in the kiosk and in each other; two dumpsters where alleys cross. Roads, reachability and the wall held on every seed before any fix.
+- Reference hashes updated by hand for the moved start and props (seed 1: 858219843, seed 42: 3437657928).
+- Review: first verdict `fix` (any prop wholly inside another passed; `startJunction` was only the middle for even block counts). Fixed and checked by the lead; removing the kiosk clearance now fails 10 seeds instead of 5.
+- For the owner's eyes: slightly fewer trees (yard trees per houses block 3.76 to 3.49, park trees per park 13.0 to 12.6). Not compared in glyph mode yet; the screenshots sub-step makes that easy.
+- Next: "Screenshots".

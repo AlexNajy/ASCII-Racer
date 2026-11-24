@@ -1,7 +1,7 @@
 import { generateBuildings, type Layout } from './buildings.ts';
 import { collideCar, createCar, stepCar, type Car, type CarSettings, type Impact } from './car.ts';
 import type { CarInput } from './carInput.ts';
-import { generateCity, type City, type CitySettings, type Rect } from './city.ts';
+import { generateCity, type City, type CitySettings, type Junction, type Rect } from './city.ts';
 import { cityColliders, type Collider } from './collision.ts';
 import { houseDriveways } from './driveways.ts';
 import { houseFences } from './fences.ts';
@@ -10,9 +10,10 @@ import { signalOffsets } from './signals.ts';
 import { generateStreetLights, type StreetLight } from './streetLights.ts';
 import { cityModels } from '../render/models/spawn.ts';
 import type { Model } from '../render/models/model.ts';
+import { withoutVertices } from '../render/shapes.ts';
 
 // Everything generated from the seed. `models` holds the drawn vertices too, because the colliders come from
-// the same models (a stepped tower is only solid where it stands).
+// the same models (a stepped tower is only solid where it stands). Without `vertices` they are left empty.
 export interface CityData {
   city: City;
   layout: Layout;
@@ -40,18 +41,24 @@ export interface TickResult {
   impact: Impact | null;
 }
 
-const START_X = 0;
-const START_Z = 0;
 const START_HEADING = 0;
 
-export function generateCityData(settings: CitySettings): CityData {
+// The middle junction. Avenues are wider than streets, so it is not always at the origin.
+export function startJunction(city: City): Junction {
+  const perRow = Math.round(Math.sqrt(city.junctions.length));
+  const middle = Math.floor(perRow / 2);
+  return city.junctions.find(({ row, column }) => row === middle && column === middle)!;
+}
+
+export function generateCityData(settings: CitySettings, vertices = true): CityData {
   const city = generateCity(settings);
   const layout = generateBuildings(city, settings);
   const fences = houseFences(city, layout.buildings);
   const driveways = houseDriveways(city, layout.buildings);
   const streetLights = generateStreetLights(city, settings);
   const intersections = generateIntersections(city, settings);
-  const models = cityModels(city, layout, driveways, settings.seed);
+  const buildModels = () => cityModels(city, layout, driveways, fences, settings.seed);
+  const models = vertices ? buildModels() : withoutVertices(buildModels);
   return {
     city,
     layout,
@@ -66,8 +73,10 @@ export function generateCityData(settings: CitySettings): CityData {
 }
 
 export function createWorld(citySettings: CitySettings, carSettings: CarSettings): World {
-  const car = createCar(START_X, START_Z, START_HEADING);
-  return { ...generateCityData(citySettings), citySettings, carSettings, car, previousCar: { ...car }, tick: 0 };
+  const data = generateCityData(citySettings);
+  const { x, z } = startJunction(data.city);
+  const car = createCar(x, z, START_HEADING);
+  return { ...data, citySettings, carSettings, car, previousCar: { ...car }, tick: 0 };
 }
 
 // Builds the city again from the current settings; the car and the tick carry on.

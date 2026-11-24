@@ -104,3 +104,5 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 ## Decisions made along the way
 
 (Added by the loop: one line each, with the roadmap step.)
+
+- Step 13: the car starts on the middle junction of the city, not the origin, which is inside a block for some seeds.

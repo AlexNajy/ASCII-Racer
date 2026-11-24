@@ -17,6 +17,19 @@ const NORMAL_Y_OFFSET = 7;
 const ID_OFFSET = 10;
 const MATERIAL_OFFSET = 11;
 
+let skipVertices = false;
+
+// Runs `build` with every shape giving no vertices. Models still make the same random calls and colliders,
+// so code that only needs what is solid (the city tests) skips the slow part.
+export function withoutVertices<T>(build: () => T): T {
+  skipVertices = true;
+  try {
+    return build();
+  } finally {
+    skipVertices = false;
+  }
+}
+
 // Marks every vertex with the given id.
 export function withId(vertices: number[], id: number): number[] {
   for (let i = ID_OFFSET; i < vertices.length; i += FLOATS_PER_VERTEX) vertices[i] = id;
@@ -47,6 +60,7 @@ export function withSideColor(vertices: number[], color: Vec3): number[] {
 }
 
 export function box(min: Vec3, max: Vec3, color: Vec3, emission = 0): number[] {
+  if (skipVertices) return [];
   const [x0, y0, z0] = min;
   const [x1, y1, z1] = max;
   const faces: [Vec3, Vec3, Vec3, Vec3, Vec3][] = [
@@ -74,6 +88,7 @@ export function quad(
   seed = 0,
   style = 0,
 ): number[] {
+  if (skipVertices) return [];
   const vertices: number[] = [];
   for (const i of [0, 1, 2, 0, 2, 3]) {
     vertices.push(...corners[i], ...color, ...normal, emission, NO_ID, MATERIAL.default, uvs?.[i][0] ?? 0, uvs?.[i][1] ?? 0, seed, style);
@@ -98,6 +113,7 @@ function triangle(a: Vec3, b: Vec3, c: Vec3, outside: Vec3, color: Vec3, emissio
 // A roof over a rectangle rising to a ridge `inset` shorter than its long side at each end; half its short side makes
 // a pyramid. Four sloped faces.
 export function hipRoof(x0: number, z0: number, x1: number, z1: number, bottom: number, height: number, inset: number, color: Vec3, emission = 0): number[] {
+  if (skipVertices) return [];
   const alongX = x1 - x0 >= z1 - z0;
   const [a0, a1, b0, b1] = alongX ? [x0, x1, z0, z1] : [z0, z1, x0, x1];
   const point = (a: number, y: number, b: number): Vec3 => (alongX ? [a, y, b] : [b, y, a]);
@@ -120,6 +136,7 @@ export function hipRoof(x0: number, z0: number, x1: number, z1: number, bottom: 
 
 // A cone standing on the ground plane at `base`, faceted.
 export function cone(base: Vec3, radius: number, height: number, sides: number, color: Vec3): number[] {
+  if (skipVertices) return [];
   const rim = (corner: number): Vec3 => {
     const angle = (2 * Math.PI * corner) / sides;
     return [base[0] + Math.cos(angle) * radius, base[1], base[2] + Math.sin(angle) * radius];
@@ -136,6 +153,7 @@ export function cone(base: Vec3, radius: number, height: number, sides: number, 
 
 // An upright polygon column (water tanks), its side faces and a top.
 export function column(base: Vec3, radius: number, height: number, sides: number, color: Vec3): number[] {
+  if (skipVertices) return [];
   const at = (corner: number, y: number): Vec3 => {
     const angle = (2 * Math.PI * corner) / sides;
     return [base[0] + Math.cos(angle) * radius, y, base[2] + Math.sin(angle) * radius];
@@ -154,6 +172,7 @@ export function column(base: Vec3, radius: number, height: number, sides: number
 // A pitched roof over the rectangle from (x0, z0) to (x1, z1): two slopes meeting at a ridge along the longer side,
 // closed by triangular gable ends.
 export function gableRoof(x0: number, z0: number, x1: number, z1: number, bottom: number, height: number, color: Vec3): number[] {
+  if (skipVertices) return [];
   const alongX = x1 - x0 >= z1 - z0;
   // Built with the ridge along x; for a ridge along z, x and z swap.
   const [a0, a1, b0, b1] = alongX ? [x0, x1, z0, z1] : [z0, z1, x0, x1];
@@ -206,6 +225,7 @@ export function pixelArt(
   color: Vec3,
   emission = 0,
 ): number[] {
+  if (skipVertices) return [];
   const [x, y, z] = centre;
   const [facingX, , facingZ] = facing;
   // Face space to world: u to the right as a viewer sees it, v up, w out of the face.
@@ -257,6 +277,7 @@ export function disc(
   color: Vec3,
   emission = 0,
 ): number[] {
+  if (skipVertices) return [];
   const right = cross(facing, [0, 1, 0]);
   const up: Vec3 = [0, 1, 0];
   const half = depth / 2;
@@ -280,6 +301,7 @@ export function disc(
 
 // A flat regular polygon lying on the ground and facing up (ponds), as a fan of triangles from the centre.
 export function flatDisc(centre: Vec3, radius: number, sides: number, color: Vec3, emission = 0): number[] {
+  if (skipVertices) return [];
   const rim = (corner: number): Vec3 => {
     const angle = (2 * Math.PI * corner) / sides;
     return along(centre, [[1, 0, 0], Math.cos(angle) * radius], [[0, 0, 1], -Math.sin(angle) * radius]);
@@ -295,6 +317,7 @@ export function flatDisc(centre: Vec3, radius: number, sides: number, color: Vec
 
 // A square bar between two points at any angle. Must not point straight up.
 export function beam(from: Vec3, to: Vec3, thickness: number, color: Vec3, emission = 0): number[] {
+  if (skipVertices) return [];
   const length = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
   const forward: Vec3 = [(to[0] - from[0]) / length, (to[1] - from[1]) / length, (to[2] - from[2]) / length];
   const side = cross(forward, [0, 1, 0]);

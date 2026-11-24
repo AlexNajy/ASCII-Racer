@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { CAR_LENGTH, DEFAULT_CAR_SETTINGS } from './car.ts';
+import { CAR_LENGTH, CAR_WIDTH, DEFAULT_CAR_SETTINGS } from './car.ts';
 import { NO_INPUT, type CarInput } from './carInput.ts';
 import { DEFAULT_CITY_SETTINGS } from './city.ts';
 import { TICKS_PER_SECOND } from './clock.ts';
-import { createWorld, regenerateCity, stepWorld, type World } from './world.ts';
+import { createWorld, regenerateCity, startJunction, stepWorld, type World } from './world.ts';
 
 const THROTTLE: CarInput = { ...NO_INPUT, throttle: 1 };
 
@@ -16,6 +16,16 @@ function drive(world: World, inputs: (tick: number) => CarInput, ticks: number):
 }
 
 describe('world', () => {
+  it.each([6, 7, 8, 10])('starts on the central junction with %i blocks per side, clear of colliders', (blocksPerSide) => {
+    const world = createWorld({ ...DEFAULT_CITY_SETTINGS, blocksPerSide }, { ...DEFAULT_CAR_SETTINGS });
+    const junction = startJunction(world.city);
+    const middle = Math.floor((blocksPerSide + 1) / 2);
+    expect([junction.row, junction.column]).toEqual([middle, middle]);
+    const radius = CAR_WIDTH / 2;
+    const hit = world.colliders.some(({ rect }) => junction.x > rect.minX - radius && junction.x < rect.maxX + radius && junction.z > rect.minZ - radius && junction.z < rect.maxZ + radius);
+    expect(hit).toBe(false);
+  });
+
   it('builds a city with buildings and colliders at tick 0', () => {
     const world = newWorld();
     expect(world.tick).toBe(0);
