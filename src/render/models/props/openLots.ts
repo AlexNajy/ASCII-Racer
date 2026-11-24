@@ -1,5 +1,6 @@
 import type { OpenLot, Side } from '../../../game/buildings.ts';
 import { CURB_HEIGHT, subtract, type City, type Rect } from '../../../game/city.ts';
+import { hypot } from '../../../math/deterministic.ts';
 import { POND_RADIUS } from '../../../game/park.ts';
 import type { Vec3 } from '../../../math/mat4.ts';
 import { MATERIAL } from '../../materials.ts';
@@ -145,7 +146,7 @@ function park({ rect }: OpenLot, random: () => number): Model {
     const x = rect.minX + random() * (rect.maxX - rect.minX);
     const z = rect.minZ + random() * (rect.maxZ - rect.minZ);
     const onPath = Math.abs(x - cx) < half + TREE_CLEARANCE || Math.abs(z - cz) < half + TREE_CLEARANCE;
-    const nearPond = Math.hypot(x - cx, z - cz) < POND_RADIUS + TREE_CLEARANCE;
+    const nearPond = hypot(x - cx, z - cz) < POND_RADIUS + TREE_CLEARANCE;
     if (!onPath && !nearPond) models.push(tree(x, z, GROUND, random));
   }
   return combine(models);

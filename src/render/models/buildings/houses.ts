@@ -1,5 +1,6 @@
 import type { Side } from '../../../game/buildings.ts';
 import type { Rect } from '../../../game/city.ts';
+import { cos, sin } from '../../../math/deterministic.ts';
 import type { Vec3 } from '../../../math/mat4.ts';
 import { MATERIAL } from '../../materials.ts';
 import { gableRoof, hipRoof, withMaterial, withSideColor, withSideMaterial } from '../../shapes.ts';
@@ -21,8 +22,12 @@ const CHIMNEY_COLOR: Vec3 = [0.5, 0.28, 0.24];
 const GARAGE_DOOR_COLOR: Vec3 = [0.6, 0.6, 0.58];
 const GARAGE_DOOR_HEIGHT = 2.5;
 
+function tan(angle: number): number {
+  return sin(angle) / cos(angle);
+}
+
 function roofHeight(width: number): number {
-  return (Math.tan((ROOF_ANGLE * Math.PI) / 180) * width) / 2;
+  return (tan((ROOF_ANGLE * Math.PI) / 180) * width) / 2;
 }
 
 function roof(rect: Rect, y: number, color: Vec3, wallColor: Vec3, hip: boolean): number[] {
