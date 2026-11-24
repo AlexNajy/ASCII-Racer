@@ -31,6 +31,7 @@ uniform vec3 u_scatterParams[32];
 uniform vec4 u_windowStyles[16];
 uniform float u_windowLitMaterial;
 uniform float u_windowDarkMaterial;
+uniform float u_supersample; // samples per cell along each axis; fwidth is per sample, so this turns it into per cell
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
@@ -68,7 +69,11 @@ float scatter(vec3 normal) {
   int material = int(v_material);
   vec3 params = u_scatterParams[material];
   vec2 p = surfacePosition(v_worldPosition, normal);
-  float fine = hash(ivec2(floor(p / params.x)), uint(material));
+  // Squares smaller than a cell would land on a different random square every frame as the camera moves, so further
+  // away they double in size per axis until each covers a cell, like the windows' groups.
+  vec2 footprint = fwidth(p) * u_supersample;
+  vec2 square = params.x * max(vec2(1.0), exp2(ceil(log2(max(footprint / params.x, vec2(0.001))))));
+  float fine = hash(ivec2(floor(p / square)), uint(material));
   float patches = valueNoise(p / params.y, uint(material));
   return mix(fine, patches, params.z);
 }
@@ -100,7 +105,7 @@ Surface facade() {
   Surface wall = Surface(v_color, v_emission, v_material);
   vec4 style = u_windowStyles[int(v_facade.y)];
   uint seed = uint(v_facade.x);
-  vec2 footprint = fwidth(v_facadeUv);
+  vec2 footprint = fwidth(v_facadeUv) * u_supersample;
   vec2 group = max(vec2(1.0), pow(vec2(2.0), ceil(log2(max(footprint / GROUP_FOOTPRINT, vec2(0.001))))));
   bvec2 solid = greaterThan(footprint, vec2(SOLID_WINDOW_FOOTPRINT));
   vec2 offCentre = abs(fract(v_facadeUv) - 0.5);

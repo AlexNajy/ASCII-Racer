@@ -25,6 +25,7 @@ uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene, 5 normal texture, 
 // Turns world directions into view space: x right, y up, z towards the camera.
 uniform mat3 u_viewRotation;
 
+
 out vec4 outColor;
 
 // Neighbouring faces whose normals are further apart than this (about 25°) form an edge.
@@ -157,6 +158,8 @@ void main() {
   ivec2 cell = ivec2(gl_FragCoord.xy) / u_cellSize;
   vec4 scene = texelFetch(u_scene, cell, 0);
   vec3 color = scene.rgb;
+  ivec2 inCell = ivec2(gl_FragCoord.xy) - cell * u_cellSize;
+
 
   // Alpha 0 means nothing was drawn here: show the background as a solid colour.
   if (scene.a == 0.0) {
@@ -222,7 +225,6 @@ void main() {
   }
 
   // Atlas rows run top-down, screen rows bottom-up, hence the flipped y.
-  ivec2 inCell = ivec2(gl_FragCoord.xy) - cell * u_cellSize;
   ivec2 atlasPixel = ivec2(
     column * u_cellSize.x + inCell.x,
     row * u_cellSize.y + u_cellSize.y - 1 - inCell.y

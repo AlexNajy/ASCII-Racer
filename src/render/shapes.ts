@@ -10,6 +10,7 @@ import { MATERIAL } from './materials.ts';
 export const FLOATS_PER_VERTEX = 16;
 export const NO_ID = -1;
 export const BEACON_ID = -2; // shown only while u_beaconOn is set
+export const BRAKE_ID = -3; // dimmed unless u_braking is set
 const NO_FACADE = [0, 0, 0, 0];
 const COLOR_OFFSET = 3;
 const NORMAL_Y_OFFSET = 7;
