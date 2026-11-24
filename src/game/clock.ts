@@ -8,6 +8,13 @@ export interface Clock {
   leftover: number; // frame time not yet used up by whole ticks, in seconds
 }
 
+// Longest frame time used, so returning to a background tab doesn't teleport the camera or run a burst of ticks.
+export const MAX_FRAME_SECONDS = 0.1;
+
+export function capFrameSeconds(seconds: number): number {
+  return Math.min(seconds, MAX_FRAME_SECONDS);
+}
+
 export function createClock(): Clock {
   return { tick: 0, leftover: 0 };
 }

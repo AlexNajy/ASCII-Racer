@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TICKS_PER_SECOND, TICK_SECONDS, advanceClock, createClock } from './clock';
+import { MAX_FRAME_SECONDS, TICKS_PER_SECOND, TICK_SECONDS, advanceClock, capFrameSeconds, createClock } from './clock';
 
 function run(frames: number[]): { ticks: number[]; clock: ReturnType<typeof createClock> } {
   const clock = createClock();
@@ -30,5 +30,13 @@ describe('advanceClock', () => {
     const split = run(Array.from({ length: 100 }, () => 0.01)).clock.tick;
     expect(Math.abs(whole - split)).toBeLessThanOrEqual(1);
     expect(whole).toBeGreaterThanOrEqual(TICKS_PER_SECOND - 1);
+  });
+});
+
+describe('capFrameSeconds', () => {
+  it('keeps short frames and caps long ones, so a slow frame runs at most 6 ticks', () => {
+    expect(capFrameSeconds(0.016)).toBe(0.016);
+    expect(capFrameSeconds(10)).toBe(MAX_FRAME_SECONDS);
+    expect(run([capFrameSeconds(10)]).ticks.length).toBeLessThanOrEqual(6);
   });
 });
