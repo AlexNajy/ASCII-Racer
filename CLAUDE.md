@@ -143,27 +143,42 @@ The finished game is described in `SPEC.md`. The steps and their sub-steps are t
 - One branch per roadmap step, named like the existing ones (`fly-camera`, `visual-identity`), merged into `main` with a pull request titled `Step N: Name`. Tick sub-steps in `README.md` as they are done.
 - Dev dependencies are fine (Vitest, Playwright, the Supabase CLI). Runtime dependencies are not, except `@supabase/supabase-js`.
 
-## The loop
+## Building with /go
 
-The game is finished by scheduled agent runs with nobody watching. Every run starts with no memory: the repository is the only state. The owner has made all the creative decisions (`SPEC.md`) and is not available for questions.
+The owner has made the creative decisions (`SPEC.md`) and is usually away. `/go` in a Claude Code session on the owner's Mac starts the build; the session's model is the lead and stays the lead until the owner says stop. State lives in the repository (`README.md` checkboxes, `PROGRESS.md`, git), so a new `/go` carries on where the last one ended.
 
-Each run:
+### The lead
 
-1. Read `SPEC.md` and the roadmap in `README.md`. The task is the first unticked sub-step of the first unfinished step that isn't marked blocked.
-2. `git fetch`. If the step's branch exists, check it out and carry on from it; otherwise branch from `main`. Use the author name and email of the last commit on `main` for commits.
-3. Do that one sub-step. Small and complete beats large and half done; if it turns out too big, split it into sub-steps in the README first.
-4. Prove it: `npm run check` must pass, with new tests for new simulation, generation or server code. For anything visible, run `npm run shots` and look at the pictures in glyph mode. Never delete or weaken a test to get it to pass; a test that is wrong is fixed with the reason in the commit message.
-5. Update the "How it works today" notes above when the sub-step changes how something works, tick the sub-step, commit, push.
-6. If there is time left in the run, take the next sub-step. Stop cleanly: never leave uncommitted work or a broken branch.
-7. When every sub-step of the step is ticked: tick the step, open the pull request (a few bullets of what was built and how it was checked, like the earlier ones), wait for CI, merge with a merge commit, keep the branch.
+The lead plans, delegates, reviews and commits. It does not write features itself, so its own context stays small enough to run for hours.
 
-Rules:
+For each sub-step, in roadmap order (first unticked, unblocked sub-step of the first unfinished step, on that step's branch):
+
+1. Brief a subagent (Agent tool, `general-purpose`). The brief stands alone: the sub-step, the part of `SPEC.md` it serves, the files to read first, what done means and how to prove it, and the rules below. Pick the model by the work: `sonnet` for well-defined building, `opus` for the hard parts (simulation changes, shaders, netcode, anything a first try got wrong), `haiku` for searching and mechanical edits. A sub-step too big for one brief is split in the README first.
+2. One subagent writes in the working tree at a time. Others may run alongside only if they read (research, review, looking at screenshots) or work in their own worktree on something that touches different files.
+3. When it reports back, check the work yourself: read the diff, run `npm run check`, and for anything visible run `npm run shots` and look at the pictures in glyph mode. Not good enough: send it back with what is wrong, or give it to a stronger model. Twice failed: mark it blocked.
+4. Tick the sub-step, update the "How it works today" notes above if how something works changed, add the entry to `PROGRESS.md`, commit, push.
+5. When every sub-step of a step is ticked: tick the step, open the pull request (`Step N: Name`, a few bullets of what was built and how it was checked), wait for CI, merge with a merge commit, keep the branch, start the next step's branch from `main`.
+
+Subagents are told: follow this file's conventions; write tests for new simulation, generation and server code; never delete or weaken a test to make it pass; do not commit, push or switch branches; finish with a report of what changed, how it was checked, decisions made and doubts.
+
+Other rules:
 
 - `main` only changes through pull requests with green CI.
-- If the remote branch moved while working, rebase onto it; if the same sub-step was done there, drop the local work.
-- Stuck after real attempts (or something only the owner can do, like an account or a secret): add `  - blocked: reason` under the sub-step in the README, commit, and go on with the next sub-step that doesn't depend on it. A later run may retry a blocked sub-step if the reason no longer holds.
+- Stuck, or something only the owner can do (an account, a secret): add `  - blocked: reason` under the sub-step, note it in `PROGRESS.md`, go on with the next sub-step that doesn't depend on it.
 - A decision the spec doesn't cover: pick the simplest thing, add a line to "Decisions made along the way" in `SPEC.md`.
-- A bug found on the way: fix it if it is small, otherwise add a sub-step for it.
-- Things tried and dropped are written down above with the reason, so no later run tries them again.
-- Don't touch repository settings, secrets, the schedule, or anything outside this repository.
-- When every step is ticked, do one pass per run looking for bugs against `SPEC.md` (play through the modes headless, read the screenshots), fix what turns up, and otherwise change nothing.
+- A bug found on the way: fix it if small, otherwise add a sub-step.
+- Things tried and dropped are written down above with the reason.
+- After the context has been summarised, read this section and the end of `PROGRESS.md` again before going on.
+- When every step is ticked: play through every mode against `SPEC.md` (headless runs, screenshots), fix what turns up, then stop and say so.
+
+### When the owner speaks
+
+Any message from the owner while building ("hey im back", a question, a change) gets answered first: what was finished since they left, what is running now, anything blocked or worth their eyes, from `PROGRESS.md` and the running subagents. A running subagent carries on unless the message means its work is wrong. Then do what they ask:
+
+- A change to the game: edit `SPEC.md` and the roadmap first, then build it.
+- Screenshots: `npm run shots` (or a one-off picture of what they name) and open them with `open`.
+- "go" or nothing more: carry on.
+
+### When the owner says stop
+
+`/stop`, or "stop" in words: let a subagent that is nearly done finish and commit its work if it passes; stop the others and discard their half-done changes (say what was dropped in `PROGRESS.md`). Leave the tree clean and pushed, stop `caffeinate`, and give a short summary: done, in what state, next.
