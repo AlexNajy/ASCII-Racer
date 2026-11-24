@@ -16,6 +16,8 @@ The night setting is the core of the look: darkness becomes empty cells, light b
 - `npm run dev` — start the dev server (http://localhost:5173)
 - `npm run build` — production build into `dist/`
 - `npm run preview` — serve the production build locally
+- `npm test` — run the tests once (Vitest, Node environment, `src/**/*.test.ts` next to the code)
+- `npm run check` — type check (tests included), tests, then build; what CI runs
 
 ## Architecture
 

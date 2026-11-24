@@ -11,6 +11,8 @@ npm install
 npm run dev       # dev server at http://localhost:5173
 npm run build     # production build into dist/
 npm run preview   # serve the production build locally
+npm test          # run the tests once
+npm run check     # type check, tests and build
 ```
 
 ## Controls
@@ -121,7 +123,7 @@ npm run preview   # serve the production build locally
   - [x] Car model: body, cabin with glass, wheels, glowing headlights and tail lights that brighten while braking, on the same collision box
   - [x] Drift particles: bursts from the bottom of the rear tyres while sliding, like crash debris
 - [ ] **13. Checks**: what the loop uses to know a change works, see `SPEC.md` for the finished game
-  - [ ] Test runner: Vitest as a dev dependency, `npm test`, and `npm run check` running type check, tests and build
+  - [x] Test runner: Vitest as a dev dependency, `npm test`, and `npm run check` running type check, tests and build
   - [ ] Headless world: setup and the per-tick step moved out of `main.ts` into `game/world.ts` (no WebGL, no DOM), so Node can build a city and drive a car in it
   - [ ] Determinism tests: the same seed and inputs give the same car state after thousands of ticks, and a stored hash of a reference run that only changes on purpose
   - [ ] City tests over 200 seeds: nothing solid on a road, every junction reachable, no way out of the city, no props inside buildings
