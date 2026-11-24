@@ -125,22 +125,7 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 
 ## Roadmap
 
-1. Full-screen WebGL2 canvas with a game loop (done when the screen clears every frame)
-2. Draw a triangle (first vertex and fragment shaders)
-3. 3D camera and a simple ground plane with perspective
-4. Render to an offscreen framebuffer, then the ASCII pass with a glyph atlas
-5. Fly camera: move freely through the scene with the keyboard and look around with the mouse
-6. A city: street grid, zoning and an outer wall, as plain seeded data
-7. Buildings: placeholder boxes on every block, batched into one mesh, collisions with buildings
-8. Lighting: a dim moonlight base that shapes buildings, and things that glow (emission) instead of real lights
-9. A drivable car: keyboard input, arcade acceleration, steering and drift (Mario Kart style), headlights
-10. Per-material glyph sets: material IDs in the scene buffer pick an atlas row per cell
-11. Building models: parametric styles and fixed prefabs in place of the boxes, with seeded spawning rules per zone, lot and neighbourhood
-12. Visual identity: temporally stable glyphs (no flicker at speed), particles, drift particles
-13. Sound: Web Audio API, engine, tires, impacts, ambience
-14. HUD: a text layer drawn in the glyph grid (speedometer first)
-15. Menu + game modes
-16. Multiplayer: a small server to connect players, other players' cars, rollback netcode
+The finished game is described in `SPEC.md`. The steps and their sub-steps are the checkboxes in `README.md`; that list is the task queue.
 
 ## Conventions
 
@@ -154,16 +139,31 @@ The city is plain data (rectangles and zones) with no WebGL in it. The renderer,
 - Detail smaller than ~1 m disappears beyond ~40 m (about 8 cells per metre at 20 m, 2 at 80 m). Buildings read by silhouette and height.
 - Shaders live in `.glsl` files and are imported with Vite's `?raw` suffix.
 - Keep comments to a minimal neccesary use
-- Commit after each small working step.
-- One branch per roadmap step, merged into `main` with a pull request. Tick sub-steps in `README.md` as they are done.
+- Commit after each small working step, in the style of the existing history: `Topic: what changed`, no prefixes like `feat:`.
+- One branch per roadmap step, named like the existing ones (`fly-camera`, `visual-identity`), merged into `main` with a pull request titled `Step N: Name`. Tick sub-steps in `README.md` as they are done.
+- Dev dependencies are fine (Vitest, Playwright, the Supabase CLI). Runtime dependencies are not, except `@supabase/supabase-js`.
 
-## Working with me
+## The loop
 
-This is a learning project, i want to understand how it works.
+The game is finished by scheduled agent runs with nobody watching. Every run starts with no memory: the repository is the only state. The owner has made all the creative decisions (`SPEC.md`) and is not available for questions.
 
-- Work in small steps. One concept at a time, never a whole feature in one go.
-- Explain consisely and simply each new addition and the why
-- Tell me where code goes (which file, which part of the file).
-- You can write the code yourself; explain what it does and why. Ask before committing or changing things outside the current step.
-- I'm on macOS, using VS Code and Chrome for development.
-- I commit the code not you
+Each run:
+
+1. Read `SPEC.md` and the roadmap in `README.md`. The task is the first unticked sub-step of the first unfinished step that isn't marked blocked.
+2. `git fetch`. If the step's branch exists, check it out and carry on from it; otherwise branch from `main`. Use the author name and email of the last commit on `main` for commits.
+3. Do that one sub-step. Small and complete beats large and half done; if it turns out too big, split it into sub-steps in the README first.
+4. Prove it: `npm run check` must pass, with new tests for new simulation, generation or server code. For anything visible, run `npm run shots` and look at the pictures in glyph mode. Never delete or weaken a test to get it to pass; a test that is wrong is fixed with the reason in the commit message.
+5. Update the "How it works today" notes above when the sub-step changes how something works, tick the sub-step, commit, push.
+6. If there is time left in the run, take the next sub-step. Stop cleanly: never leave uncommitted work or a broken branch.
+7. When every sub-step of the step is ticked: tick the step, open the pull request (a few bullets of what was built and how it was checked, like the earlier ones), wait for CI, merge with a merge commit, keep the branch.
+
+Rules:
+
+- `main` only changes through pull requests with green CI.
+- If the remote branch moved while working, rebase onto it; if the same sub-step was done there, drop the local work.
+- Stuck after real attempts (or something only the owner can do, like an account or a secret): add `  - blocked: reason` under the sub-step in the README, commit, and go on with the next sub-step that doesn't depend on it. A later run may retry a blocked sub-step if the reason no longer holds.
+- A decision the spec doesn't cover: pick the simplest thing, add a line to "Decisions made along the way" in `SPEC.md`.
+- A bug found on the way: fix it if it is small, otherwise add a sub-step for it.
+- Things tried and dropped are written down above with the reason, so no later run tries them again.
+- Don't touch repository settings, secrets, the schedule, or anything outside this repository.
+- When every step is ticked, do one pass per run looking for bugs against `SPEC.md` (play through the modes headless, read the screenshots), fix what turns up, and otherwise change nothing.
