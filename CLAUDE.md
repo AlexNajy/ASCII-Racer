@@ -145,7 +145,7 @@ The finished game is described in `SPEC.md`. The steps and their sub-steps are t
 
 ## Building with /go
 
-The owner has made the creative decisions (`SPEC.md`) and is usually away. `/go` in a Claude Code session on the owner's Mac starts the build; the session's model is the lead and stays the lead until the owner says stop. State lives in the repository (`README.md` checkboxes, `PROGRESS.md`, git), so a new `/go` carries on where the last one ended.
+The owner has made the creative decisions (`SPEC.md`) and is usually away. `/go` (`.claude/skills/go`) in a Claude Code session on the owner's Mac starts the build; the session's model is the lead and stays the lead until the owner says stop. State lives in the repository (`README.md` checkboxes, `PROGRESS.md`, git), so a new `/go` carries on where the last one ended.
 
 ### The lead
 
@@ -153,13 +153,13 @@ The lead plans, delegates, reviews and commits. It does not write features itsel
 
 For each sub-step, in roadmap order (first unticked, unblocked sub-step of the first unfinished step, on that step's branch):
 
-1. Brief a subagent (Agent tool, `general-purpose`). The brief stands alone: the sub-step, the part of `SPEC.md` it serves, the files to read first, what done means and how to prove it, and the rules below. Pick the model by the work: `sonnet` for well-defined building, `opus` for the hard parts (simulation changes, shaders, netcode, anything a first try got wrong), `haiku` for searching and mechanical edits. A sub-step too big for one brief is split in the README first.
-2. One subagent writes in the working tree at a time. Others may run alongside only if they read (research, review, looking at screenshots) or work in their own worktree on something that touches different files.
-3. When it reports back, check the work yourself: read the diff, run `npm run check`, and for anything visible run `npm run shots` and look at the pictures in glyph mode. Not good enough: send it back with what is wrong, or give it to a stronger model. Twice failed: mark it blocked.
+1. Brief the `builder` subagent (`.claude/agents/builder.md` holds its standing rules). The brief stands alone: the sub-step, the part of `SPEC.md` it serves, the files to read first, what done means and how to prove it. It runs on `sonnet`; pass `model: opus` for the hard parts (simulation changes, shaders, netcode, anything a first try got wrong). Use `Explore` for searching. A sub-step too big for one brief is split in the README first.
+2. One builder writes in the working tree at a time. Other subagents may run alongside only if they read (research, review, looking at screenshots).
+3. When it reports back, have the `reviewer` subagent look at the uncommitted work; it has not seen how it was written. Then check yourself: `npm run check`, and for anything visible `npm run shots` and look at the pictures in glyph mode. A `fix` verdict or a failed check goes back to a builder with the findings. Twice failed: discard the changes and mark the sub-step blocked.
 4. Tick the sub-step, update the "How it works today" notes above if how something works changed, add the entry to `PROGRESS.md`, commit, push.
 5. When every sub-step of a step is ticked: tick the step, open the pull request (`Step N: Name`, a few bullets of what was built and how it was checked), wait for CI, merge with a merge commit, keep the branch, start the next step's branch from `main`.
 
-Subagents are told: follow this file's conventions; write tests for new simulation, generation and server code; never delete or weaken a test to make it pass; do not commit, push or switch branches; finish with a report of what changed, how it was checked, decisions made and doubts.
+While `.claude/go.active` exists (made by `/go`, removed by `/stop`) a Stop hook (`.claude/hooks/keep-going.sh`) counts the unticked, unblocked sub-steps and sends you back to work if any remain. When you have to end a turn anyway (waiting for a background subagent, or the owner wants you to hold), `touch .claude/go.pause` first and remove it when you resume. After the context is summarised, another hook prints the end of `PROGRESS.md`.
 
 Other rules:
 
@@ -168,7 +168,6 @@ Other rules:
 - A decision the spec doesn't cover: pick the simplest thing, add a line to "Decisions made along the way" in `SPEC.md`.
 - A bug found on the way: fix it if small, otherwise add a sub-step.
 - Things tried and dropped are written down above with the reason.
-- After the context has been summarised, read this section and the end of `PROGRESS.md` again before going on.
 - When every step is ticked: play through every mode against `SPEC.md` (headless runs, screenshots), fix what turns up, then stop and say so.
 
 ### When the owner speaks
