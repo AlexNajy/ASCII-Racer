@@ -7,7 +7,7 @@ import { createWorld, generateCityData, startJunction, type CityData } from './w
 
 // Every daily city comes from a new seed with the default settings, so these must hold for any seed.
 const SEEDS = Array.from({ length: 200 }, (_, i) => i + 1);
-const CAR_RADIUS = CAR_WIDTH / 2; // collideCar's circles
+const CAR_RADIUS = CAR_WIDTH / 2; // collideCar's capsule
 const OVERLAP_TOLERANCE = 0.01; // m, both ways, so touching edges and rounding don't count
 const FILL_CELL = 0.5; // m, smaller than any gap that matters next to the car's width
 const FILL_MARGIN = 2; // m of grid beyond the wall's outer edge

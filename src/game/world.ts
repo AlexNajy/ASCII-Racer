@@ -128,7 +128,7 @@ export function stepWorld(world: World, input: CarInput): TickResult {
     return { impact: null, race: { kind: 'go' } };
   }
   stepCar(world.car, input, world.carSettings);
-  const impact = collideCar(world.car, world.colliders, world.carSettings);
+  const impact = collideCar(world.car, world.previousCar.x, world.previousCar.z, world.colliders, world.carSettings);
   world.tick++;
   return { impact, race: race ? advanceRace(race, world.previousCar, world.car, world.tick) : null };
 }
