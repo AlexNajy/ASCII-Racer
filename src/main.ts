@@ -18,9 +18,11 @@ import { FENCE_HEIGHT } from './game/fences.ts';
 import { lotPavements } from './game/lots.ts';
 import { POND_RADIUS } from './game/park.ts';
 import { signalPhase } from './game/signals.ts';
-import { generateRoute, RouteError, type Route } from './game/route.ts';
-import { goTick } from './game/race.ts';
-import { clearRace, createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorld, type CityData } from './game/world.ts';
+import type { Route } from './game/route.ts';
+import { goTick, raceTicks } from './game/race.ts';
+import { createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorld, type CityData } from './game/world.ts';
+import { cityRoute, enterState } from './app/flow.ts';
+import { afterTick, DEFAULT_RACE_MODE, MENU, preRace, pressEnter, pressEscape, type GameState } from './app/gameState.ts';
 import { trackFullscreenKey, trackKeyboard, trackKeyPress, trackMouse } from './game/input.ts';
 import {
   createColorTarget,
@@ -37,6 +39,7 @@ import { createHudTexture, uploadHud } from './hud/hudTexture.ts';
 import { drawHud } from './hud/hud.ts';
 import { routeGuidance } from './hud/guidance.ts';
 import { createMinimap } from './hud/minimap.ts';
+import { drawMenuScreen, drawPreRaceScreen, drawResultsScreen } from './hud/screens.ts';
 import { drawTestCard } from './hud/testCard.ts';
 import { printableRows, TextGrid } from './hud/textGrid.ts';
 import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS, STROKE_ROW, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
@@ -329,17 +332,19 @@ const urlParams = parseUrlParams(window.location.search);
 if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
 
 const world = createWorld(citySettings, carSettings);
-// Until the menu exists the game starts in a race on the city seed's route; race=0 drives freely as before.
-function startCityRace() {
-  if (!urlParams.race) return;
-  try {
-    startRace(world, generateRoute(world.roadGraph, citySettings.seed));
-  } catch (error) {
-    if (!(error instanceof RouteError)) throw error;
-    clearRace(world);
-  }
+// The game starts on the menu. state=race (and results) starts racing the city seed's route at tick 0, as shots
+// do; race=0 drives freely instead.
+let gameState: GameState = MENU;
+if (urlParams.state === 'race' || urlParams.state === 'results') {
+  gameState = { kind: 'race', mode: DEFAULT_RACE_MODE };
+  const route = urlParams.race ? cityRoute(world) : null;
+  if (route) startRace(world, route);
+} else if (urlParams.state === 'preRace') {
+  const route = cityRoute(world);
+  if (!route) throw new Error('URL parameter state: the city has no route');
+  gameState = preRace(DEFAULT_RACE_MODE, route);
+  enterState(world, gameState, MENU);
 }
-startCityRace();
 // gate=N with N the number of gates finishes the race once the held tick is reached, at that time.
 const finishAtStart = urlParams.gate !== null && world.race !== null && urlParams.gate === world.race.route.gates.length;
 if (urlParams.gate !== null && world.race && !finishAtStart) {
@@ -353,19 +358,23 @@ if (urlParams.car) {
 }
 // A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
 const heldTick = urlParams.tick;
-const heldInput = urlParams.drive ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
+const heldInput = urlParams.drive && gameState.kind === 'race' ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
 for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, heldInput);
 if (finishAtStart && world.race) {
   world.race.nextGate = world.race.route.gates.length;
   world.race.phase = 'finished';
   world.race.finishTick = Math.max(world.tick, goTick(world.race));
 }
+if (urlParams.state === 'results') {
+  if (world.race?.phase !== 'finished') throw new Error('URL parameter state: results needs a finished race (gate=<gate count>)');
+  gameState = { kind: 'results', mode: DEFAULT_RACE_MODE, ticks: raceTicks(world.race, world.tick) };
+}
 let cityMeshes = buildCityMeshes(world);
 // The race's gates, rebuilt whenever its route changes; none in free driving.
 let gateMesh: Mesh | null = null;
 let gateRoute: Route | null = null;
 function updateGateMesh() {
-  const route = world.race?.route ?? null;
+  const route = world.race?.route ?? (gameState.kind === 'preRace' ? gameState.route : null);
   if (route === gateRoute) return;
   if (gateMesh) deleteMesh(gateMesh);
   gateMesh = route ? uploadMesh(routeGateVertices(route.gates)) : null;
@@ -377,8 +386,8 @@ let minimap = createMinimap(world.city);
 function regenerateCity() {
   cityMeshes.forEach(deleteMesh);
   regenerateWorldCity(world);
-  startCityRace();
-  if (world.race) faceCarHeading();
+  // The old route and the car's place mean nothing in the new city.
+  setGameState(MENU);
   cityMeshes = buildCityMeshes(world);
   gl!.deleteTexture(signals.texture);
   signals = createSignalTexture(gl!, world.city.junctions.length);
@@ -559,10 +568,21 @@ function draw(mesh: Mesh, mode: GLenum, view: Mat4, model?: Mat4) {
 const clock = createClock();
 const chase = createChaseCamera();
 faceCarHeading();
-trackKeyPress('KeyR', () => {
-  if (!world.race) return;
-  startRace(world, world.race.route);
-  faceCarHeading();
+
+function setGameState(next: GameState) {
+  enterState(world, next, gameState);
+  // Every state but the results puts the car somewhere new.
+  if (next.kind !== 'results') faceCarHeading();
+  gameState = next;
+  if (urlParams.hud !== 'test') hud.clear();
+}
+trackKeyPress('Enter', () => {
+  const next = pressEnter(gameState, () => cityRoute(world));
+  if (next !== gameState) setGameState(next);
+});
+trackKeyPress('Escape', () => {
+  const next = pressEscape(gameState);
+  if (next !== gameState) setGameState(next);
 });
 let carInput = NO_INPUT;
 
@@ -578,10 +598,12 @@ function frame(timeMs: number) {
   const dt = heldTick === null ? capFrameSeconds((timeMs - previousTimeMs) / 1000) : 0;
   previousTimeMs = timeMs;
   if (heldTick === null) advanceClock(clock, dt, () => {
-    carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
+    carInput = settings.movement === Movement.Car && gameState.kind === 'race' ? readCarInput() : NO_INPUT;
     const { impact } = stepWorld(world, carInput);
     if (impact) crashDebris(impact);
     driftParticles();
+    const next = afterTick(gameState, world.race, world.tick);
+    if (next !== gameState) setGameState(next);
   });
   updateParticles(particles, dt);
   // Drawn between the last two ticks by the time left over, so motion is smooth on any refresh rate.
@@ -595,7 +617,15 @@ function frame(timeMs: number) {
     fovBoost = updateChaseCamera(camera, chase, drawnCar, carSettings, chaseSettings, world.colliders, dt);
   }
   if (urlParams.hud !== 'test') {
-    if (settings.movement === Movement.Car) {
+    if (settings.movement !== Movement.Car) {
+      hud.clear();
+    } else if (gameState.kind === 'menu') {
+      drawMenuScreen(hud);
+    } else if (gameState.kind === 'preRace') {
+      drawPreRaceScreen(hud, { minimap, car: drawnCar, route: gameState.route });
+    } else if (gameState.kind === 'results') {
+      drawResultsScreen(hud, gameState.ticks);
+    } else {
       drawHud(hud, {
         speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ),
         topSpeed: carSettings.topSpeed,
@@ -604,8 +634,6 @@ function frame(timeMs: number) {
           ? { race: world.race, tick: world.tick, guidance: routeGuidance(world.roadGraph, world.race, { ...drawnCar, heading: camera.yaw }) }
           : undefined,
       });
-    } else {
-      hud.clear();
     }
   }
   const [cameraX, cameraY, cameraZ] = camera.position;

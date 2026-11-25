@@ -309,13 +309,7 @@ export function createDevMenu(
   }
 
   dropdown(viewPage, 'Render mode', 'renderMode', RenderMode);
-  const movementSelect = dropdown(viewPage, 'Movement', 'movement', Movement);
-  window.addEventListener('keydown', (event) => {
-    if (event.code !== 'KeyC') return;
-    settings.movement = settings.movement === Movement.FlyCamera ? Movement.Car : Movement.FlyCamera;
-    movementSelect.value = String(settings.movement);
-    onChange('movement');
-  });
+  dropdown(viewPage, 'Movement', 'movement', Movement);
 
   const noclipRow = document.createElement('label');
   noclipRow.className = 'checkbox';

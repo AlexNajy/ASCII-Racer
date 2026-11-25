@@ -1,4 +1,5 @@
 import { CELL_WIDTH_MAX, CELL_WIDTH_MIN, RenderMode } from './menu.ts';
+import type { GameStateKind } from '../app/gameState.ts';
 import type { Camera } from '../render/camera.ts';
 
 // Read once at startup, for repeatable pictures (`npm run shots`). With none of them present nothing changes.
@@ -11,10 +12,13 @@ export interface UrlParams {
   drive: boolean; // the held tick's stepping holds full throttle instead of no input
   hud: 'test' | null; // fill the text layer with a test card
   cellWidth: number | null; // CSS px, as the dev menu's cell width
-  race: boolean; // race=0 drives freely from the middle junction instead of starting a race
+  race: boolean; // race=0: the race state drives freely from the middle junction instead of on the city seed's route
   gate: number | null; // the race's next gate once it starts, to show a later gate lit; the gate count finishes it
   car: { x: number; z: number; quarterTurns: number } | null; // the car's place after the race starts, heading in quarter turns left of north
+  state: GameStateKind; // the screen the game starts on, the menu without the parameter
 }
+
+const URL_STATES: Record<string, GameStateKind> = { menu: 'menu', prerace: 'preRace', race: 'race', results: 'results' };
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
 
@@ -35,6 +39,7 @@ export function parseUrlParams(search: string): UrlParams {
   const race = query.get('race');
   const gate = query.get('gate');
   const car = query.get('car');
+  const state = query.get('state');
 
   let renderMode: RenderMode | null = null;
   if (mode !== null) {
@@ -82,6 +87,10 @@ export function parseUrlParams(search: string): UrlParams {
     carPose = { x, z, quarterTurns };
   }
 
+  if (state !== null && !Object.keys(URL_STATES).includes(state)) {
+    throw new Error(`URL parameter state: "${state}" is not one of ${Object.keys(URL_STATES).join(', ')}`);
+  }
+
   return {
     seed: seedNumber,
     renderMode,
@@ -94,5 +103,6 @@ export function parseUrlParams(search: string): UrlParams {
     race: race !== '0',
     gate: gateNumber,
     car: carPose,
+    state: state === null ? 'menu' : URL_STATES[state],
   };
 }

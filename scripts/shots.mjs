@@ -20,6 +20,7 @@ const EYE = 1.2;
 // headlights) is in the fly camera's pictures too, so every shot from before races existed has it.
 // gate: the race's next gate, so a later gate shows lit; the number of gates finishes the race at the held tick.
 // car: 'x,z,quarterTurns' puts the car there once the race has started (quarter turns left of north).
+// state: the game state the shot starts in ('menu', 'prerace', 'race', 'results'); 'race' when not given.
 // Positions are for the default seed's city (seed 1); with another seed the same spots show something else.
 const SHOTS = [
   { name: 'chase-junction', camera: null, mode: 'glyphs', tick: 300, race: false },
@@ -54,6 +55,9 @@ const SHOTS = [
   { name: 'gate-finish-far', camera: `-75,${EYE},-69,-90,2`, mode: 'glyphs', tick: 120, gate: 9 },
   { name: 'gate-finish', camera: `91,${EYE},-69,-90,6`, mode: 'glyphs', tick: 120, gate: 9 },
   { name: 'hud-test', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, hud: 'test', race: false },
+  { name: 'state-menu', camera: null, mode: 'glyphs', tick: 300, state: 'menu' },
+  { name: 'state-prerace', camera: null, mode: 'glyphs', tick: 300, state: 'prerace' },
+  { name: 'state-results', camera: null, mode: 'glyphs', tick: 600, gate: 10, state: 'results' },
 ];
 
 const args = process.argv.slice(2);
@@ -107,7 +111,7 @@ try {
       onError(new Error('page error'));
     });
     page.on('console', (message) => message.type() === 'error' && errors.push(message.text()));
-    const query = new URLSearchParams({ seed: String(seed), mode: shot.mode, tick: String(shot.tick) });
+    const query = new URLSearchParams({ seed: String(seed), mode: shot.mode, tick: String(shot.tick), state: shot.state ?? 'race' });
     if (shot.camera) query.set('camera', shot.camera);
     if (shot.drive) query.set('drive', '1');
     if (shot.race === false) query.set('race', '0');

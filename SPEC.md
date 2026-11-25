@@ -122,3 +122,9 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 - Step 15: the checkpoint count is gates passed over all gates with the finish counted as one (`12/12` once finished); the start line is not a gate. The timer has one minutes digit and stops at 9:59.983.
 - Step 15: route lengths are short 1250 m, medium 1800 m (the daily), long 2500 m. The cautious test driver (grip only, about 22 m/s on average) takes 48–65 s, 70–94 s (80 on average) and about 110 s; a player who drifts through the turns should be some 10–20% faster, so medium lands around 65–80 s, inside the 60–90 s aim.
 - Step 15: start and finish lines stay at least 20 m from the junction squares, and routes avoid turning the same way at two neighbouring junctions (looping round one block); both are preferences of the search, not hard rules.
+- Step 16: the game opens on the menu; Enter goes menu → pre-race → race, Esc goes back to the menu from any other screen; nothing happens on Enter while racing.
+- Step 16: the results screen comes up 5 s after the finish (when the finish banner has gone); until then the car can still be driven.
+- Step 16: in the menu, pre-race and results screens the car takes no input; the world keeps ticking (signals, neon), the car stands on the middle junction in the menu and on the start line before the race.
+- Step 16: the countdown starts when the pre-race screen is left with Enter, not when it opens.
+- Step 16: regenerating the city from the dev menu goes back to the main menu.
+- Step 16: the fly camera is switched only from the dev menu (the `C` key is gone) and works on every screen; the race restart key `R` is gone (restart comes back with unlimited's "again").

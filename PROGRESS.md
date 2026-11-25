@@ -164,3 +164,13 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Reviewer passed it: 32 000 random cut walls bit-identical to one rectangle (the old code differed in 5444, by up to 42 m); about 80 000 slides into the real joints of seeds 7 and 42 each identical to the merged box; no phantom walls across alleys or at set-back steps; no traps. About 10% slower in constant wall contact (135 000 ticks/s).
 - Known and left: a wedged car can rest 1 mm to 5 cm inside a collider (the 4-pass limit), same before this change; the many-pieces test doesn't assert that its slides hit.
 - Step 15 is complete: `npm run shots` gives 23 pictures, the lead looked at the race ones.
+
+## 2026-11-25: step 15 merged, step 16 game states
+
+- Step 15 merged as PR #18 and deployed. Branch `menu` for step 16.
+- Game states: `src/app/gameState.ts` (menu, preRace, race, results as plain data with pure transitions; a `RaceMode` with only `cityRoute` so far), `src/app/flow.ts` (what entering a state does to the world), `src/hud/screens.ts` (placeholder screens on the text layer). The game opens on the menu; Enter goes menu, pre-race, race; results come 5 s after the finish; Esc goes to the menu. Nothing in the simulation knows about it.
+- Keys gone: `C` (the fly camera is only the dev menu's Movement dropdown) and `R` (restart returns with unlimited's "again").
+- URL parameter `state=menu|prerace|race|results`; `scripts/shots.mjs` passes `state=race`, the 23 old shots are byte-identical, new shots `state-menu`, `state-prerace`, `state-results`. 242 tests.
+- Reviewer passed it and walked it in headless Chrome with the real clock: menu, pre-race, countdown, driving, Esc, a second clean race, a real finish, the results coming up by themselves, back to the menu; no console errors.
+- To check by hand in a real browser (headless can't): with the mouse captured, Chrome probably uses the first Esc to free the pointer without sending the key to the page, so leaving a race may take two presses.
+- For the real menu: the placeholder text has no background and is faint over a bright scene; Enter does nothing on a city without a route and the menu should say why; Enter and Esc also act while the dev menu is open.
