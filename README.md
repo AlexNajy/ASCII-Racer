@@ -139,8 +139,8 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Minimap: roads and the car, in a corner
 - [ ] **15. Routes**: a race from a seed
   - [x] Road graph: junctions and the segments between them as plain data from the city
-  - [ ] Route generator: start, ordered checkpoints and finish from a seed, by target length, no segment twice, with turns
-  - [ ] Route tests over 1000 seeds: every route valid, connected and inside the length range
+  - [x] Route generator: start, ordered checkpoints and finish from a seed, by target length, no segment twice, with turns
+  - [x] Route tests over 1000 seeds: every route valid, connected and inside the length range
   - [ ] Gates: glowing checkpoint and finish gates across the road, only the next one lit
   - [ ] Race state in the simulation: countdown, running, finished, checkpoints crossed in order and direction, time in ticks
   - [ ] Race HUD: timer, checkpoint count, the route on the minimap, arrow to the next gate

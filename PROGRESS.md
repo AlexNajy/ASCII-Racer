@@ -92,4 +92,12 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - `game/roadGraph.ts`: nodes (one per junction), segments (ends west/north to east/south, axis, length, width, avenue flag, the stretch clear of both junction squares), `links` per node in north, east, south, west order, and helpers `otherEnd`, `directionFrom`, `pointAlong`, `turnBetween`. Built once into `CityData.roadGraph`; not in the city digest, so the reference hashes are unchanged.
 - Checked: reviewer passed it and scripted 283 cities (36 352 segments): widths, centre lines, clear stretches and colliders all agree with the real city; left and right agree with the car's own right vector. 128 tests.
 - Carried into the next brief: the helpers answer silently when given a node that isn't on the segment (they should throw); compare `avenue`, never widths.
-- Next: "Route generator" and "Route tests over 1000 seeds", briefed together.
+
+## 2026-11-24: step 15, route generator and route tests
+
+- `game/route.ts`: `generateRoute(graph, seed, { length })`: a depth-first walk with weighted choices (straight 8, turn 1, ring 0.3, at most 3 ring segments in a row), never a segment twice, backtracking when stuck; start and finish mid-segment with the positions rolled to hit the target length; a gate on every leg turned into and at most 300 m apart; a car pose one car length behind the start line with a quarter-turn heading; `RouteError` when the city is too small. Lengths: short 1400, medium 2000 (default), long 2800 m. Own seed index, so the city is unchanged.
+- Tests: 1000 routes (250 cities × 4 route seeds) checked for validity, clear corridors and gate spans, plus other sizes, determinism and three stored route digests. 144 tests, about 9 s.
+- Checked: reviewer passed it with its own validation of 25 389 routes (three city sizes, three lengths, extreme seeds), a real car driven from the pose, and three mutations all caught. Slowest route 51 ms.
+- Numbers for a medium route in the default city: 2000 to 2016 m, 12 gates on average (8 to 19), a third of junctions are turns, 21% of the length on the ring, longest straight 616 m.
+- Quality notes carried into the test driver sub-step, where routes are tuned anyway: 92% of routes loop round a single block at least once (hairpins); 17% put the start 10 m before a junction or the finish 10 m after one; `finishRange` has no guard for an empty range.
+- Next: "Gates".

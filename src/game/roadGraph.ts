@@ -116,14 +116,18 @@ function lineWidths(centres: number[], min: number, max: number, blocks: number[
   });
 }
 
+// Throws if `node` is not an end of the segment, so the helpers below never answer for a segment that doesn't touch it.
 export function otherEnd(graph: RoadGraph, segment: number, node: number): number {
   const { a, b } = graph.segments[segment];
-  return node === a ? b : a;
+  if (node === a) return b;
+  if (node === b) return a;
+  throw new Error(`junction ${node} is not an end of segment ${segment}`);
 }
 
 // Unit step (one of four) of travel along a segment when leaving `node`.
 export function directionFrom(graph: RoadGraph, segment: number, node: number): Point {
   const { a, axis } = graph.segments[segment];
+  otherEnd(graph, segment, node);
   const sign = node === a ? 1 : -1;
   return axis === 'x' ? { x: sign, z: 0 } : { x: 0, z: sign };
 }
@@ -131,14 +135,14 @@ export function directionFrom(graph: RoadGraph, segment: number, node: number): 
 // The point `fraction` (0 to 1) of the way along a segment, measured from `node`.
 export function pointAlong(graph: RoadGraph, segment: number, node: number, fraction: number): Point {
   const { start, end, a } = graph.segments[segment];
+  otherEnd(graph, segment, node);
   const [from, to] = node === a ? [start, end] : [end, start];
   return { x: from.x + (to.x - from.x) * fraction, z: from.z + (to.z - from.z) * fraction };
 }
 
 // Arriving at their shared node along `from` and leaving along `to`. Z grows southwards, so a left turn from
-// heading north (-Z) goes west (-X).
+// heading north (-Z) goes west (-X). Leaving along the same segment is a U-turn.
 export function turnBetween(graph: RoadGraph, from: number, to: number, node: number): Turn {
-  if (from === to) return 'uTurn';
   const into = directionFrom(graph, from, otherEnd(graph, from, node));
   const out = directionFrom(graph, to, node);
   const dot = into.x * out.x + into.z * out.z;

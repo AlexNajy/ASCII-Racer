@@ -107,3 +107,8 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 
 - Step 13: the car starts on the middle junction of the city, not the origin, which is inside a block for some seeds.
 - Step 14: the speedometer shows how fast the car is moving in any direction (sliding and reversing included), in km/h.
+- Step 15: a route never uses a road segment twice but may pass through a junction again, crossing its own path.
+- Step 15: routes never start on the ring road; ring segments are weighted down (0.3) and at most 3 come in a row.
+- Step 15: a gate stands on every segment the route turns into and on straights at most 300 m apart; the finish is the last gate.
+- Step 15: the start line has 30 m of clear road behind it for the start grid; the car starts one car length behind it on the centre line, facing along the road.
+- Step 15: a route that can't be generated (city too small for the length) is an error, not a shorter route.

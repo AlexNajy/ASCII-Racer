@@ -165,4 +165,19 @@ describe('road graph helpers', () => {
     expect(turn('east', 'north')).toBe('right');
     for (const d of ['north', 'east', 'south', 'west']) expect(turn(d, d)).toBe('uTurn');
   });
+
+  it('throws for a junction that is not an end of the segment', () => {
+    const east = leg('east');
+    const north = leg('north');
+    const far = otherEnd(graph, north.segment, centre.index);
+    expect(() => otherEnd(graph, east.segment, far)).toThrow(/not an end/);
+    expect(() => directionFrom(graph, east.segment, far)).toThrow(/not an end/);
+    expect(() => pointAlong(graph, east.segment, far, 0.5)).toThrow(/not an end/);
+    // The two segments don't touch at `far`, and `east` doesn't arrive there.
+    expect(() => turnBetween(graph, north.segment, east.segment, far)).toThrow(/not an end/);
+    expect(() => turnBetween(graph, east.segment, north.segment, far)).toThrow(/not an end/);
+    // Two segments of the same road that are not neighbours.
+    const beyond = graph.links[east.node].find((l) => l.direction === 'east')!;
+    expect(() => turnBetween(graph, leg('west').segment, beyond.segment, centre.index)).toThrow(/not an end/);
+  });
 });
