@@ -8,6 +8,7 @@ export interface UrlParams {
   camera: Camera | null; // a fly camera pose, which switches to the fly camera
   tick: number | null; // the world is stepped to this tick with no input and then held
   shot: boolean; // mark the canvas when a frame has been drawn
+  drive: boolean; // the held tick's stepping holds full throttle instead of no input
   hud: 'test' | null; // fill the text layer with a test card
   cellWidth: number | null; // CSS px, as the dev menu's cell width
 }
@@ -66,6 +67,7 @@ export function parseUrlParams(search: string): UrlParams {
     camera: pose,
     tick: tickNumber,
     shot: query.has('shot') || tick !== null,
+    drive: query.get('drive') === '1',
     hud,
     cellWidth,
   };

@@ -66,4 +66,13 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - New URL parameters `hud=test` (test card) and `cell=N` (cell width); new shot `hud-test`.
 - Checked: reviewer passed it and made its own baseline from HEAD: the 10 older shots are byte-identical. It looked at the card at 5x zoom and at other cell sizes, window sizes and pixel ratios. The lead looked at `hud-test.png`.
 - For step 16 (menus, results): a strip under one cell tall at the top and a few pixels on the right are outside the grid and always show the scene, so a full-screen opaque screen needs the shader to blank them. Backgrounds are black only; a highlighted menu row has to use text colour or markers unless the texel format grows.
-- Next: "Speedometer".
+
+## 2026-11-24: step 14, speedometer
+
+- `src/hud/hud.ts`: `drawHud(grid, { speed, topSpeed })` draws a fixed 15×9 panel in the bottom right: three block digits (3×5 cells each, made of `#`), `km/h`, and a bar against the car's top speed setting. Each cell is written once per call, so an unchanged speed uploads nothing; not drawn when the grid is too small. Hidden in the fly camera.
+- New URL parameter `drive=1` (full throttle during the held-tick startup) and shot `hud-driving` (91 km/h at tick 300, matching the simulation's 25.3 m/s).
+- Review: first verdict `fix` (the texture uploaded every frame, the panel broke apart on tiny grids, the number was one glyph row). Fixed and checked by the lead: 64 tests, only `chase-junction` and `hud-driving` differ from the baseline shots.
+- Decisions (in `SPEC.md`): the number is the car's whole speed, slides and reversing included.
+- For the owner's eyes: the digits are 5 cells tall, about 50 px on a 900 px screen. Readable, still small; doubling the digit size is a small change if wanted.
+- Not tried in a real browser: switching to the fly camera and back, a live resize (read in code only).
+- Next: "Minimap".

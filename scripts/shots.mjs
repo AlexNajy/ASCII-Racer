@@ -28,6 +28,7 @@ const SHOTS = [
   { name: 'car-park', camera: `-236,9,112,90,-16`, mode: 'glyphs', tick: 300 },
   { name: 'supermarket', camera: `188,${EYE},238,180,9`, mode: 'glyphs', tick: 300 },
   { name: 'outer-wall', camera: `154,${EYE},268,180,12`, mode: 'glyphs', tick: 300 },
+  { name: 'hud-driving', camera: null, mode: 'glyphs', tick: 300, drive: true },
   { name: 'hud-test', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, hud: 'test' },
 ];
 
@@ -84,6 +85,7 @@ try {
     page.on('console', (message) => message.type() === 'error' && errors.push(message.text()));
     const query = new URLSearchParams({ seed: String(seed), mode: shot.mode, tick: String(shot.tick) });
     if (shot.camera) query.set('camera', shot.camera);
+    if (shot.drive) query.set('drive', '1');
     if (shot.hud) query.set('hud', shot.hud);
     if (shot.cell) query.set('cell', String(shot.cell));
     try {

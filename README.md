@@ -135,7 +135,7 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Deploy: a GitHub Action publishing `dist/` to GitHub Pages on every merge to `main`
 - [ ] **14. HUD**: drawn in the glyph grid, not as HTML
   - [x] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass
-  - [ ] Speedometer
+  - [x] Speedometer
   - [ ] Minimap: roads and the car, in a corner
 - [ ] **15. Routes**: a race from a seed
   - [ ] Road graph: junctions and the segments between them as plain data from the city

@@ -32,6 +32,7 @@ import { identity, multiply, normalize, perspective, rotationY, translation, typ
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { createHudTexture, uploadHud } from './hud/hudTexture.ts';
+import { drawHud } from './hud/hud.ts';
 import { drawTestCard } from './hud/testCard.ts';
 import { printableRows, TextGrid } from './hud/textGrid.ts';
 import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS, STROKE_ROW, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
@@ -320,7 +321,8 @@ if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
 const world = createWorld(citySettings, carSettings);
 // A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
 const heldTick = urlParams.tick;
-for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, NO_INPUT);
+const heldInput = urlParams.drive ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
+for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, heldInput);
 let cityMeshes = buildCityMeshes(world);
 let signals = createSignalTexture(gl, world.city.junctions.length);
 
@@ -526,6 +528,13 @@ function frame(timeMs: number) {
     if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, world.colliders);
   } else {
     fovBoost = updateChaseCamera(camera, chase, drawnCar, carSettings, chaseSettings, world.colliders, dt);
+  }
+  if (urlParams.hud !== 'test') {
+    if (settings.movement === Movement.Car) {
+      drawHud(hud, { speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ), topSpeed: carSettings.topSpeed });
+    } else {
+      hud.clear();
+    }
   }
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);

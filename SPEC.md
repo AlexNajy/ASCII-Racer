@@ -106,3 +106,4 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 (Added by the loop: one line each, with the roadmap step.)
 
 - Step 13: the car starts on the middle junction of the city, not the origin, which is inside a block for some seeds.
+- Step 14: the speedometer shows how fast the car is moving in any direction (sliding and reversing included), in km/h.
