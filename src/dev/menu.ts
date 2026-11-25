@@ -4,6 +4,10 @@ import type { CitySettings } from '../game/city.ts';
 import type { ScatterSettings } from '../render/materials.ts';
 import type { SkySettings } from '../render/sky.ts';
 
+// CSS px.
+export const CELL_WIDTH_MIN = 4;
+export const CELL_WIDTH_MAX = 16;
+
 export const RenderMode = {
   Glyphs: 0,
   Brightness: 1,
@@ -227,7 +231,7 @@ export function createDevMenu(
   const scatterPage = page('Scatter');
 
   settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
-  settingSlider(viewPage, 'Cell width', 'cellWidth', 4, 16, 1);
+  settingSlider(viewPage, 'Cell width', 'cellWidth', CELL_WIDTH_MIN, CELL_WIDTH_MAX, 1);
   settingSlider(viewPage, 'View distance', 'viewDistance', 5, 1000, 1);
   settingSlider(viewPage, 'Fog start', 'fogStart', 0, 1000, 1);
   settingSlider(viewPage, 'Samples per cell (each axis)', 'supersample', 1, 4, 1);

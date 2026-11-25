@@ -59,4 +59,11 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - PR #16 merged. The first deploy failed at the last step ("No artifacts named github-pages were found", asked 0.4 s after the upload in the same job); a re-run of the same commit passed. https://alexnajy.github.io/ASCII-Racer/ answers 200 with its script and stylesheet.
 - Fix on the `hud` branch: `deploy.yml` split into a build job and a deploy job, the usual shape, so the artifact is listed before it is asked for. Proven only at the next merge.
 - Not checked: the live site in a real browser with a real GPU.
-- Next: step 14, "Text layer".
+
+## 2026-11-24: step 14, text layer
+
+- `src/hud/`: `TextGrid` (plain, tested: `put`, `write` with colour, background and alignment, `fill`, `box`, `clear`, `resize`; negative coordinates count from the right and bottom; clips; dirty flag) and `hudTexture.ts` (one RGBA8UI texel per cell: character plus a solid-background bit, then the colour; uploaded only when dirty). The atlas has the 95 printable characters as 8 extra rows after the material rows. The ASCII pass draws HUD cells over the scene in glyph mode.
+- New URL parameters `hud=test` (test card) and `cell=N` (cell width); new shot `hud-test`.
+- Checked: reviewer passed it and made its own baseline from HEAD: the 10 older shots are byte-identical. It looked at the card at 5x zoom and at other cell sizes, window sizes and pixel ratios. The lead looked at `hud-test.png`.
+- For step 16 (menus, results): a strip under one cell tall at the top and a few pixels on the right are outside the grid and always show the scene, so a full-screen opaque screen needs the shader to blank them. Backgrounds are black only; a highlighted menu row has to use text colour or markers unless the texel format grows.
+- Next: "Speedometer".

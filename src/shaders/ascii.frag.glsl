@@ -24,6 +24,11 @@ uniform float u_glyphShade;
 uniform int u_renderMode; // 0 glyphs, 1 brightness, 2 scene, 5 normal texture, 6 CRT scene, 8 screen normals
 // Turns world directions into view space: x right, y up, z towards the camera.
 uniform mat3 u_viewRotation;
+// The text layer, one texel per full cell, row 0 at the top: character code (0 = none) plus 128 for a solid
+// background, then red, green, blue.
+uniform highp usampler2D u_hud;
+uniform int u_textRow; // atlas row of the first printable character (space)
+uniform int u_atlasColumns; // glyphs per atlas row
 
 
 out vec4 outColor;
@@ -149,10 +154,43 @@ vec3 crt() {
   return sum / total * (1.0 - CRT_SCANLINE * smoothstep(0.2, 0.5, abs(row)));
 }
 
+const uint BACKGROUND_BIT = 128u;
+const int FIRST_PRINTABLE = 32;
+const int LAST_PRINTABLE = 126;
+
+// The text layer's colour for this pixel, or alpha 0 where the scene shows. Its rows are counted down from the
+// highest full cell row, so it sits in the same grid as the scene and never uses the cut-off top row or column.
+vec4 hudColor() {
+  ivec2 cell = ivec2(gl_FragCoord.xy) / u_cellSize;
+  ivec2 size = textureSize(u_hud, 0);
+  ivec2 hudCell = ivec2(cell.x, size.y - 1 - cell.y);
+  if (hudCell.x >= size.x || hudCell.y < 0) return vec4(0.0);
+  uvec4 text = texelFetch(u_hud, hudCell, 0);
+  int code = int(text.r & ~BACKGROUND_BIT);
+  bool background = text.r >= BACKGROUND_BIT;
+  if (code <= FIRST_PRINTABLE || code > LAST_PRINTABLE) return background ? vec4(u_background, 1.0) : vec4(0.0);
+  int index = code - FIRST_PRINTABLE;
+  ivec2 inCell = ivec2(gl_FragCoord.xy) - cell * u_cellSize;
+  ivec2 atlasPixel = ivec2(
+    (index % u_atlasColumns) * u_cellSize.x + inCell.x,
+    (u_textRow + index / u_atlasColumns) * u_cellSize.y + u_cellSize.y - 1 - inCell.y
+  );
+  float glyph = texelFetch(u_glyphs, atlasPixel, 0).r;
+  return vec4(mix(u_background, vec3(text.gba) / 255.0, glyph), 1.0);
+}
+
 void main() {
   if (u_renderMode == 6) {
     outColor = vec4(crt(), 1.0);
     return;
+  }
+
+  if (u_renderMode == 0) {
+    vec4 hud = hudColor();
+    if (hud.a > 0.0) {
+      outColor = hud;
+      return;
+    }
   }
 
   ivec2 cell = ivec2(gl_FragCoord.xy) / u_cellSize;
