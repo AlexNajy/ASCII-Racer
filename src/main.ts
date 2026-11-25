@@ -31,6 +31,11 @@ import { createProgram } from './gl/shader.ts';
 import { identity, multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
+import { createHudTexture, uploadHud } from './hud/hudTexture.ts';
+import { drawHud } from './hud/hud.ts';
+import { createMinimap } from './hud/minimap.ts';
+import { drawTestCard } from './hud/testCard.ts';
+import { printableRows, TextGrid } from './hud/textGrid.ts';
 import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS, STROKE_ROW, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
 import { box, flatDisc, FLOATS_PER_VERTEX, withMaterial, withSideColor, withSideMaterial } from './render/shapes.ts';
@@ -317,9 +322,11 @@ if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
 const world = createWorld(citySettings, carSettings);
 // A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
 const heldTick = urlParams.tick;
-for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, NO_INPUT);
+const heldInput = urlParams.drive ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
+for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, heldInput);
 let cityMeshes = buildCityMeshes(world);
 let signals = createSignalTexture(gl, world.city.junctions.length);
+let minimap = createMinimap(world.city);
 
 function regenerateCity() {
   cityMeshes.forEach(deleteMesh);
@@ -327,6 +334,9 @@ function regenerateCity() {
   cityMeshes = buildCityMeshes(world);
   gl!.deleteTexture(signals.texture);
   signals = createSignalTexture(gl!, world.city.junctions.length);
+  // The new map may be smaller than the old one; the HUD draws itself again next frame.
+  if (urlParams.hud !== 'test') hud.clear();
+  minimap = createMinimap(world.city);
 }
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
@@ -351,6 +361,9 @@ const glyphShadeLocation = gl.getUniformLocation(asciiProgram, 'u_glyphShade');
 const asciiViewRotationLocation = gl.getUniformLocation(asciiProgram, 'u_viewRotation');
 const strokeMaterialsLocation = gl.getUniformLocation(asciiProgram, 'u_strokeMaterials');
 const strokeRowLocation = gl.getUniformLocation(asciiProgram, 'u_strokeRow');
+const hudLocation = gl.getUniformLocation(asciiProgram, 'u_hud');
+const textRowLocation = gl.getUniformLocation(asciiProgram, 'u_textRow');
+const atlasColumnsLocation = gl.getUniformLocation(asciiProgram, 'u_atlasColumns');
 const fullscreenVao = gl.createVertexArray();
 const resolveProgram = createProgram(gl, fullscreenVertexSource, resolveFragmentSource);
 const resolveSceneLocation = gl.getUniformLocation(resolveProgram, 'u_scene');
@@ -377,7 +390,7 @@ function updateGlyphImage(on: boolean): ColorTarget | null {
 
 const settings: DevSettings = {
   fovDegrees: 60,
-  cellWidth: 6,
+  cellWidth: urlParams.cellWidth ?? 6,
   viewDistance: 1000,
   fogStart: 150,
   renderMode: urlParams.renderMode ?? RenderMode.Glyphs,
@@ -408,12 +421,18 @@ const cells = createRenderTarget(gl);
 let cellWidth = 0;
 let cellHeight = 0;
 let glyphAtlas: WebGLTexture | null = null;
+// The printable characters follow the material rows in the atlas, cut to the same width.
+const ATLAS_COLUMNS = [...GLYPH_RAMPS[0]].length;
+const ATLAS_ROWS = [...GLYPH_RAMPS, ...printableRows(ATLAS_COLUMNS)];
+const TEXT_ROW = GLYPH_RAMPS.length;
+const hud = new TextGrid();
+const hudTexture = createHudTexture(gl);
 
 function buildCells() {
   cellWidth = Math.round(settings.cellWidth * dpr);
   cellHeight = Math.round(settings.cellWidth * CELL_ASPECT * dpr);
   gl!.deleteTexture(glyphAtlas);
-  glyphAtlas = createGlyphAtlas(gl!, GLYPH_RAMPS, cellWidth, cellHeight);
+  glyphAtlas = createGlyphAtlas(gl!, ATLAS_ROWS, cellWidth, cellHeight);
 }
 
 function resize() {
@@ -423,6 +442,9 @@ function resize() {
   const rows = Math.ceil(canvas.height / cellHeight);
   resizeRenderTarget(gl!, cells, columns, rows);
   resizeRenderTarget(gl!, scene, columns * settings.supersample, rows * settings.supersample);
+  // Only whole cells, so nothing written is cut off at the right or top edge.
+  hud.resize(Math.floor(canvas.width / cellWidth), Math.floor(canvas.height / cellHeight));
+  if (urlParams.hud === 'test') drawTestCard(hud);
 }
 
 buildCells();
@@ -511,6 +533,17 @@ function frame(timeMs: number) {
     if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, world.colliders);
   } else {
     fovBoost = updateChaseCamera(camera, chase, drawnCar, carSettings, chaseSettings, world.colliders, dt);
+  }
+  if (urlParams.hud !== 'test') {
+    if (settings.movement === Movement.Car) {
+      drawHud(hud, {
+        speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ),
+        topSpeed: carSettings.topSpeed,
+        minimap: { minimap, car: drawnCar },
+      });
+    } else {
+      hud.clear();
+    }
   }
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
@@ -644,6 +677,11 @@ function frame(timeMs: number) {
   gl!.uniform1i(animatedMaterialsLocation, ANIMATED_MATERIALS);
   gl!.uniform1i(strokeMaterialsLocation, STROKE_MATERIALS);
   gl!.uniform1i(strokeRowLocation, STROKE_ROW);
+  gl!.activeTexture(gl!.TEXTURE5);
+  uploadHud(gl!, hudTexture, hud);
+  gl!.uniform1i(hudLocation, 5);
+  gl!.uniform1i(textRowLocation, TEXT_ROW);
+  gl!.uniform1i(atlasColumnsLocation, ATLAS_COLUMNS);
   const animationTicks = Math.round(settings.animationSeconds * TICKS_PER_SECOND);
   gl!.uniform1f(animationPhaseLocation, (world.tick % animationTicks) / animationTicks);
   gl!.uniform1f(animationLevelsLocation, settings.animationLevels);

@@ -1,4 +1,4 @@
-import { RenderMode } from './menu.ts';
+import { CELL_WIDTH_MAX, CELL_WIDTH_MIN, RenderMode } from './menu.ts';
 import type { Camera } from '../render/camera.ts';
 
 // Read once at startup, for repeatable pictures (`npm run shots`). With none of them present nothing changes.
@@ -8,6 +8,9 @@ export interface UrlParams {
   camera: Camera | null; // a fly camera pose, which switches to the fly camera
   tick: number | null; // the world is stepped to this tick with no input and then held
   shot: boolean; // mark the canvas when a frame has been drawn
+  drive: boolean; // the held tick's stepping holds full throttle instead of no input
+  hud: 'test' | null; // fill the text layer with a test card
+  cellWidth: number | null; // CSS px, as the dev menu's cell width
 }
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
@@ -24,6 +27,8 @@ export function parseUrlParams(search: string): UrlParams {
   const mode = query.get('mode');
   const camera = query.get('camera');
   const tick = query.get('tick');
+  const hud = query.get('hud');
+  const cell = query.get('cell');
 
   let renderMode: RenderMode | null = null;
   if (mode !== null) {
@@ -50,11 +55,20 @@ export function parseUrlParams(search: string): UrlParams {
     throw new Error('URL parameter seed: expected a whole number, 0 or more');
   }
 
+  if (hud !== null && hud !== 'test') throw new Error(`URL parameter hud: "${hud}" is not test`);
+  const cellWidth = cell === null ? null : number('cell', cell);
+  if (cellWidth !== null && (!Number.isInteger(cellWidth) || cellWidth < CELL_WIDTH_MIN || cellWidth > CELL_WIDTH_MAX)) {
+    throw new Error(`URL parameter cell: expected a whole number of CSS pixels, ${CELL_WIDTH_MIN} to ${CELL_WIDTH_MAX}`);
+  }
+
   return {
     seed: seedNumber,
     renderMode,
     camera: pose,
     tick: tickNumber,
     shot: query.has('shot') || tick !== null,
+    drive: query.get('drive') === '1',
+    hud,
+    cellWidth,
   };
 }

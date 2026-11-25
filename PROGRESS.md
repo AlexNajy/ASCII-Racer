@@ -53,4 +53,33 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - CI: `ci.yml` runs `npm run check` on every pull request (now pull requests only). Its first run on PR #16 failed on Vitest's 5 s default timeout, the runner being 2 to 3 times slower than the Mac; `testTimeout` is now 60 s and the run is green. The stored reference hashes matched on Linux, so the simulation agrees across the two machines.
 - Deploy: `deploy.yml` on every push to `main`: `npm ci`, `npm run check`, then `dist/` to Pages (a red check doesn't deploy). `vite.config.ts` has `base: './'`, so the site works under `/ASCII-Racer/`; builder and reviewer both loaded it from a sub-path in headless Chrome with no 404s.
 - Reviewer passed it. The deploy itself only runs after the merge; checked then (see the next entry).
-- Step 13 done. Next: step 14, "Text layer".
+
+## 2026-11-24: step 13 merged and live
+
+- PR #16 merged. The first deploy failed at the last step ("No artifacts named github-pages were found", asked 0.4 s after the upload in the same job); a re-run of the same commit passed. https://alexnajy.github.io/ASCII-Racer/ answers 200 with its script and stylesheet.
+- Fix on the `hud` branch: `deploy.yml` split into a build job and a deploy job, the usual shape, so the artifact is listed before it is asked for. Proven only at the next merge.
+- Not checked: the live site in a real browser with a real GPU.
+
+## 2026-11-24: step 14, text layer
+
+- `src/hud/`: `TextGrid` (plain, tested: `put`, `write` with colour, background and alignment, `fill`, `box`, `clear`, `resize`; negative coordinates count from the right and bottom; clips; dirty flag) and `hudTexture.ts` (one RGBA8UI texel per cell: character plus a solid-background bit, then the colour; uploaded only when dirty). The atlas has the 95 printable characters as 8 extra rows after the material rows. The ASCII pass draws HUD cells over the scene in glyph mode.
+- New URL parameters `hud=test` (test card) and `cell=N` (cell width); new shot `hud-test`.
+- Checked: reviewer passed it and made its own baseline from HEAD: the 10 older shots are byte-identical. It looked at the card at 5x zoom and at other cell sizes, window sizes and pixel ratios. The lead looked at `hud-test.png`.
+- For step 16 (menus, results): a strip under one cell tall at the top and a few pixels on the right are outside the grid and always show the scene, so a full-screen opaque screen needs the shader to blank them. Backgrounds are black only; a highlighted menu row has to use text colour or markers unless the texel format grows.
+
+## 2026-11-24: step 14, speedometer
+
+- `src/hud/hud.ts`: `drawHud(grid, { speed, topSpeed })` draws a fixed 15×9 panel in the bottom right: three block digits (3×5 cells each, made of `#`), `km/h`, and a bar against the car's top speed setting. Each cell is written once per call, so an unchanged speed uploads nothing; not drawn when the grid is too small. Hidden in the fly camera.
+- New URL parameter `drive=1` (full throttle during the held-tick startup) and shot `hud-driving` (91 km/h at tick 300, matching the simulation's 25.3 m/s).
+- Review: first verdict `fix` (the texture uploaded every frame, the panel broke apart on tiny grids, the number was one glyph row). Fixed and checked by the lead: 64 tests, only `chase-junction` and `hud-driving` differ from the baseline shots.
+- Decisions (in `SPEC.md`): the number is the car's whole speed, slides and reversing included.
+- For the owner's eyes: the digits are 5 cells tall, about 50 px on a 900 px screen. Readable, still small; doubling the digit size is a small change if wanted.
+- Not tried in a real browser: switching to the fly camera and back, a live resize (read in code only).
+
+## 2026-11-24: step 14, minimap
+
+- `src/hud/minimap.ts`: the whole city, north up, bottom left. Laid out from the road lines: every road line is exactly one cell, every block 5×2 cells, so the grid is always regular (49×25 cells for the default city, 55×29 with its frame). Streets dim `- | +`, avenues bright `= H #`, the car a red `A < V >` by heading. `minimapPosition` / `minimapCell` map world to map cells for routes, gates and other cars later.
+- Checked: reviewer passed it. Against the city data the map is not mirrored and the car is on the right cell in both chase shots; the mapping is monotonic on five cities; fly camera and back, resizes and city regeneration leave no stale cells (driven in headless Chrome). 77 tests; only the two chase shots changed.
+- Left open: the car glyph test restates the code's own table instead of driving a car and checking the direction (the reviewer checked the sign by hand against `car.ts`).
+- New sub-step in step 19: the map is 43% of the screen height for a 10×10 city at 1600×900 and 54% at 1280×720, so large lobby cities need a smaller scale.
+- Step 14 done. Next: step 15, "Road graph".
