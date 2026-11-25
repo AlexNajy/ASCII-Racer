@@ -18,6 +18,7 @@ The night setting is the core of the look: darkness becomes empty cells, light b
 - `npm run preview` — serve the production build locally
 - `npm test` — run the tests once (Vitest, Node environment, `src/**/*.test.ts` next to the code)
 - `npm run check` — type check (tests included), tests, then build; what CI runs
+- Merges to `main` deploy `dist/` to GitHub Pages (https://alexnajy.github.io/ASCII-Racer/) through `.github/workflows/deploy.yml`, which runs `npm run check` first; `ci.yml` covers pull requests only. `vite.config.ts` sets `base: './'` so the site works under a sub-path.
 - `npm run shots` — builds, serves `dist/` and saves glyph mode pictures from fixed spots to `shots/` (git-ignored) with headless Chrome (Playwright, the installed Chrome). `npm run shots -- houses park` takes only those, `--seed N` another city. Not part of `check`. The spots are the `SHOTS` list in `scripts/shots.mjs`, picked for seed 1.
 
 ## Architecture

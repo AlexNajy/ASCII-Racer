@@ -4,6 +4,8 @@ A daily 3D racing game set in a city at night, running in the browser and drawn 
 
 Built from scratch with TypeScript, WebGL2 and GLSL. No 3D libraries.
 
+Play it: https://alexnajy.github.io/ASCII-Racer/
+
 ## Running it
 
 ```
