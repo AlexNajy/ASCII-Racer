@@ -6,6 +6,7 @@ import { cityColliders, type Collider } from './collision.ts';
 import { houseDriveways } from './driveways.ts';
 import { houseFences } from './fences.ts';
 import { generateIntersections, type Intersections } from './intersections.ts';
+import { roadGraph, type RoadGraph } from './roadGraph.ts';
 import { signalOffsets } from './signals.ts';
 import { generateStreetLights, type StreetLight } from './streetLights.ts';
 import { cityModels } from '../render/models/spawn.ts';
@@ -22,6 +23,7 @@ export interface CityData {
   streetLights: StreetLight[];
   intersections: Intersections;
   signalOffsets: number[];
+  roadGraph: RoadGraph;
   models: Model;
   colliders: Collider[];
 }
@@ -67,6 +69,7 @@ export function generateCityData(settings: CitySettings, vertices = true): CityD
     streetLights,
     intersections,
     signalOffsets: signalOffsets(city, settings.seed),
+    roadGraph: roadGraph(city),
     models,
     colliders: cityColliders(models.colliders, fences, streetLights, intersections),
   };

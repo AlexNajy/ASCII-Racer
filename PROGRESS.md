@@ -86,4 +86,10 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 ## 2026-11-24: step 14 merged and live
 
 - PR #17 merged. The split deploy workflow worked first time; the live site serves the new bundle (same file name as the local build of `main`).
-- Next: step 15, "Road graph", on the `routes` branch.
+
+## 2026-11-24: step 15, road graph
+
+- `game/roadGraph.ts`: nodes (one per junction), segments (ends west/north to east/south, axis, length, width, avenue flag, the stretch clear of both junction squares), `links` per node in north, east, south, west order, and helpers `otherEnd`, `directionFrom`, `pointAlong`, `turnBetween`. Built once into `CityData.roadGraph`; not in the city digest, so the reference hashes are unchanged.
+- Checked: reviewer passed it and scripted 283 cities (36 352 segments): widths, centre lines, clear stretches and colliders all agree with the real city; left and right agree with the car's own right vector. 128 tests.
+- Carried into the next brief: the helpers answer silently when given a node that isn't on the segment (they should throw); compare `avenue`, never widths.
+- Next: "Route generator" and "Route tests over 1000 seeds", briefed together.
