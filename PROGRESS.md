@@ -53,4 +53,10 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - CI: `ci.yml` runs `npm run check` on every pull request (now pull requests only). Its first run on PR #16 failed on Vitest's 5 s default timeout, the runner being 2 to 3 times slower than the Mac; `testTimeout` is now 60 s and the run is green. The stored reference hashes matched on Linux, so the simulation agrees across the two machines.
 - Deploy: `deploy.yml` on every push to `main`: `npm ci`, `npm run check`, then `dist/` to Pages (a red check doesn't deploy). `vite.config.ts` has `base: './'`, so the site works under `/ASCII-Racer/`; builder and reviewer both loaded it from a sub-path in headless Chrome with no 404s.
 - Reviewer passed it. The deploy itself only runs after the merge; checked then (see the next entry).
-- Step 13 done. Next: step 14, "Text layer".
+
+## 2026-11-24: step 13 merged and live
+
+- PR #16 merged. The first deploy failed at the last step ("No artifacts named github-pages were found", asked 0.4 s after the upload in the same job); a re-run of the same commit passed. https://alexnajy.github.io/ASCII-Racer/ answers 200 with its script and stylesheet.
+- Fix on the `hud` branch: `deploy.yml` split into a build job and a deploy job, the usual shape, so the artifact is listed before it is asked for. Proven only at the next merge.
+- Not checked: the live site in a real browser with a real GPU.
+- Next: step 14, "Text layer".
