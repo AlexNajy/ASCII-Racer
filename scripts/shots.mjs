@@ -21,6 +21,7 @@ const EYE = 1.2;
 // gate: the race's next gate, so a later gate shows lit; the number of gates finishes the race at the held tick.
 // car: 'x,z,quarterTurns' puts the car there once the race has started (quarter turns left of north).
 // state: the game state the shot starts in ('menu', 'prerace', 'race', 'results'); 'race' when not given.
+// entry: the menu entry selected (0 is the first).
 // Positions are for the default seed's city (seed 1); with another seed the same spots show something else.
 const SHOTS = [
   { name: 'chase-junction', camera: null, mode: 'glyphs', tick: 300, race: false },
@@ -55,7 +56,12 @@ const SHOTS = [
   { name: 'gate-finish-far', camera: `-75,${EYE},-69,-90,2`, mode: 'glyphs', tick: 120, gate: 9 },
   { name: 'gate-finish', camera: `91,${EYE},-69,-90,6`, mode: 'glyphs', tick: 120, gate: 9 },
   { name: 'hud-test', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, hud: 'test', race: false },
-  { name: 'state-menu', camera: null, mode: 'glyphs', tick: 300, state: 'menu' },
+  // The menu's flight goes clockwise round the roads two junctions out from the middle one, 1174 m, about 8800
+  // ticks: 5400 heads west down the south side, 1200 east along the north side, 7800 north up the west side.
+  { name: 'state-menu', camera: null, mode: 'glyphs', tick: 5400, state: 'menu' },
+  { name: 'menu-flight-2', camera: null, mode: 'glyphs', tick: 1200, state: 'menu' },
+  { name: 'menu-flight-3', camera: null, mode: 'glyphs', tick: 7800, state: 'menu' },
+  { name: 'menu-garage', camera: null, mode: 'glyphs', tick: 5400, state: 'menu', entry: 4 },
   { name: 'state-prerace', camera: null, mode: 'glyphs', tick: 300, state: 'prerace' },
   { name: 'state-results', camera: null, mode: 'glyphs', tick: 600, gate: 10, state: 'results' },
 ];
@@ -119,6 +125,7 @@ try {
     if (shot.gate !== undefined) query.set('gate', String(shot.gate));
     if (shot.cell) query.set('cell', String(shot.cell));
     if (shot.car) query.set('car', shot.car);
+    if (shot.entry !== undefined) query.set('entry', String(shot.entry));
     try {
       await page.goto(`${base}?${query}`);
       await Promise.race([page.waitForSelector('canvas[data-ready="true"]', { timeout: READY_TIMEOUT_MS }), firstError]);

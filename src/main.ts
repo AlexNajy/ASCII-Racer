@@ -22,8 +22,19 @@ import type { Route } from './game/route.ts';
 import { goTick, raceTicks } from './game/race.ts';
 import { createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorld, type CityData } from './game/world.ts';
 import { cityRoute, enterState } from './app/flow.ts';
-import { afterTick, DEFAULT_RACE_MODE, MENU, preRace, pressEnter, pressEscape, type GameState } from './app/gameState.ts';
-import { trackFullscreenKey, trackKeyboard, trackKeyPress, trackMouse } from './game/input.ts';
+import {
+  afterTick,
+  DEFAULT_RACE_MODE,
+  MENU,
+  moveSelection,
+  preRace,
+  pressEnter,
+  pressEscape,
+  selectEntry,
+  type GameState,
+} from './app/gameState.ts';
+import { pointerCell } from './app/pointer.ts';
+import { takeMouseMovement, trackFullscreenKey, trackKeyboard, trackKeyPress, trackMouse } from './game/input.ts';
 import {
   createColorTarget,
   createRenderTarget,
@@ -34,12 +45,14 @@ import {
 import { createProgram } from './gl/shader.ts';
 import { identity, multiply, normalize, perspective, rotationY, translation, type Mat4, type Vec3 } from './math/mat4.ts';
 import { viewMatrix, type Camera } from './render/camera.ts';
+import { flightPath, flightPose } from './render/menuFlight.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { createHudTexture, uploadHud } from './hud/hudTexture.ts';
 import { drawHud } from './hud/hud.ts';
 import { routeGuidance } from './hud/guidance.ts';
 import { createMinimap } from './hud/minimap.ts';
-import { drawMenuScreen, drawPreRaceScreen, drawResultsScreen } from './hud/screens.ts';
+import { drawMenuScreen, menuEntryAt, menuLayout } from './hud/menuScreen.ts';
+import { drawPreRaceScreen, drawResultsScreen } from './hud/screens.ts';
 import { drawTestCard } from './hud/testCard.ts';
 import { printableRows, TextGrid } from './hud/textGrid.ts';
 import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS, STROKE_ROW, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
@@ -344,6 +357,8 @@ if (urlParams.state === 'race' || urlParams.state === 'results') {
   if (!route) throw new Error('URL parameter state: the city has no route');
   gameState = preRace(DEFAULT_RACE_MODE, route);
   enterState(world, gameState, MENU);
+} else if (urlParams.entry !== null) {
+  gameState = selectEntry(gameState, urlParams.entry);
 }
 // gate=N with N the number of gates finishes the race once the held tick is reached, at that time.
 const finishAtStart = urlParams.gate !== null && world.race !== null && urlParams.gate === world.race.route.gates.length;
@@ -382,6 +397,7 @@ function updateGateMesh() {
 }
 let signals = createSignalTexture(gl, world.city.junctions.length);
 let minimap = createMinimap(world.city);
+let flight = flightPath(world.roadGraph);
 
 function regenerateCity() {
   cityMeshes.forEach(deleteMesh);
@@ -394,6 +410,7 @@ function regenerateCity() {
   // The new map may be smaller than the old one; the HUD draws itself again next frame.
   if (urlParams.hud !== 'test') hud.clear();
   minimap = createMinimap(world.city);
+  flight = flightPath(world.roadGraph);
 }
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
@@ -523,12 +540,11 @@ const devMenu = createDevMenu(
   uploadStars,
   (open) => {
     if (open) document.exitPointerLock();
-    else canvas.requestPointerLock().catch(() => {});
+    else if (gameState.kind !== 'menu') canvas.requestPointerLock().catch(() => {});
   },
 );
 
 trackKeyboard();
-trackMouse(canvas);
 trackFullscreenKey(document.body);
 let headlightsOn = true;
 trackKeyPress('KeyH', () => (headlightsOn = !headlightsOn));
@@ -574,15 +590,59 @@ function setGameState(next: GameState) {
   // Every state but the results puts the car somewhere new.
   if (next.kind !== 'results') faceCarHeading();
   gameState = next;
+  if (next.kind === 'menu' && document.pointerLockElement) document.exitPointerLock();
   if (urlParams.hud !== 'test') hud.clear();
 }
+// The menu is only on screen in the car movement; the fly camera hides the text layer.
+function menuShown(): boolean {
+  return gameState.kind === 'menu' && settings.movement === Movement.Car;
+}
+function changeState(next: GameState) {
+  if (next === gameState) return;
+  // A new selection only redraws the two entry rows.
+  if (next.kind === 'menu' && gameState.kind === 'menu') gameState = next;
+  else setGameState(next);
+}
+function moveMenuSelection(step: number) {
+  if (menuShown() && !devMenu.isOpen()) changeState(moveSelection(gameState, step));
+}
+trackKeyPress('ArrowUp', () => moveMenuSelection(-1));
+trackKeyPress('KeyW', () => moveMenuSelection(-1));
+trackKeyPress('ArrowDown', () => moveMenuSelection(1));
+trackKeyPress('KeyS', () => moveMenuSelection(1));
+function menuEntryUnder(event: MouseEvent): number | null {
+  const layout = menuLayout(hud.columns, hud.rows);
+  const cell = pointerCell(event.offsetX, event.offsetY, {
+    pixelRatio: dpr,
+    cellWidth,
+    cellHeight,
+    canvasHeight: canvas.height,
+    columns: hud.columns,
+    rows: hud.rows,
+  });
+  return layout && cell ? menuEntryAt(layout, cell.column, cell.row) : null;
+}
+canvas.addEventListener('mousemove', (event) => {
+  if (!menuShown()) return;
+  const entry = menuEntryUnder(event);
+  if (entry !== null) changeState(selectEntry(gameState, entry));
+});
+// The one click path: in the menu a click picks an entry and never captures the pointer; elsewhere it captures it.
+trackMouse(canvas, (event) => {
+  if (!menuShown()) return gameState.kind !== 'menu';
+  const entry = menuEntryUnder(event);
+  if (entry !== null) {
+    const selected = selectEntry(gameState, entry);
+    changeState(selected);
+    changeState(pressEnter(selected, () => cityRoute(world)));
+  }
+  return false;
+});
 trackKeyPress('Enter', () => {
-  const next = pressEnter(gameState, () => cityRoute(world));
-  if (next !== gameState) setGameState(next);
+  if (!devMenu.isOpen()) changeState(pressEnter(gameState, () => cityRoute(world)));
 });
 trackKeyPress('Escape', () => {
-  const next = pressEscape(gameState);
-  if (next !== gameState) setGameState(next);
+  if (!devMenu.isOpen()) changeState(pressEscape(gameState));
 });
 let carInput = NO_INPUT;
 
@@ -613,6 +673,12 @@ function frame(timeMs: number) {
   if (settings.movement === Movement.FlyCamera) {
     updateFlyCamera(camera, dt);
     if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, world.colliders);
+  } else if (gameState.kind === 'menu') {
+    takeMouseMovement();
+    const pose = flightPose(flight, world.tick + clock.leftover / TICK_SECONDS);
+    camera.position = pose.position;
+    camera.yaw = pose.yaw;
+    camera.pitch = pose.pitch;
   } else {
     fovBoost = updateChaseCamera(camera, chase, drawnCar, carSettings, chaseSettings, world.colliders, dt);
   }
@@ -620,7 +686,7 @@ function frame(timeMs: number) {
     if (settings.movement !== Movement.Car) {
       hud.clear();
     } else if (gameState.kind === 'menu') {
-      drawMenuScreen(hud);
+      drawMenuScreen(hud, gameState.selected);
     } else if (gameState.kind === 'preRace') {
       drawPreRaceScreen(hud, { minimap, car: drawnCar, route: gameState.route });
     } else if (gameState.kind === 'results') {
@@ -666,6 +732,8 @@ function frame(timeMs: number) {
   gl!.uniform3fv(lightDirectionLocation, LIGHT_DIRECTION);
   gl!.uniform1f(ambientLocation, settings.ambient);
   gl!.uniform1f(lightIntensityLocation, settings.lightIntensity);
+  // The menu's flight passes over the car parked on the middle junction; it and its headlights stay out of the way.
+  const carShown = gameState.kind !== 'menu';
   const light = headlight(drawnCar);
   const halfAngle = (settings.headlightAngle * Math.PI) / 360;
   gl!.uniform3fv(headlightPositionLocation, light.position);
@@ -673,7 +741,7 @@ function frame(timeMs: number) {
   gl!.uniform1f(headlightOuterCosLocation, Math.cos(halfAngle));
   gl!.uniform1f(headlightInnerCosLocation, Math.cos(halfAngle * (1 - HEADLIGHT_SOFT_EDGE)));
   gl!.uniform1f(headlightRangeLocation, settings.headlightRange);
-  gl!.uniform1f(headlightIntensityLocation, headlightsOn ? settings.headlightIntensity : 0);
+  gl!.uniform1f(headlightIntensityLocation, headlightsOn && carShown ? settings.headlightIntensity : 0);
   gl!.uniform1i(sceneScatterMaterialsLocation, SCATTER_MATERIALS);
   gl!.uniform3fv(scatterParamsLocation, scatterParams());
   gl!.uniform4fv(windowStylesLocation, WINDOW_STYLE_PARAMS);
@@ -712,7 +780,7 @@ function frame(timeMs: number) {
   for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
   updateGateMesh();
   if (gateMesh) draw(gateMesh, gl!.TRIANGLES, view);
-  draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
+  if (carShown) draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
 
   const particleCount = particleVertices(particles);
   if (particleCount > 0) {

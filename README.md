@@ -20,10 +20,11 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
 
 ## Controls
 
-- `Enter`: menu to pre-race screen to race, results back to the menu
+- Menu: `Up` / `Down` or `W` / `S` to choose (wraps round), `Enter` to pick; or point at an entry and click
+- `Enter`: pre-race screen to race, results back to the menu
 - `Esc`: back to the menu (and releases the mouse)
 - `W` / `S` or arrow keys: throttle / brake, `A` / `D`: steer, `Space`: drift
-- Click: capture the mouse to look around
+- Click (outside the menu): capture the mouse to look around
 - `F`: toggle fullscreen
 - Fly camera (switched on in the dev menu, View page, Movement):
   - `W` / `S`: fly forward / back along the view direction
@@ -152,7 +153,7 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Wall seams: where two building rectangles touch along a flat wall, the seam acts like a corner and turns a sideways slide into speed along the wall; a flat wall made of several colliders must behave like one
 - [ ] **16. Menu and unlimited**
   - [x] Game states: menu, pre-race, race, results, with the dev fly camera kept behind the dev menu
-  - [ ] Main menu on the text layer over a camera flight through the city
+  - [x] Main menu on the text layer over a camera flight through the city
   - [ ] Unlimited: random city and route, finish screen with again, next and menu
   - [ ] Settings: nickname, volume, glyph size, fullscreen, key list, saved in the browser
   - [ ] Garage: body shapes on the same collision box, colour list, turning preview, saved in the browser

@@ -14,10 +14,11 @@ export function isKeyDown(code: string): boolean {
 let mouseX = 0;
 let mouseY = 0;
 
-export function trackMouse(element: HTMLElement): void {
-  element.addEventListener('click', () => {
+// Every click goes to `onClick`, which returns whether it captures the mouse.
+export function trackMouse(element: HTMLElement, onClick: (event: MouseEvent) => boolean = () => true): void {
+  element.addEventListener('click', (event) => {
     // Chrome refuses a new lock for about a second after Escape releases it; the next click retries.
-    element.requestPointerLock().catch(() => {});
+    if (onClick(event)) element.requestPointerLock().catch(() => {});
   });
   window.addEventListener('mousemove', (event) => {
     if (document.pointerLockElement !== element) return;

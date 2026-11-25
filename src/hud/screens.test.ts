@@ -3,7 +3,7 @@ import { DEFAULT_CITY_SETTINGS, generateCity } from '../game/city.ts';
 import { roadGraph } from '../game/roadGraph.ts';
 import { generateRoute } from '../game/route.ts';
 import { createMinimap } from './minimap.ts';
-import { drawMenuScreen, drawPreRaceScreen, drawResultsScreen } from './screens.ts';
+import { drawPreRaceScreen, drawResultsScreen } from './screens.ts';
 import { TextGrid } from './textGrid.ts';
 
 const city = generateCity({ ...DEFAULT_CITY_SETTINGS });
@@ -21,17 +21,12 @@ function text(grid: TextGrid): string {
 
 const minimap = createMinimap(city);
 const screens: [string, (grid: TextGrid) => void][] = [
-  ['menu', drawMenuScreen],
   ['pre-race', (grid) => drawPreRaceScreen(grid, { minimap, car: { ...route.pose }, route })],
   ['results', (grid) => drawResultsScreen(grid, 4567)],
 ];
 
 describe('placeholder screens', () => {
   it('says what each screen is', () => {
-    const menu = new TextGrid(120, 50);
-    drawMenuScreen(menu);
-    expect(text(menu)).toContain('ascii racer');
-    expect(text(menu)).toContain('press enter');
     const results = new TextGrid(120, 50);
     drawResultsScreen(results, 4567);
     expect(text(results)).toContain('time  1:16.116');

@@ -73,6 +73,7 @@ type NumberSetting =
 
 export interface DevMenu {
   setInfo(text: string): void;
+  isOpen(): boolean;
 }
 
 export function createDevMenu(
@@ -362,5 +363,6 @@ export function createDevMenu(
     setInfo(text) {
       if (!panel.hidden) info.textContent = text;
     },
+    isOpen: () => !panel.hidden,
   };
 }

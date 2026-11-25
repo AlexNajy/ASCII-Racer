@@ -5,7 +5,7 @@ import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu' });
+    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', entry: null });
   });
 
   it('reads drive=1 and nothing else as driving', () => {
@@ -31,6 +31,12 @@ describe('parseUrlParams', () => {
     expect(() => parseUrlParams('?state=')).toThrow();
     expect(() => parseUrlParams('?state=preRace')).toThrow();
     expect(() => parseUrlParams('?state=toString')).toThrow();
+  });
+
+  it('selects a menu entry by its place in the list', () => {
+    expect(parseUrlParams('?entry=0').entry).toBe(0);
+    expect(parseUrlParams('?entry=5').entry).toBe(5);
+    for (const bad of ['', '6', '-1', '1.5', 'garage']) expect(() => parseUrlParams(`?entry=${bad}`)).toThrow();
   });
 
   it('accepts whole gate numbers from 0', () => {

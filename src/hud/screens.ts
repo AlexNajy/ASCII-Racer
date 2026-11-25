@@ -4,10 +4,8 @@ import { drawMinimap, type Minimap, type MinimapCar } from './minimap.ts';
 import { FRAME_COLOR } from './raceHud.ts';
 import type { TextGrid } from './textGrid.ts';
 
-// Placeholder screens for the game states other than the race, until the real menu, pre-race and results screens
-// exist. Each writes the same cells every call, so drawing the same screen again leaves the grid clean.
-const TITLE = 'ascii racer';
-const TITLE_COLOR = 0xffd070;
+// Placeholder screens for the pre-race and results states, until the real ones exist (the menu is menuScreen.ts).
+// Each writes the same cells every call, so drawing the same screen again leaves the grid clean.
 const TEXT_COLOR = 0xc0c0c0;
 const TIME_COLOR = 0xff99ff;
 const MARGIN = 1;
@@ -21,12 +19,6 @@ function centred(grid: TextGrid, row: number, text: string, color: number): void
 
 function upperThird(grid: TextGrid): number {
   return Math.floor(grid.rows / 3);
-}
-
-export function drawMenuScreen(grid: TextGrid): void {
-  const top = upperThird(grid);
-  centred(grid, top, TITLE, TITLE_COLOR);
-  centred(grid, top + 2, 'press enter', TEXT_COLOR);
 }
 
 export interface PreRaceMinimap {

@@ -128,3 +128,7 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 - Step 16: the countdown starts when the pre-race screen is left with Enter, not when it opens.
 - Step 16: regenerating the city from the dev menu goes back to the main menu.
 - Step 16: the fly camera is switched only from the dev menu (the `C` key is gone) and works on every screen; the race restart key `R` is gone (restart comes back with unlimited's "again").
+- Step 16: until the daily exists (step 17) the menu flies through the current city seed's city, not today's; the flight goes round a rectangle of roads two junctions out from the middle junction, 12 m up, at 8 m/s, and the parked car is hidden.
+- Step 16: the menu selection wraps round at both ends; entries not built yet are shown dimmed and can be selected, but Enter or a click on them does nothing; the selection starts on the first built entry.
+- Step 16: until unlimited's random cities exist, `unlimited` opens the city seed's route (pre-race, race, results), as Enter on the placeholder menu did.
+- Step 16: in the menu the mouse is not captured; pointing at an entry selects it and a click picks it.

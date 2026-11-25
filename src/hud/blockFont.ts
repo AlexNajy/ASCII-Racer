@@ -18,12 +18,16 @@ const GLYPHS: Record<string, string[]> = {
   ':': ['...', '.#.', '...', '.#.', '...'],
   '.': ['...', '...', '...', '...', '.#.'],
   ' ': ['...', '...', '...', '...', '...'],
+  A: ['###', '#.#', '###', '#.#', '#.#'],
+  C: ['###', '#..', '#..', '#..', '###'],
+  E: ['###', '#..', '##.', '#..', '###'],
   F: ['###', '#..', '##.', '#..', '#..'],
   G: ['###', '#..', '#.#', '#.#', '###'],
   H: ['#.#', '#.#', '###', '#.#', '#.#'],
   I: ['###', '.#.', '.#.', '.#.', '###'],
   N: ['#..#', '##.#', '#.##', '#..#', '#..#'],
   O: ['###', '#.#', '#.#', '#.#', '###'],
+  R: ['##.', '#.#', '##.', '#.#', '#.#'],
   S: ['###', '#..', '###', '..#', '###'],
 };
 
@@ -40,13 +44,13 @@ export function blockWidth(text: string, scale = 1): number {
   return (width + (text.length - 1) * BLOCK_GAP) * scale;
 }
 
-// `text` as rows of '#' and ' ', each cell `scale` × `scale`.
-export function blockRows(text: string, scale = 1): string[] {
+// `text` as rows of '#' and ' ', each cell `scale` columns × `scaleY` rows.
+export function blockRows(text: string, scale = 1, scaleY = scale): string[] {
   const rows: string[] = [];
   for (let y = 0; y < BLOCK_HEIGHT; y++) {
     const row = [...text].map((char) => glyph(char)[y].replaceAll('.', ' ')).join(' '.repeat(BLOCK_GAP));
     const wide = [...row].map((cell) => cell.repeat(scale)).join('');
-    for (let i = 0; i < scale; i++) rows.push(wide);
+    for (let i = 0; i < scaleY; i++) rows.push(wide);
   }
   return rows;
 }

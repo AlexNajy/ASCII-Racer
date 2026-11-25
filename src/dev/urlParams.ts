@@ -1,5 +1,6 @@
 import { CELL_WIDTH_MAX, CELL_WIDTH_MIN, RenderMode } from './menu.ts';
 import type { GameStateKind } from '../app/gameState.ts';
+import { MENU_ENTRIES } from '../app/mainMenu.ts';
 import type { Camera } from '../render/camera.ts';
 
 // Read once at startup, for repeatable pictures (`npm run shots`). With none of them present nothing changes.
@@ -16,6 +17,7 @@ export interface UrlParams {
   gate: number | null; // the race's next gate once it starts, to show a later gate lit; the gate count finishes it
   car: { x: number; z: number; quarterTurns: number } | null; // the car's place after the race starts, heading in quarter turns left of north
   state: GameStateKind; // the screen the game starts on, the menu without the parameter
+  entry: number | null; // the menu entry selected at the start (0 is the first)
 }
 
 const URL_STATES: Record<string, GameStateKind> = { menu: 'menu', prerace: 'preRace', race: 'race', results: 'results' };
@@ -40,6 +42,7 @@ export function parseUrlParams(search: string): UrlParams {
   const gate = query.get('gate');
   const car = query.get('car');
   const state = query.get('state');
+  const entry = query.get('entry');
 
   let renderMode: RenderMode | null = null;
   if (mode !== null) {
@@ -91,6 +94,11 @@ export function parseUrlParams(search: string): UrlParams {
     throw new Error(`URL parameter state: "${state}" is not one of ${Object.keys(URL_STATES).join(', ')}`);
   }
 
+  const entryNumber = entry === null ? null : number('entry', entry);
+  if (entryNumber !== null && (!Number.isInteger(entryNumber) || entryNumber < 0 || entryNumber >= MENU_ENTRIES.length)) {
+    throw new Error(`URL parameter entry: expected a whole number, 0 to ${MENU_ENTRIES.length - 1}`);
+  }
+
   return {
     seed: seedNumber,
     renderMode,
@@ -104,5 +112,6 @@ export function parseUrlParams(search: string): UrlParams {
     gate: gateNumber,
     car: carPose,
     state: state === null ? 'menu' : URL_STATES[state],
+    entry: entryNumber,
   };
 }
