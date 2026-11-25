@@ -15,6 +15,7 @@ import { STREET_LIGHT_POLE_HEIGHT, STREET_LIGHT_POLE_WIDTH, type StreetLight } f
 export interface Collider {
   rect: Rect;
   top: number;
+  building?: boolean; // part of a building model, so props can be told apart; behaves the same
 }
 
 // Pushes a circle (centre x, z) out of a rectangle, seen from above. Returns the new centre,

@@ -27,3 +27,4 @@ dist-ssr
 .claude/go.pause
 .claude/settings.local.json
 screenshots
+shots

@@ -1,7 +1,8 @@
 import './style.css';
+import { parseUrlParams } from './dev/urlParams.ts';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
-import { advanceClock, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
-import { blendCars, CAR_WIDTH, collideCar, createCar, DEFAULT_CAR_SETTINGS, stepCar, type CarSettings, type Impact } from './game/car.ts';
+import { advanceClock, capFrameSeconds, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
+import { blendCars, CAR_WIDTH, DEFAULT_CAR_SETTINGS, type CarSettings, type Impact } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import {
@@ -10,16 +11,14 @@ import {
   updateChaseCamera,
   type ChaseCameraSettings,
 } from './game/chaseCamera.ts';
-import { generateBuildings, inset, SETBACK, type Building, type Layout } from './game/buildings.ts';
-import { DEFAULT_CITY_SETTINGS, generateCity, CURB_HEIGHT, subtract, Zone, type City, type CitySettings, type Rect } from './game/city.ts';
-import { cityColliders, pushOutOfColliders, type Collider } from './game/collision.ts';
-import { FENCE_HEIGHT, houseFences } from './game/fences.ts';
-import { houseDriveways } from './game/driveways.ts';
+import { inset, SETBACK } from './game/buildings.ts';
+import { DEFAULT_CITY_SETTINGS, CURB_HEIGHT, subtract, Zone, type CitySettings, type Rect } from './game/city.ts';
+import { pushOutOfColliders } from './game/collision.ts';
+import { FENCE_HEIGHT } from './game/fences.ts';
 import { lotPavements } from './game/lots.ts';
 import { POND_RADIUS } from './game/park.ts';
-import { generateIntersections, type Intersections } from './game/intersections.ts';
-import { signalOffsets, signalPhase } from './game/signals.ts';
-import { generateStreetLights, type StreetLight } from './game/streetLights.ts';
+import { signalPhase } from './game/signals.ts';
+import { createWorld, regenerateCity as regenerateWorldCity, stepWorld, type CityData } from './game/world.ts';
 import { trackFullscreenKey, trackKeyboard, trackKeyPress, trackMouse } from './game/input.ts';
 import {
   createColorTarget,
@@ -36,7 +35,6 @@ import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS
 import { createSignalTexture, updateSignalTexture } from './render/signalTexture.ts';
 import { box, flatDisc, FLOATS_PER_VERTEX, withMaterial, withSideColor, withSideMaterial } from './render/shapes.ts';
 import { windowStyleParams } from './render/models/facade.ts';
-import { cityModels } from './render/models/spawn.ts';
 import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
@@ -201,6 +199,7 @@ const DEBRIS_HEIGHT = 0.7; // m, about the bumper
 
 // Debris flies back off the wall from where the car touched it, more and faster the harder it hit.
 function crashDebris({ speed, normalX, normalZ }: Impact) {
+  const { car } = world;
   if (speed < DEBRIS_MIN_SPEED) return;
   const contact: Vec3 = [car.x - normalX * (CAR_WIDTH / 2), DEBRIS_HEIGHT, car.z - normalZ * (CAR_WIDTH / 2)];
   const count = Math.round(speed * DEBRIS_PER_SPEED);
@@ -212,6 +211,7 @@ const DRIFT_PARTICLE_SPEED_SHARE = 0.6; // particles fly up at up to this share 
 
 // Bursts from the bottom of the rear tyres while sliding, like crash debris: more and faster the harder the slide.
 function driftParticles() {
+  const { car } = world;
   const slide = slideSpeed(car);
   if (slide <= DRIFT_SLIDE_SPEED) return;
   const count = Math.max(1, Math.round(slide * DRIFT_PARTICLES_PER_SLIDE_SPEED));
@@ -248,15 +248,9 @@ const POND_SIDES = 24;
 const POND_COLOR: Vec3 = [0.15, 0.3, 0.6];
 const FENCE_COLOR: Vec3 = [0.45, 0.35, 0.25];
 
-function buildCityMeshes(
-  city: City,
-  buildings: Building[],
-  driveways: Rect[],
-  models: number[],
-  fences: Rect[],
-  streetLights: StreetLight[],
-  { trafficLights, stopSigns }: Intersections,
-): Mesh[] {
+function buildCityMeshes({ city, layout, driveways, models, fences, streetLights, intersections }: CityData): Mesh[] {
+  const { buildings } = layout;
+  const { trafficLights, stopSigns } = intersections;
   const road = uploadMesh(withMaterial(slab(city.bounds, -0.1, 0, ROAD_COLOR), MATERIAL.defaultRoad));
   // Raised slightly so the paint doesn't fight the road surface for depth.
   const markings = uploadMesh(
@@ -287,7 +281,7 @@ function buildCityMeshes(
     ]),
   );
   // Everything on the lots in one mesh, with corners already in world position, so it draws in a single call.
-  const modelMesh = uploadMesh(models);
+  const modelMesh = uploadMesh(models.vertices);
   const fenceMesh = uploadMesh(
     withMaterial(
       fences.flatMap((rect) => slab(rect, CURB_HEIGHT, CURB_HEIGHT + FENCE_HEIGHT, FENCE_COLOR)),
@@ -317,44 +311,20 @@ const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
 const carSettings: CarSettings = { ...DEFAULT_CAR_SETTINGS };
 const chaseSettings: ChaseCameraSettings = { ...DEFAULT_CHASE_CAMERA_SETTINGS };
 
-interface World {
-  city: City;
-  layout: Layout;
-  fences: Rect[];
-  streetLights: StreetLight[];
-  intersections: Intersections;
-  offsets: number[];
-  colliders: Collider[];
-  meshes: Mesh[];
-}
+const urlParams = parseUrlParams(window.location.search);
+if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
 
-// The data is kept, not just the meshes, so the game can collide with it.
-function generateWorld(): World {
-  const city = generateCity(citySettings);
-  const layout = generateBuildings(city, citySettings);
-  const fences = houseFences(city, layout.buildings);
-  const driveways = houseDriveways(city, layout.buildings);
-  const streetLights = generateStreetLights(city, citySettings);
-  const intersections = generateIntersections(city, citySettings);
-  const models = cityModels(city, layout, driveways, citySettings.seed);
-  return {
-    city,
-    layout,
-    fences,
-    streetLights,
-    intersections,
-    offsets: signalOffsets(city, citySettings.seed),
-    colliders: cityColliders(models.colliders, fences, streetLights, intersections),
-    meshes: buildCityMeshes(city, layout.buildings, driveways, models.vertices, fences, streetLights, intersections),
-  };
-}
-
-let world = generateWorld();
+const world = createWorld(citySettings, carSettings);
+// A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
+const heldTick = urlParams.tick;
+for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, NO_INPUT);
+let cityMeshes = buildCityMeshes(world);
 let signals = createSignalTexture(gl, world.city.junctions.length);
 
 function regenerateCity() {
-  world.meshes.forEach(deleteMesh);
-  world = generateWorld();
+  cityMeshes.forEach(deleteMesh);
+  regenerateWorldCity(world);
+  cityMeshes = buildCityMeshes(world);
   gl!.deleteTexture(signals.texture);
   signals = createSignalTexture(gl!, world.city.junctions.length);
 }
@@ -410,8 +380,8 @@ const settings: DevSettings = {
   cellWidth: 6,
   viewDistance: 1000,
   fogStart: 150,
-  renderMode: RenderMode.Glyphs,
-  movement: Movement.Car,
+  renderMode: urlParams.renderMode ?? RenderMode.Glyphs,
+  movement: urlParams.camera ? Movement.FlyCamera : Movement.Car,
   noclip: false,
   ambient: 0.5,
   lightIntensity: 0.4,
@@ -489,6 +459,12 @@ const camera: Camera = {
   yaw: 0,
   pitch: -0.2,
 };
+if (urlParams.camera) {
+  camera.position = urlParams.camera.position;
+  camera.yaw = urlParams.camera.yaw;
+  camera.pitch = urlParams.camera.pitch;
+}
+let framesDrawn = 0;
 const CAMERA_RADIUS = 0.5;
 
 // A fixed light high up, from +x and +z, until the night lights replace it.
@@ -505,33 +481,30 @@ function draw(mesh: Mesh, mode: GLenum, view: Mat4, model?: Mat4) {
 }
 
 const clock = createClock();
-const car = createCar(0, 0, 0);
-let previousCar = car;
 const chase = createChaseCamera();
 let carInput = NO_INPUT;
 
-// Longest step allowed, so returning to a background tab doesn't teleport the camera
-// or run a burst of simulation ticks.
-const MAX_FRAME_SECONDS = 0.1;
 // Larger than needed up close, so the depth buffer keeps precision for curbs and markings far away.
 const NEAR_PLANE = 0.5;
 let previousTimeMs = 0;
 
 function frame(timeMs: number) {
   requestAnimationFrame(frame);
-  const dt = Math.min((timeMs - previousTimeMs) / 1000, MAX_FRAME_SECONDS);
+  // The previous frame was drawn completely, with the glyph atlas built before the loop started.
+  if (urlParams.shot && framesDrawn > 0) canvas.dataset.ready = 'true';
+  framesDrawn++;
+  const dt = heldTick === null ? capFrameSeconds((timeMs - previousTimeMs) / 1000) : 0;
   previousTimeMs = timeMs;
-  advanceClock(clock, dt, () => {
-    previousCar = { ...car };
+  if (heldTick === null) advanceClock(clock, dt, () => {
     carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
-    stepCar(car, carInput, carSettings);
-    const impact = collideCar(car, world.colliders, carSettings);
+    const { impact } = stepWorld(world, carInput);
     if (impact) crashDebris(impact);
     driftParticles();
   });
   updateParticles(particles, dt);
   // Drawn between the last two ticks by the time left over, so motion is smooth on any refresh rate.
-  const drawnCar = blendCars(previousCar, car, clock.leftover / TICK_SECONDS);
+  const { car } = world;
+  const drawnCar = blendCars(world.previousCar, car, clock.leftover / TICK_SECONDS);
   let fovBoost = 0;
   if (settings.movement === Movement.FlyCamera) {
     updateFlyCamera(camera, dt);
@@ -543,7 +516,7 @@ function frame(timeMs: number) {
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(
     `camera ${cameraX.toFixed(1)}, ${cameraY.toFixed(1)}, ${cameraZ.toFixed(1)}` +
-      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${clock.tick}` +
+      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${world.tick}` +
       `\ncar ${car.x.toFixed(1)}, ${car.z.toFixed(1)}  heading ${degrees(car.heading)}°` +
       `  ${(Math.hypot(car.velocityX, car.velocityZ) * 3.6).toFixed(0)} km/h${car.drifting ? '  DRIFT' : ''}  traction ${car.traction.toFixed(2)}` +
       `\ninput throttle ${carInput.throttle}  brake ${carInput.brake}  steer ${carInput.steer}  drift ${carInput.drift}`,
@@ -586,13 +559,13 @@ function frame(timeMs: number) {
   const samples = fullResolution ? 1 : settings.supersample;
   const pointCells = [target.width / samples, target.height / samples];
   gl!.uniform1f(supersampleLocation, samples);
-  gl!.uniform1i(beaconOnLocation, clock.tick % BEACON_CYCLE_TICKS < BEACON_ON_TICKS ? 1 : 0);
+  gl!.uniform1i(beaconOnLocation, world.tick % BEACON_CYCLE_TICKS < BEACON_ON_TICKS ? 1 : 0);
   gl!.uniform1i(brakingLocation, carInput.brake > 0 ? 1 : 0);
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
   gl!.activeTexture(gl!.TEXTURE3);
-  updateSignalTexture(gl!, signals, world.offsets.map((offset) => signalPhase(clock.tick, offset)));
+  updateSignalTexture(gl!, signals, world.signalOffsets.map((offset) => signalPhase(world.tick, offset)));
   gl!.uniform1i(signalsTextureLocation, 3);
   const view = viewMatrix(camera);
 
@@ -609,7 +582,7 @@ function frame(timeMs: number) {
   gl!.enable(gl!.DEPTH_TEST);
   gl!.useProgram(program);
 
-  for (const mesh of world.meshes) draw(mesh, gl!.TRIANGLES, view);
+  for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
   draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
 
   const particleCount = particleVertices(particles);
@@ -672,10 +645,10 @@ function frame(timeMs: number) {
   gl!.uniform1i(strokeMaterialsLocation, STROKE_MATERIALS);
   gl!.uniform1i(strokeRowLocation, STROKE_ROW);
   const animationTicks = Math.round(settings.animationSeconds * TICKS_PER_SECOND);
-  gl!.uniform1f(animationPhaseLocation, (clock.tick % animationTicks) / animationTicks);
+  gl!.uniform1f(animationPhaseLocation, (world.tick % animationTicks) / animationTicks);
   gl!.uniform1f(animationLevelsLocation, settings.animationLevels);
   gl!.uniform1f(waveScaleLocation, settings.waveScale);
-  gl!.uniform1i(tickLocation, clock.tick);
+  gl!.uniform1i(tickLocation, world.tick);
   gl!.uniform1f(splashChanceLocation, settings.splashChance);
   gl!.uniform1i(splashTicksLocation, Math.max(1, Math.round(settings.splashSeconds * TICKS_PER_SECOND)));
   gl!.uniform3fv(backgroundLocation, background);

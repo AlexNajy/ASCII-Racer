@@ -1,5 +1,6 @@
 import type { OpenLot, Side } from '../../../game/buildings.ts';
 import { CURB_HEIGHT, subtract, type City, type Rect } from '../../../game/city.ts';
+import { hypot } from '../../../math/deterministic.ts';
 import { POND_RADIUS } from '../../../game/park.ts';
 import type { Vec3 } from '../../../math/mat4.ts';
 import { MATERIAL } from '../../materials.ts';
@@ -15,11 +16,14 @@ const BAY_WIDTH = 2.8;
 const BAY_DEPTH = 5.4;
 const AISLE_WIDTH = 7;
 const PARKED_SHARE = 0.45;
+const ALLEY_MIDDLE = 0.2; // share of an alley's length kept free of dumpsters around its middle
 const SEATING_SPACING = 7;
 const MIN_SEATING_WIDTH = 4;
 const PARK_PATH_WIDTH = 3;
 const PARK_TREES = 22;
 const TREE_CLEARANCE = 3; // m from the edges of what a tree avoids
+const KIOSK_CLEARANCE = 4; // m from the kiosk's centre, along x and z
+const TREE_SPACING = 1.5; // m between park tree trunks
 const YARD_TREE_CHANCE = 0.6;
 const YARD_TREE_MARGIN = 1.5; // m from fences and walls
 const YARD_MIN_SIZE = 3 + 2 * YARD_TREE_MARGIN;
@@ -140,13 +144,20 @@ function park({ rect }: OpenLot, random: () => number): Model {
     models.push(bollard(cx - half - 0.6, cz + direction * lampAt));
     models.push(bench(cx + direction * (lampAt + 4), cz - half - 0.8, true));
   }
-  models.push(kiosk(cx + half + 3, cz + POND_RADIUS + 6, 'minX', random));
+  const kioskX = cx + half + 3;
+  const kioskZ = cz + POND_RADIUS + 6;
+  models.push(kiosk(kioskX, kioskZ, 'minX', random));
+  const planted: [number, number][] = [];
   for (let i = 0; i < PARK_TREES; i++) {
     const x = rect.minX + random() * (rect.maxX - rect.minX);
     const z = rect.minZ + random() * (rect.maxZ - rect.minZ);
     const onPath = Math.abs(x - cx) < half + TREE_CLEARANCE || Math.abs(z - cz) < half + TREE_CLEARANCE;
-    const nearPond = Math.hypot(x - cx, z - cz) < POND_RADIUS + TREE_CLEARANCE;
-    if (!onPath && !nearPond) models.push(tree(x, z, GROUND, random));
+    const nearPond = hypot(x - cx, z - cz) < POND_RADIUS + TREE_CLEARANCE;
+    const nearKiosk = Math.abs(x - kioskX) < KIOSK_CLEARANCE && Math.abs(z - kioskZ) < KIOSK_CLEARANCE;
+    const nearTree = planted.some(([px, pz]) => hypot(x - px, z - pz) < TREE_SPACING);
+    if (onPath || nearPond || nearKiosk || nearTree) continue;
+    planted.push([x, z]);
+    models.push(tree(x, z, GROUND, random));
   }
   return combine(models);
 }
@@ -154,7 +165,9 @@ function park({ rect }: OpenLot, random: () => number): Model {
 // Along one edge, so a car still fits past.
 function alley({ rect }: OpenLot, random: () => number): Model {
   const alongX = rect.maxX - rect.minX > rect.maxZ - rect.minZ;
-  const share = 0.15 + random() * 0.7;
+  // Kept out of the middle, where an alley the other way may cross.
+  const roll = 0.15 + random() * (0.7 - ALLEY_MIDDLE);
+  const share = roll < 0.5 - ALLEY_MIDDLE / 2 ? roll : roll + ALLEY_MIDDLE;
   const flip = random() < 0.5;
   const x = alongX ? rect.minX + share * (rect.maxX - rect.minX) : flip ? rect.minX + 0.7 : rect.maxX - 0.7;
   const z = alongX ? (flip ? rect.minZ + 0.7 : rect.maxZ - 0.7) : rect.minZ + share * (rect.maxZ - rect.minZ);

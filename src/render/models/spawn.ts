@@ -62,17 +62,22 @@ const YARD_SEED = 1 << 23;
 const FLEX_SEED = 1 << 24;
 
 // Everything standing on the city's lots, drawn as one mesh.
-export function cityModels(city: City, { buildings, open }: Layout, driveways: Rect[], seed: number): Model {
+export function cityModels(city: City, { buildings, open }: Layout, driveways: Rect[], fences: Rect[], seed: number): Model {
   const generator = (base: number, index: number) => createRandom(blockSeed(seed, base + index));
   const buildingModels = buildings.map((building, index) => {
     const random = generator(MODEL_SEED, index);
-    return choose(building, random())(building, random);
+    const model = choose(building, random())(building, random);
+    return { ...model, colliders: model.colliders.map((collider) => ({ ...collider, building: true })) };
   });
   const openModels = open.map((lot, index) => openLotModel(lot, generator(OPEN_LOT_SEED, index)));
-  const houses = buildings.filter(({ kind }) => kind === 'house' || kind === 'garage').map(({ rect }) => rect);
+  // Solid parts of houses and garages, porches included.
+  const houses = buildingModels.flatMap(({ colliders }, index) => {
+    const { kind } = buildings[index];
+    return kind === 'house' || kind === 'garage' ? colliders.map(({ rect }) => rect) : [];
+  });
   const yards = city.blocks
     .filter(({ zone }) => zone === Zone.Houses)
-    .map(({ rect }, index) => yardTrees(inset(rect, SETBACK), [...houses, ...driveways], generator(YARD_SEED, index)));
+    .map(({ rect }, index) => yardTrees(inset(rect, SETBACK), [...houses, ...driveways, ...fences], generator(YARD_SEED, index)));
   const flexAlleys = city.wall
     .filter(({ kind }) => kind === 'flex')
     .map(({ rect }, index) => flexAlley(rect, city, generator(FLEX_SEED, index)));
