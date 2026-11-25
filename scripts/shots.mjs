@@ -16,20 +16,23 @@ const DEFAULT_SEED = 1;
 const EYE = 1.2;
 
 // camera: 'x,y,z,yaw,pitch' (degrees; yaw 0 looks -Z, 90 looks -X, 180 looks +Z), or null for the chase camera.
+// race: false drives freely from the middle junction instead of starting the city seed's race; the car (and its
+// headlights) is in the fly camera's pictures too, so every shot from before races existed has it.
 // Positions are for the default seed's city (seed 1); with another seed the same spots show something else.
 const SHOTS = [
-  { name: 'chase-junction', camera: null, mode: 'glyphs', tick: 300 },
-  { name: 'street-downtown', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300 },
-  { name: 'street-downtown-grey', camera: `4,${EYE},110,0,3`, mode: 'brightness', tick: 300 },
-  { name: 'avenue-lights', camera: `6,${EYE},40,0,9`, mode: 'glyphs', tick: 600 },
-  { name: 'towers-aerial', camera: '4,70,150,0,-17', mode: 'glyphs', tick: 300 },
-  { name: 'houses', camera: `-188,3,76,180,6`, mode: 'glyphs', tick: 300 },
-  { name: 'park', camera: `-188,3,64,0,-8`, mode: 'glyphs', tick: 300 },
-  { name: 'car-park', camera: `-236,9,112,90,-16`, mode: 'glyphs', tick: 300 },
-  { name: 'supermarket', camera: `188,${EYE},238,180,9`, mode: 'glyphs', tick: 300 },
-  { name: 'outer-wall', camera: `154,${EYE},268,180,12`, mode: 'glyphs', tick: 300 },
-  { name: 'hud-driving', camera: null, mode: 'glyphs', tick: 300, drive: true },
-  { name: 'hud-test', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, hud: 'test' },
+  { name: 'chase-junction', camera: null, mode: 'glyphs', tick: 300, race: false },
+  { name: 'street-downtown', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'street-downtown-grey', camera: `4,${EYE},110,0,3`, mode: 'brightness', tick: 300, race: false },
+  { name: 'avenue-lights', camera: `6,${EYE},40,0,9`, mode: 'glyphs', tick: 600, race: false },
+  { name: 'towers-aerial', camera: '4,70,150,0,-17', mode: 'glyphs', tick: 300, race: false },
+  { name: 'houses', camera: `-188,3,76,180,6`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'park', camera: `-188,3,64,0,-8`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'car-park', camera: `-236,9,112,90,-16`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'supermarket', camera: `188,${EYE},238,180,9`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'outer-wall', camera: `154,${EYE},268,180,12`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'hud-driving', camera: null, mode: 'glyphs', tick: 300, drive: true, race: false },
+  { name: 'race-start', camera: null, mode: 'glyphs', tick: 90 },
+  { name: 'hud-test', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, hud: 'test', race: false },
 ];
 
 const args = process.argv.slice(2);
@@ -86,6 +89,7 @@ try {
     const query = new URLSearchParams({ seed: String(seed), mode: shot.mode, tick: String(shot.tick) });
     if (shot.camera) query.set('camera', shot.camera);
     if (shot.drive) query.set('drive', '1');
+    if (shot.race === false) query.set('race', '0');
     if (shot.hud) query.set('hud', shot.hud);
     if (shot.cell) query.set('cell', String(shot.cell));
     try {

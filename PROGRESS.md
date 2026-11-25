@@ -100,4 +100,12 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Checked: reviewer passed it with its own validation of 25 389 routes (three city sizes, three lengths, extreme seeds), a real car driven from the pose, and three mutations all caught. Slowest route 51 ms.
 - Numbers for a medium route in the default city: 2000 to 2016 m, 12 gates on average (8 to 19), a third of junctions are turns, 21% of the length on the ring, longest straight 616 m.
 - Quality notes carried into the test driver sub-step, where routes are tuned anyway: 92% of routes loop round a single block at least once (hairpins); 17% put the start 10 m before a junction or the finish 10 m after one; `finishRange` has no guard for an empty range.
+
+## 2026-11-24: step 15, race state
+
+- Roadmap order changed: "Race state" before "Gates", because the gates draw the next checkpoint the race decides.
+- `game/race.ts` and `world.ts`: a world holds a race or none (`startRace`, `clearRace`, `createRaceWorld`). Countdown of 180 ticks with the car held bit-identical whatever the input, then running, then finished with the time frozen in whole ticks (`formatRaceTime` gives m:ss.mmm, milliseconds rounded down). Only the next gate counts, crossed in its direction within the road plus 3 m of pavement each side; backwards and out-of-order crossings do nothing. `stepWorld` reports one race event per tick (go, gate, finish). Race state is hashed only when a race is present, so the stored hashes are unchanged.
+- Browser, until the menu exists: the game starts in a race on the city's own route, `R` restarts it, regenerating the city starts that city's route. URL parameter `race=0` is free driving; all 12 older shots carry it and are byte-identical. New shot `race-start`.
+- Checked: reviewer passed it; eight mutations of the rules were caught by the tests, one survived (the span test only has a case whose end point is inside the span; carried into the gates brief). 160 tests.
+- Worth knowing: a car that cuts a corner through a park or car park crosses a gate's line outside its span, so the gate doesn't count and the driver has to go back. Kept as is (road plus pavement is the course); the gate models have to make the span obvious.
 - Next: "Gates".

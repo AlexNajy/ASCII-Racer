@@ -5,13 +5,21 @@ import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null });
+    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true });
   });
 
   it('reads drive=1 and nothing else as driving', () => {
     expect(parseUrlParams('?drive=1').drive).toBe(true);
     expect(parseUrlParams('?drive=0').drive).toBe(false);
     expect(parseUrlParams('?drive').drive).toBe(false);
+  });
+
+  it('races unless race=0', () => {
+    expect(parseUrlParams('').race).toBe(true);
+    expect(parseUrlParams('?race=1').race).toBe(true);
+    expect(parseUrlParams('?race=0').race).toBe(false);
+    expect(() => parseUrlParams('?race=')).toThrow();
+    expect(() => parseUrlParams('?race=no')).toThrow();
   });
 
   it('rejects empty and non-numeric values', () => {

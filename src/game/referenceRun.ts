@@ -1,5 +1,6 @@
 import { NO_INPUT, type CarInput } from './carInput.ts';
 import type { Car } from './car.ts';
+import { RACE_PHASES, type Race, type RaceEvent } from './race.ts';
 import { stepWorld, type World } from './world.ts';
 import type { JunctionControl } from './city.ts';
 import { hypot } from '../math/deterministic.ts';
@@ -13,6 +14,8 @@ export const REFERENCE_SAMPLE_EVERY = 500;
 const INPUT_SEED_INDEX = 0x1f00;
 const MIN_STRETCH_TICKS = 15;
 const MAX_STRETCH_TICKS = 150;
+
+const RACE_EVENT_KINDS: readonly RaceEvent['kind'][] = ['go', 'gate', 'finish'];
 
 const JUNCTION_CONTROLS: readonly JunctionControl[] = ['none', 'lights', 'allWayStop', 'twoWayStop'];
 
@@ -68,6 +71,11 @@ export function hashCar(hasher: Hasher, car: Car): void {
   hasher.numbers([car.x, car.z, car.heading, car.velocityX, car.velocityZ, car.traction, car.drifting ? 1 : 0]);
 }
 
+// Only for worlds with a race, so free-driving hashes stay as they were.
+export function hashRace(hasher: Hasher, race: Race): void {
+  hasher.numbers([race.route.seed, race.route.gates.length, RACE_PHASES.indexOf(race.phase), race.startTick, race.nextGate, race.finishTick]);
+}
+
 // Everything generation decided that the simulation or its verification can see.
 export function cityDigest(world: World): number {
   const hasher = new Hasher();
@@ -95,7 +103,7 @@ export interface ReferenceResult {
 }
 
 // Steps the world through `inputs` and hashes the city, the car along the way
-// (sampled and at the end) and every impact.
+// (sampled and at the end), every impact, and with a race its state and events.
 export function runReference(world: World, inputs: readonly CarInput[]): ReferenceResult {
   const hasher = new Hasher();
   hasher.number(cityDigest(world));
@@ -104,19 +112,22 @@ export function runReference(world: World, inputs: readonly CarInput[]): Referen
   let distance = 0;
   for (let index = 0; index < inputs.length; index++) {
     const { x, z } = world.car;
-    const { impact } = stepWorld(world, inputs[index] ?? NO_INPUT);
+    const { impact, race } = stepWorld(world, inputs[index] ?? NO_INPUT);
     distance += hypot(world.car.x - x, world.car.z - z);
     if (impact) {
       impacts++;
       hasher.numbers([index, impact.speed, impact.normalX, impact.normalZ]);
     }
+    if (race) hasher.numbers([index, RACE_EVENT_KINDS.indexOf(race.kind), race.kind === 'go' ? -1 : race.gate]);
     if ((index + 1) % REFERENCE_SAMPLE_EVERY === 0) {
       const sample = new Hasher();
       hashCar(sample, world.car);
+      if (world.race) hashRace(sample, world.race);
       samples.push(sample.value);
       hasher.number(sample.value);
     }
   }
   hashCar(hasher, world.car);
+  if (world.race) hashRace(hasher, world.race);
   return { hash: hasher.value, samples, impacts, distance };
 }

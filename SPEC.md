@@ -112,3 +112,8 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 - Step 15: a gate stands on every segment the route turns into and on straights at most 300 m apart; the finish is the last gate.
 - Step 15: the start line has 30 m of clear road behind it for the start grid; the car starts one car length behind it on the centre line, facing along the road.
 - Step 15: a route that can't be generated (city too small for the length) is an error, not a shorter route.
+- Step 15: a gate is crossed by the car's centre point, moving from strictly behind its line to on or past it in one tick.
+- Step 15: a gate counts across the whole road plus the pavement on both sides (3 m, up to the building line), so cutting a corner over the pavement still counts.
+- Step 15: crossing a gate backwards or out of order does nothing: no penalty, the next gate stays next.
+- Step 15: the countdown is 3 s and ignores all input; after the finish the time is frozen and the car keeps driving.
+- Step 15: race time is whole ticks from go to the tick the finish is crossed in, shown as m:ss.mmm with the milliseconds rounded down.

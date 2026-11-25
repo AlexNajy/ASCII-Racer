@@ -11,6 +11,7 @@ export interface UrlParams {
   drive: boolean; // the held tick's stepping holds full throttle instead of no input
   hud: 'test' | null; // fill the text layer with a test card
   cellWidth: number | null; // CSS px, as the dev menu's cell width
+  race: boolean; // race=0 drives freely from the middle junction instead of starting a race
 }
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
@@ -29,6 +30,7 @@ export function parseUrlParams(search: string): UrlParams {
   const tick = query.get('tick');
   const hud = query.get('hud');
   const cell = query.get('cell');
+  const race = query.get('race');
 
   let renderMode: RenderMode | null = null;
   if (mode !== null) {
@@ -61,6 +63,8 @@ export function parseUrlParams(search: string): UrlParams {
     throw new Error(`URL parameter cell: expected a whole number of CSS pixels, ${CELL_WIDTH_MIN} to ${CELL_WIDTH_MAX}`);
   }
 
+  if (race !== null && race !== '0' && race !== '1') throw new Error(`URL parameter race: "${race}" is not 0 or 1`);
+
   return {
     seed: seedNumber,
     renderMode,
@@ -70,5 +74,6 @@ export function parseUrlParams(search: string): UrlParams {
     drive: query.get('drive') === '1',
     hud,
     cellWidth,
+    race: race !== '0',
   };
 }

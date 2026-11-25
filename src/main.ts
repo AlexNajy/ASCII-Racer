@@ -18,7 +18,8 @@ import { FENCE_HEIGHT } from './game/fences.ts';
 import { lotPavements } from './game/lots.ts';
 import { POND_RADIUS } from './game/park.ts';
 import { signalPhase } from './game/signals.ts';
-import { createWorld, regenerateCity as regenerateWorldCity, stepWorld, type CityData } from './game/world.ts';
+import { generateRoute, RouteError } from './game/route.ts';
+import { clearRace, createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorld, type CityData } from './game/world.ts';
 import { trackFullscreenKey, trackKeyboard, trackKeyPress, trackMouse } from './game/input.ts';
 import {
   createColorTarget,
@@ -320,6 +321,17 @@ const urlParams = parseUrlParams(window.location.search);
 if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
 
 const world = createWorld(citySettings, carSettings);
+// Until the menu exists the game starts in a race on the city seed's route; race=0 drives freely as before.
+function startCityRace() {
+  if (!urlParams.race) return;
+  try {
+    startRace(world, generateRoute(world.roadGraph, citySettings.seed));
+  } catch (error) {
+    if (!(error instanceof RouteError)) throw error;
+    clearRace(world);
+  }
+}
+startCityRace();
 // A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
 const heldTick = urlParams.tick;
 const heldInput = urlParams.drive ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
@@ -331,6 +343,8 @@ let minimap = createMinimap(world.city);
 function regenerateCity() {
   cityMeshes.forEach(deleteMesh);
   regenerateWorldCity(world);
+  startCityRace();
+  if (world.race) faceCarHeading();
   cityMeshes = buildCityMeshes(world);
   gl!.deleteTexture(signals.texture);
   signals = createSignalTexture(gl!, world.city.junctions.length);
@@ -486,6 +500,12 @@ if (urlParams.camera) {
   camera.yaw = urlParams.camera.yaw;
   camera.pitch = urlParams.camera.pitch;
 }
+// After the car jumps to a start, so the chase camera doesn't swing round from where it was.
+function faceCarHeading() {
+  if (settings.movement !== Movement.Car) return;
+  camera.yaw = world.car.heading;
+  chase.share = 1;
+}
 let framesDrawn = 0;
 const CAMERA_RADIUS = 0.5;
 
@@ -504,6 +524,12 @@ function draw(mesh: Mesh, mode: GLenum, view: Mat4, model?: Mat4) {
 
 const clock = createClock();
 const chase = createChaseCamera();
+faceCarHeading();
+trackKeyPress('KeyR', () => {
+  if (!world.race) return;
+  startRace(world, world.race.route);
+  faceCarHeading();
+});
 let carInput = NO_INPUT;
 
 // Larger than needed up close, so the depth buffer keeps precision for curbs and markings far away.

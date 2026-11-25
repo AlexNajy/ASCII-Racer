@@ -6,7 +6,9 @@ import { cityColliders, type Collider } from './collision.ts';
 import { houseDriveways } from './driveways.ts';
 import { houseFences } from './fences.ts';
 import { generateIntersections, type Intersections } from './intersections.ts';
+import { advanceRace, COUNTDOWN_TICKS, createRace, type Race, type RaceEvent } from './race.ts';
 import { roadGraph, type RoadGraph } from './roadGraph.ts';
+import { DEFAULT_ROUTE_OPTIONS, generateRoute, type Route, type RouteOptions } from './route.ts';
 import { signalOffsets } from './signals.ts';
 import { generateStreetLights, type StreetLight } from './streetLights.ts';
 import { cityModels } from '../render/models/spawn.ts';
@@ -28,7 +30,7 @@ export interface CityData {
   colliders: Collider[];
 }
 
-// The simulation: the city, the car and the tick. No WebGL or DOM, so it runs in Node too.
+// The simulation: the city, the car, the tick and the race. No WebGL or DOM, so it runs in Node too.
 // The settings objects are kept by reference, so the dev menu's edits apply on the next tick or rebuild.
 export interface World extends CityData {
   citySettings: CitySettings;
@@ -36,11 +38,13 @@ export interface World extends CityData {
   car: Car;
   previousCar: Car; // the car before the last tick, for drawing between ticks
   tick: number;
+  race: Race | null; // null is free driving
 }
 
 // What one tick did that the renderer reacts to.
 export interface TickResult {
   impact: Impact | null;
+  race: RaceEvent | null;
 }
 
 const START_HEADING = 0;
@@ -79,18 +83,50 @@ export function createWorld(citySettings: CitySettings, carSettings: CarSettings
   const data = generateCityData(citySettings);
   const { x, z } = startJunction(data.city);
   const car = createCar(x, z, START_HEADING);
-  return { ...data, citySettings, carSettings, car, previousCar: { ...car }, tick: 0 };
+  return { ...data, citySettings, carSettings, car, previousCar: { ...car }, tick: 0, race: null };
 }
 
-// Builds the city again from the current settings; the car and the tick carry on.
+// Puts the car on the route's start pose, standing still, and begins the countdown at the current tick.
+export function startRace(world: World, route: Route): void {
+  const { x, z, heading } = route.pose;
+  world.car = createCar(x, z, heading);
+  world.previousCar = { ...world.car };
+  world.race = createRace(route, world.tick);
+}
+
+export function clearRace(world: World): void {
+  world.race = null;
+}
+
+// A world whose race starts at tick 0. Throws a RouteError if the city can't hold the route.
+export function createRaceWorld(
+  citySettings: CitySettings,
+  carSettings: CarSettings,
+  routeSeed: number,
+  options: RouteOptions = DEFAULT_ROUTE_OPTIONS,
+): World {
+  const world = createWorld(citySettings, carSettings);
+  startRace(world, generateRoute(world.roadGraph, routeSeed, options));
+  return world;
+}
+
+// Builds the city again from the current settings; the car, the tick and the race (on the old route) carry on.
 export function regenerateCity(world: World): void {
   Object.assign(world, generateCityData(world.citySettings));
 }
 
 export function stepWorld(world: World, input: CarInput): TickResult {
   world.previousCar = { ...world.car };
+  const { race } = world;
+  // The countdown holds the car exactly where it stands; the input is not read at all.
+  if (race?.phase === 'countdown') {
+    world.tick++;
+    if (world.tick - race.startTick < COUNTDOWN_TICKS) return { impact: null, race: null };
+    race.phase = 'running';
+    return { impact: null, race: { kind: 'go' } };
+  }
   stepCar(world.car, input, world.carSettings);
   const impact = collideCar(world.car, world.colliders, world.carSettings);
   world.tick++;
-  return { impact };
+  return { impact, race: race ? advanceRace(race, world.previousCar, world.car, world.tick) : null };
 }
