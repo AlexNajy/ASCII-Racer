@@ -57,6 +57,9 @@ const SETS = {
   strokeBackslash: { ramp: ' .`\\\\\\\\\\\\\\' },
   strokeHorizontal: { ramp: ' .,=======' },
   strokeSlash: { ramp: ' .,///////' },
+  // Race gates: steady, so they don't read as neon signs.
+  gate: { ramp: ' .:-=#%@@@' },
+  gateBeam: { ramp: ' .:!|H#@@@' },
 } satisfies Record<string, GlyphSet>;
 
 export type Material = keyof typeof SETS;

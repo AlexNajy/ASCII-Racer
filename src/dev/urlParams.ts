@@ -11,6 +11,9 @@ export interface UrlParams {
   drive: boolean; // the held tick's stepping holds full throttle instead of no input
   hud: 'test' | null; // fill the text layer with a test card
   cellWidth: number | null; // CSS px, as the dev menu's cell width
+  race: boolean; // race=0 drives freely from the middle junction instead of starting a race
+  gate: number | null; // the race's next gate once it starts, to show a later gate lit; the gate count finishes it
+  car: { x: number; z: number; quarterTurns: number } | null; // the car's place after the race starts, heading in quarter turns left of north
 }
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
@@ -29,6 +32,9 @@ export function parseUrlParams(search: string): UrlParams {
   const tick = query.get('tick');
   const hud = query.get('hud');
   const cell = query.get('cell');
+  const race = query.get('race');
+  const gate = query.get('gate');
+  const car = query.get('car');
 
   let renderMode: RenderMode | null = null;
   if (mode !== null) {
@@ -61,6 +67,21 @@ export function parseUrlParams(search: string): UrlParams {
     throw new Error(`URL parameter cell: expected a whole number of CSS pixels, ${CELL_WIDTH_MIN} to ${CELL_WIDTH_MAX}`);
   }
 
+  if (race !== null && race !== '0' && race !== '1') throw new Error(`URL parameter race: "${race}" is not 0 or 1`);
+  const gateNumber = gate === null ? null : number('gate', gate);
+  if (gateNumber !== null && (!Number.isInteger(gateNumber) || gateNumber < 0)) {
+    throw new Error('URL parameter gate: expected a whole number, 0 or more');
+  }
+
+  let carPose: UrlParams['car'] = null;
+  if (car !== null) {
+    const parts = car.split(',');
+    if (parts.length !== 3) throw new Error('URL parameter car: expected x,z,quarterTurns');
+    const [x, z, quarterTurns] = parts.map((part) => number('car', part));
+    if (!Number.isInteger(quarterTurns)) throw new Error('URL parameter car: quarterTurns must be a whole number');
+    carPose = { x, z, quarterTurns };
+  }
+
   return {
     seed: seedNumber,
     renderMode,
@@ -70,5 +91,8 @@ export function parseUrlParams(search: string): UrlParams {
     drive: query.get('drive') === '1',
     hud,
     cellWidth,
+    race: race !== '0',
+    gate: gateNumber,
+    car: carPose,
   };
 }

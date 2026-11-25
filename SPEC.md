@@ -107,3 +107,18 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 
 - Step 13: the car starts on the middle junction of the city, not the origin, which is inside a block for some seeds.
 - Step 14: the speedometer shows how fast the car is moving in any direction (sliding and reversing included), in km/h.
+- Step 15: a route never uses a road segment twice but may pass through a junction again, crossing its own path.
+- Step 15: routes never start on the ring road; ring segments are weighted down (0.3) and at most 3 come in a row.
+- Step 15: a gate stands on every segment the route turns into and on straights at most 300 m apart; the finish is the last gate.
+- Step 15: the start line has 30 m of clear road behind it for the start grid; the car starts one car length behind it on the centre line, facing along the road.
+- Step 15: a route that can't be generated (city too small for the length) is an error, not a shorter route.
+- Step 15: a gate is crossed by the car's centre point, moving from strictly behind its line to on or past it in one tick.
+- Step 15: a gate counts across the whole road plus the pavement on both sides (3 m, up to the building line), so cutting a corner over the pavement still counts.
+- Step 15: crossing a gate backwards or out of order does nothing: no penalty, the next gate stays next.
+- Step 15: the countdown is 3 s and ignores all input; after the finish the time is frozen and the car keeps driving.
+- Step 15: race time is whole ticks from go to the tick the finish is crossed in, shown as m:ss.mmm with the milliseconds rounded down.
+- Step 15: gates are arches with glowing posts and a header whose panel is lit only on the side the route comes from; the next gate breathes and has a tall beam of light above it so it shows from 300 m; passed gates disappear, gates still to come stand unlit (dim, no glow, no beam), checkpoints are lime and the finish a white chequer with a pink-white beam.
+- Step 15: the HUD guidance follows the route, not the line of sight, and says what a navigator would: between the last gate passed and the next one, the turn onto the next gate's leg (left or right) with the distance along the route to that junction, or, when that leg is reached by going straight, "GATE" with the distance along the route to the gate (never "straight"); only when the car is off those legs or not facing along one an orange "TO GATE" arrow pointing at the gate from where the player looks (ahead within 30°, behind beyond 135°). It sits beside the timer, not under it, so the next gate's beam straight ahead stays clear; the finish banner shows for 5 s, then only the frozen time stays.
+- Step 15: the checkpoint count is gates passed over all gates with the finish counted as one (`12/12` once finished); the start line is not a gate. The timer has one minutes digit and stops at 9:59.983.
+- Step 15: route lengths are short 1250 m, medium 1800 m (the daily), long 2500 m. The cautious test driver (grip only, about 22 m/s on average) takes 48–65 s, 70–94 s (80 on average) and about 110 s; a player who drifts through the turns should be some 10–20% faster, so medium lands around 65–80 s, inside the 60–90 s aim.
+- Step 15: start and finish lines stay at least 20 m from the junction squares, and routes avoid turning the same way at two neighbouring junctions (looping round one block); both are preferences of the search, not hard rules.

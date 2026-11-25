@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CITY_SETTINGS, generateCity, type City, type CitySettings } from '../game/city.ts';
+import { createRace, type Race } from '../game/race.ts';
+import { roadGraph } from '../game/roadGraph.ts';
+import { generateRoute } from '../game/route.ts';
 import { drawHud } from './hud.ts';
-import { BLOCK_COLUMNS, BLOCK_ROWS, carGlyph, createMinimap, minimapCell, minimapLayout, minimapPosition } from './minimap.ts';
+import {
+  BLOCK_COLUMNS,
+  BLOCK_ROWS,
+  carGlyph,
+  createMinimap,
+  minimapCell,
+  minimapLayout,
+  minimapPosition,
+  routeCells,
+  routeOverlay,
+  type Minimap,
+} from './minimap.ts';
 import { TextGrid } from './textGrid.ts';
 
 function city(settings: Partial<CitySettings> = {}): City {
@@ -215,5 +229,128 @@ describe('drawing through drawHud', () => {
     const fits = new TextGrid(width + 3 + speedometer, height + 1);
     drawHud(fits, values(minimap, junction.x, junction.z));
     expect(fits.get(1, 0)?.code).toBe('+'.charCodeAt(0));
+  });
+});
+
+describe('the route on the minimap', () => {
+  const ROUTE_SEEDS = [1, 2, 3, 4, 5, 6];
+  const ROUTE_CITIES: Partial<CitySettings>[] = [{}, { seed: 5 }, { seed: 9, avenueDensity: 1 }, { blocksPerSide: 10, seed: 3 }];
+  const routes = ROUTE_CITIES.flatMap((settings) => {
+    const c = city(settings);
+    const graph = roadGraph(c);
+    return ROUTE_SEEDS.map((seed) => ({ city: c, route: generateRoute(graph, seed) }));
+  });
+  const key = (cell: { column: number; row: number }) => `${cell.column},${cell.row}`;
+
+  it('is an unbroken line of road cells from the start to the finish, over 24 routes', () => {
+    expect(routes.length).toBeGreaterThanOrEqual(20);
+    for (const { city: c, route } of routes) {
+      const layout = minimapLayout(c);
+      const legs = routeCells(layout, route);
+      expect(legs.length).toBe(route.legs.length);
+      const all = legs.flat();
+      for (const cell of all) expect(ROAD_CHARS.has(charAt(layout, cell.column, cell.row))).toBe(true);
+      for (let i = 1; i < all.length; i++) {
+        expect(Math.abs(all[i].column - all[i - 1].column) + Math.abs(all[i].row - all[i - 1].row)).toBeLessThanOrEqual(1);
+      }
+      legs.slice(1).forEach((cells, i) => expect(cells[0]).toEqual(legs[i][legs[i].length - 1]));
+      expect(all[0]).toEqual(minimapCell(layout, route.start.point.x, route.start.point.z));
+      const finish = route.gates[route.gates.length - 1].point;
+      expect(all[all.length - 1]).toEqual(minimapCell(layout, finish.x, finish.z));
+      // Every junction of the route is a crossing cell on the line.
+      const onLine = new Set(all.map(key));
+      for (const junction of route.junctions) {
+        const { x, z } = c.junctions[junction];
+        expect(onLine.has(key(minimapCell(layout, x, z)))).toBe(true);
+      }
+    }
+  });
+
+  it('marks the next gate, the finish and the start, and dims what is behind the last gate passed', () => {
+    for (const { city: c, route } of routes) {
+      const layout = minimapLayout(c);
+      const at = (overlay: Map<number, { char: string; color: number }>, p: { x: number; z: number }) => {
+        const { column, row } = minimapCell(layout, p.x, p.z);
+        return overlay.get(row * layout.columns + column);
+      };
+      const finish = route.gates[route.gates.length - 1].point;
+      const first = routeOverlay(layout, { route, nextGate: 0 });
+      expect(at(first, route.gates[0].point)?.char).toBe('@');
+      expect(at(first, finish)?.char).toBe('F');
+      expect(at(first, route.start.point)?.char).toBe('S');
+      const colors = new Set([...first.values()].filter((cell) => cell.char === '#').map((cell) => cell.color));
+      expect(colors.size).toBe(1);
+
+      const later = routeOverlay(layout, { route, nextGate: 2 });
+      expect(at(later, route.gates[2].point)?.char).toBe('@');
+      expect(at(later, route.gates[0].point)?.char).not.toBe('@');
+      const line = routeCells(layout, route).flat();
+      const brightColor = [...colors][0];
+      const indexOf = (cell: { column: number; row: number }) => cell.row * layout.columns + cell.column;
+      const visits = new Map<number, number>();
+      for (const cell of line) visits.set(indexOf(cell), (visits.get(indexOf(cell)) ?? 0) + 1);
+      // A cell just after the start, driven once, is behind the gates passed: dim now; one before the finish isn't.
+      const early = line.slice(1).find((cell) => visits.get(indexOf(cell)) === 1)!;
+      expect(later.get(indexOf(early))?.color).not.toBe(brightColor);
+      const end = line[line.length - 2];
+      expect(later.get(indexOf(end))?.color).toBe(brightColor);
+    }
+  });
+});
+
+describe('drawing the route through drawHud', () => {
+  const c = city();
+  const route = generateRoute(roadGraph(c), 1);
+  const race = (nextGate: number): Race => ({ ...createRace(route, 0), phase: 'running', nextGate });
+  const values = (minimap: Minimap, x: number, z: number, nextGate = 0) => ({
+    speed: 0,
+    topSpeed: 32,
+    minimap: { minimap, car: { x, z, heading: 0 } },
+    race: { race: race(nextGate), tick: 400, guidance: null },
+  });
+  const start = route.start.point;
+  const onRoute = route.polyline[2];
+
+  it('leaves the grid clean when the same state is drawn again', () => {
+    const grid = new TextGrid(266, 81);
+    const minimap = createMinimap(c);
+    drawHud(grid, values(minimap, start.x, start.z));
+    grid.dirty = false;
+    drawHud(grid, values(minimap, start.x, start.z));
+    expect(grid.dirty).toBe(false);
+  });
+
+  it('restores the route under the cell the car left', () => {
+    const grid = new TextGrid(266, 81);
+    const minimap = createMinimap(c);
+    const fresh = new TextGrid(266, 81);
+    drawHud(fresh, values(createMinimap(c), start.x, start.z));
+    drawHud(grid, values(minimap, onRoute.x, onRoute.z));
+    drawHud(grid, values(minimap, start.x, start.z));
+    expect(grid.data).toEqual(fresh.data);
+  });
+
+  it('updates the route when the next gate changes, as a fresh draw would', () => {
+    const grid = new TextGrid(266, 81);
+    const minimap = createMinimap(c);
+    drawHud(grid, values(minimap, start.x, start.z, 0));
+    drawHud(grid, values(minimap, start.x, start.z, 3));
+    const fresh = new TextGrid(266, 81);
+    drawHud(fresh, values(createMinimap(c), start.x, start.z, 3));
+    expect(grid.data).toEqual(fresh.data);
+  });
+
+  it('goes back to the plain map without a race', () => {
+    const grid = new TextGrid(266, 81);
+    const minimap = createMinimap(c);
+    drawHud(grid, values(minimap, start.x, start.z));
+    drawHud(grid, { speed: 0, topSpeed: 32, minimap: { minimap, car: { x: start.x, z: start.z, heading: 0 } } });
+    const fresh = new TextGrid(266, 81);
+    drawHud(fresh, { speed: 0, topSpeed: 32, minimap: { minimap: createMinimap(c), car: { x: start.x, z: start.z, heading: 0 } } });
+    // The race elements stay until the owner clears the grid; the map itself is plain again.
+    const { width, height } = minimap.layout;
+    for (let row = grid.rows - 1 - height; row < grid.rows - 1; row++) {
+      for (let column = 1; column < 1 + width; column++) expect(grid.get(column, row)).toEqual(fresh.get(column, row));
+    }
   });
 });

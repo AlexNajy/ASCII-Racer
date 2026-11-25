@@ -1,5 +1,6 @@
 import type { CarInput } from './carInput.ts';
 import { TICK_SECONDS } from './clock.ts';
+import type { Rect } from './city.ts';
 import { pushOutOfRect, type Collider } from './collision.ts';
 import { atan2, cos, hypot, sin } from '../math/deterministic.ts';
 
@@ -148,9 +149,19 @@ export function stepCar(car: Car, input: CarInput, settings: CarSettings): void 
   car.z += car.velocityZ * TICK_SECONDS;
 }
 
-// Seen from above the car is a row of circles as wide as it, the end ones reaching its nose and tail.
-// Round ends glance off corners instead of catching on them.
-const COLLISION_CIRCLES = 3;
+// Seen from above the car is a capsule as wide as it: a circle swept along the centre line, its round ends
+// reaching the nose and tail, so they glance off corners instead of catching on them. Being convex it has
+// no notch a pole can hook into, so a car pressed between a pole and a wall can always slide out one way.
+const COLLISION_RADIUS = CAR_WIDTH / 2;
+const COLLISION_REACH = (CAR_LENGTH - CAR_WIDTH) / 2; // from the centre to the end circles' centres
+// The tick's move is resolved in steps no longer than this, so nothing thin is skipped past or squeezed through.
+const MAX_COLLISION_STEP = 0.1; // m
+// Pushing out of one collider can push into another; each step repeats until clear or this many passes.
+const COLLISION_PASSES = 4;
+// Colliders further than this from the tick's move can't be reached by the car.
+const NEARBY_MARGIN = CAR_LENGTH; // m
+// Colliders this close are taken to touch, so a wall cut into pieces has no corners at its seams.
+const SEAM_GAP = 1e-3; // m
 
 // How hard the car hit something this tick: the speed it had into the wall, and the wall's outward direction.
 export interface Impact {
@@ -159,27 +170,128 @@ export interface Impact {
   normalZ: number;
 }
 
-// A car can't drive over anything solid, however low, so `top` is ignored.
-export function collideCar(car: Car, colliders: Collider[], settings: CarSettings): Impact | null {
-  const startX = car.x;
-  const startZ = car.z;
-  const radius = CAR_WIDTH / 2;
-  const reach = (CAR_LENGTH - CAR_WIDTH) / 2; // from the centre to the end circles' centres
-  const [forwardX, forwardZ] = forward(car.heading);
-  for (let i = 0; i < COLLISION_CIRCLES; i++) {
-    const offset = reach * ((2 * i) / (COLLISION_CIRCLES - 1) - 1);
-    for (const { rect } of colliders) {
-      const x = car.x + forwardX * offset;
-      const z = car.z + forwardZ * offset;
-      const [pushedX, pushedZ] = pushOutOfRect(x, z, radius, rect);
-      car.x += pushedX - x;
-      car.z += pushedZ - z;
+// The point of the segment from (ax, az) to (bx, bz) nearest the rectangle, seen from above: the nearest pair
+// is an end of the segment or the segment's nearest point to a corner. The rectangle's centre covers a segment
+// running right through it.
+function nearestOnSegment(ax: number, az: number, bx: number, bz: number, rect: Rect): [number, number] {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const lengthSquared = dx * dx + dz * dz;
+  const along = (px: number, pz: number) => Math.min(1, Math.max(0, ((px - ax) * dx + (pz - az) * dz) / lengthSquared));
+  const candidates = [
+    0,
+    1,
+    along(rect.minX, rect.minZ),
+    along(rect.maxX, rect.minZ),
+    along(rect.minX, rect.maxZ),
+    along(rect.maxX, rect.maxZ),
+    along((rect.minX + rect.maxX) / 2, (rect.minZ + rect.maxZ) / 2),
+  ];
+  let bestX = ax;
+  let bestZ = az;
+  let best = Infinity;
+  for (const t of candidates) {
+    const x = ax + dx * t;
+    const z = az + dz * t;
+    const outX = x - Math.min(Math.max(x, rect.minX), rect.maxX);
+    const outZ = z - Math.min(Math.max(z, rect.minZ), rect.maxZ);
+    const distanceSquared = outX * outX + outZ * outZ;
+    if (distanceSquared < best) {
+      best = distanceSquared;
+      bestX = x;
+      bestZ = z;
     }
   }
+  return [bestX, bestZ];
+}
+
+function covers(colliders: Collider[], x: number, z: number): Rect | null {
+  let found: Rect | null = null;
+  for (const { rect } of colliders) {
+    if (x >= rect.minX && x <= rect.maxX && z >= rect.minZ && z <= rect.maxZ) found = rect;
+  }
+  return found;
+}
+
+// The rectangle to push the segment out of, and the segment's point nearest it. Where that point lies past a
+// corner and a touching neighbour carries the face on beyond it, the rectangle is stretched over the neighbour,
+// so a flat wall made of several colliders pushes straight out like one, never off a seam.
+function faceOf(ax: number, az: number, bx: number, bz: number, rect: Rect, colliders: Collider[]): [Rect, number, number] {
+  let [nearX, nearZ] = nearestOnSegment(ax, az, bx, bz, rect);
+  for (let i = 0; i < colliders.length; i++) {
+    const sideX = nearX < rect.minX ? -1 : nearX > rect.maxX ? 1 : 0;
+    const sideZ = nearZ < rect.minZ ? -1 : nearZ > rect.maxZ ? 1 : 0;
+    if (sideX === 0 || sideZ === 0) break;
+    const cornerX = sideX < 0 ? rect.minX : rect.maxX;
+    const cornerZ = sideZ < 0 ? rect.minZ : rect.maxZ;
+    // Just past the corner along each face, inside the face line.
+    const alongX = covers(colliders, cornerX + sideX * SEAM_GAP, cornerZ - sideZ * SEAM_GAP);
+    const alongZ = covers(colliders, cornerX - sideX * SEAM_GAP, cornerZ + sideZ * SEAM_GAP);
+    if (alongX && !alongZ) {
+      rect = sideX < 0 ? { ...rect, minX: alongX.minX } : { ...rect, maxX: alongX.maxX };
+    } else if (alongZ && !alongX) {
+      rect = sideZ < 0 ? { ...rect, minZ: alongZ.minZ } : { ...rect, maxZ: alongZ.maxZ };
+    } else {
+      break;
+    }
+    [nearX, nearZ] = nearestOnSegment(ax, az, bx, bz, rect);
+  }
+  return [rect, nearX, nearZ];
+}
+
+// Moves the capsule centred on (x, z) out of the colliders. Returns the new centre.
+function pushCarOut(x: number, z: number, reachX: number, reachZ: number, colliders: Collider[]): [number, number] {
+  for (let pass = 0; pass < COLLISION_PASSES; pass++) {
+    let pushed = false;
+    for (const collider of colliders) {
+      const ax = x - reachX;
+      const az = z - reachZ;
+      const bx = x + reachX;
+      const bz = z + reachZ;
+      const [nearX, nearZ] = nearestOnSegment(ax, az, bx, bz, collider.rect);
+      const [outX, outZ] = pushOutOfRect(nearX, nearZ, COLLISION_RADIUS, collider.rect);
+      if (outX === nearX && outZ === nearZ) continue;
+      const [rect, faceX, faceZ] = faceOf(ax, az, bx, bz, collider.rect, colliders);
+      const [faceOutX, faceOutZ] = pushOutOfRect(faceX, faceZ, COLLISION_RADIUS, rect);
+      x += faceOutX - faceX;
+      z += faceOutZ - faceZ;
+      pushed = true;
+    }
+    if (!pushed) break;
+  }
+  return [x, z];
+}
+
+// Resolves the tick's move from (fromX, fromZ) to where stepCar put the car. A car can't drive over anything
+// solid, however low, so `top` is ignored.
+export function collideCar(car: Car, fromX: number, fromZ: number, colliders: Collider[], settings: CarSettings): Impact | null {
+  const endX = car.x;
+  const endZ = car.z;
+  const moveX = endX - fromX;
+  const moveZ = endZ - fromZ;
+  const nearby = colliders.filter(
+    ({ rect }) =>
+      rect.maxX > Math.min(fromX, endX) - NEARBY_MARGIN &&
+      rect.minX < Math.max(fromX, endX) + NEARBY_MARGIN &&
+      rect.maxZ > Math.min(fromZ, endZ) - NEARBY_MARGIN &&
+      rect.minZ < Math.max(fromZ, endZ) + NEARBY_MARGIN,
+  );
+  const [forwardX, forwardZ] = forward(car.heading);
+  const steps = Math.max(1, Math.ceil(hypot(moveX, moveZ) / MAX_COLLISION_STEP));
+  // The pushes add up separately, so a move that hits nothing ends exactly where stepCar put it.
+  let pushX = 0;
+  let pushZ = 0;
+  for (let step = 1; step <= steps; step++) {
+    const x = (step === steps ? endX : fromX + (moveX * step) / steps) + pushX;
+    const z = (step === steps ? endZ : fromZ + (moveZ * step) / steps) + pushZ;
+    const [outX, outZ] = pushCarOut(x, z, forwardX * COLLISION_REACH, forwardZ * COLLISION_REACH, nearby);
+    pushX += outX - x;
+    pushZ += outZ - z;
+  }
+  car.x = endX + pushX;
+  car.z = endZ + pushZ;
 
   // The tick's whole push points out of the wall, so it gives the wall's direction.
-  const pushX = car.x - startX;
-  const pushZ = car.z - startZ;
   const push = hypot(pushX, pushZ);
   if (push === 0) return null;
   const normalX = pushX / push;

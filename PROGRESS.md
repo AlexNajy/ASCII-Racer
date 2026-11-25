@@ -82,4 +82,85 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Checked: reviewer passed it. Against the city data the map is not mirrored and the car is on the right cell in both chase shots; the mapping is monotonic on five cities; fly camera and back, resizes and city regeneration leave no stale cells (driven in headless Chrome). 77 tests; only the two chase shots changed.
 - Left open: the car glyph test restates the code's own table instead of driving a car and checking the direction (the reviewer checked the sign by hand against `car.ts`).
 - New sub-step in step 19: the map is 43% of the screen height for a 10×10 city at 1600×900 and 54% at 1280×720, so large lobby cities need a smaller scale.
-- Step 14 done. Next: step 15, "Road graph".
+
+## 2026-11-24: step 14 merged and live
+
+- PR #17 merged. The split deploy workflow worked first time; the live site serves the new bundle (same file name as the local build of `main`).
+
+## 2026-11-24: step 15, road graph
+
+- `game/roadGraph.ts`: nodes (one per junction), segments (ends west/north to east/south, axis, length, width, avenue flag, the stretch clear of both junction squares), `links` per node in north, east, south, west order, and helpers `otherEnd`, `directionFrom`, `pointAlong`, `turnBetween`. Built once into `CityData.roadGraph`; not in the city digest, so the reference hashes are unchanged.
+- Checked: reviewer passed it and scripted 283 cities (36 352 segments): widths, centre lines, clear stretches and colliders all agree with the real city; left and right agree with the car's own right vector. 128 tests.
+- Carried into the next brief: the helpers answer silently when given a node that isn't on the segment (they should throw); compare `avenue`, never widths.
+
+## 2026-11-24: step 15, route generator and route tests
+
+- `game/route.ts`: `generateRoute(graph, seed, { length })`: a depth-first walk with weighted choices (straight 8, turn 1, ring 0.3, at most 3 ring segments in a row), never a segment twice, backtracking when stuck; start and finish mid-segment with the positions rolled to hit the target length; a gate on every leg turned into and at most 300 m apart; a car pose one car length behind the start line with a quarter-turn heading; `RouteError` when the city is too small. Lengths: short 1400, medium 2000 (default), long 2800 m. Own seed index, so the city is unchanged.
+- Tests: 1000 routes (250 cities × 4 route seeds) checked for validity, clear corridors and gate spans, plus other sizes, determinism and three stored route digests. 144 tests, about 9 s.
+- Checked: reviewer passed it with its own validation of 25 389 routes (three city sizes, three lengths, extreme seeds), a real car driven from the pose, and three mutations all caught. Slowest route 51 ms.
+- Numbers for a medium route in the default city: 2000 to 2016 m, 12 gates on average (8 to 19), a third of junctions are turns, 21% of the length on the ring, longest straight 616 m.
+- Quality notes carried into the test driver sub-step, where routes are tuned anyway: 92% of routes loop round a single block at least once (hairpins); 17% put the start 10 m before a junction or the finish 10 m after one; `finishRange` has no guard for an empty range.
+
+## 2026-11-24: step 15, race state
+
+- Roadmap order changed: "Race state" before "Gates", because the gates draw the next checkpoint the race decides.
+- `game/race.ts` and `world.ts`: a world holds a race or none (`startRace`, `clearRace`, `createRaceWorld`). Countdown of 180 ticks with the car held bit-identical whatever the input, then running, then finished with the time frozen in whole ticks (`formatRaceTime` gives m:ss.mmm, milliseconds rounded down). Only the next gate counts, crossed in its direction within the road plus 3 m of pavement each side; backwards and out-of-order crossings do nothing. `stepWorld` reports one race event per tick (go, gate, finish). Race state is hashed only when a race is present, so the stored hashes are unchanged.
+- Browser, until the menu exists: the game starts in a race on the city's own route, `R` restarts it, regenerating the city starts that city's route. URL parameter `race=0` is free driving; all 12 older shots carry it and are byte-identical. New shot `race-start`.
+- Checked: reviewer passed it; eight mutations of the rules were caught by the tests, one survived (the span test only has a case whose end point is inside the span; carried into the gates brief). 160 tests.
+- Worth knowing: a car that cuts a corner through a park or car park crosses a gate's line outside its span, so the gate doesn't count and the driver has to go back. Kept as is (road plus pavement is the course); the gate models have to make the span obvious.
+
+## 2026-11-24: step 15, gates
+
+- `render/models/gate.ts`: an arch per gate (lit posts 0.8 m from the kerb, a header 8.5 to 13.5 m up with its panel lit on the approach side), lime checkpoints, a white chequered finish, not solid. One mesh per route; `u_nextGate` hides passed gates, leaves the next one at full glow and dims the ones to come. The next gate also has a beam of light 6 m wide up to 50 m (pink-white for the finish), faded close up, and breathes between 70% and 100% over 2 s (`u_gatePulse` from the tick). Own steady glyph sets `gate` and `gateBeam`.
+- URL parameter `gate=N` sets the next gate for screenshots. Shots: `gate-near`, `gate-finish`, `gate-far` (250 m), `gate-neon` (200 m beside a green neon shop), `gate-finish-far`.
+- Review: correct on the first pass, but the gate was only obvious up to 100 m (9 × 1.3 cells at 250 m) and its posts went through awnings at 30% of gates. The look round added the beam, pulse, glyph sets and moved the posts; the lead checked it: 166 tests, non-gate shots byte-identical, the beam is 4 columns × 11 rows at 250 m and the first thing the eye lands on.
+- Known and accepted: a mall canopy can poke 0.2 m into a post; a street light can stand inside a finish post; about 1.5% of posts stand in a car park entrance gap; a passed gate vanishes in one frame as the car goes under it.
+- From the review's numbers: the first gate is never on the start leg and 77% of hops between gates need a turn first, so the HUD arrow and the route on the minimap (next) carry "which way".
+
+## 2026-11-24: step 15, race HUD
+
+- `src/hud/`: `blockFont.ts` (3×5 block characters, shared with the speedometer), `raceHud.ts` (timer top centre in block digits with `GATE n/N` in its frame; guidance beside it; a banner under it for 3, 2, 1, GO and, for 5 s, FINISH with the time), `guidance.ts`, and the route on the minimap (cyan line, driven part dim, `S`, `o` gates to come, `@` next gate, `F` finish).
+- Guidance follows the route like a navigator: the next real turn with the distance along the route to its junction, or `GATE` with its distance when no turn is left (then only a one-row readout, so the beam stays in view); off the route, a bearing arrow to the gate. Never "straight".
+- New URL parameters `car=x,z,quarterTurns` and `gate=<count>` (finished); shots `race-go`, `race-running`, `race-arrow`, `race-gate-ahead`, `race-finished`.
+- Review: first verdict `fix`: guidance flipped to the bearing arrow or the next leg's instruction within 15 m before a right turn (a leg claimed the car without the car facing along it); `STRAIGHT n m` was noise; the arrow panel covered the beam; the FINISH banner never went away. All fixed; the lead checked: 195 tests including a walk of 240 routes at 1 m steps with lane offsets and heading jitter, non-race shots byte-identical, the race shots read well at 1600×900.
+
+## 2026-11-24: step 15, test driver (built, not reviewed, not ticked)
+
+- Built: `game/driver.ts` (`driverInput`, `driveRace`: follows the route's centre line, brakes to 10 m/s for turns, recovers from stalls and missed gates), `driver.test.ts` (16 full races, two recovery races, a replay of the recorded inputs in a separately built world, a stored `DRIVEN_RACE_HASH`), and `npm run drive -- first last [--length ...] [--blocks N]` for sweeps.
+- Route tuning in the same change: lengths 1250 / 1800 / 2500 m; start and finish margins 20 m with a search that only stops when both fit strictly inside their stretches; `REPEAT_TURN_WEIGHT` against two same-side turns at neighbouring junctions; `finishRange` guarded. Route digests updated by hand on purpose; the free-driving reference hashes are untouched. Gate and race shots re-aimed to the new seed-1 route.
+- Builder's numbers, not confirmed by a reviewer: 600 medium routes all finished in 70.5 / 80.5 / 93.8 s (min / mean / max) with no impacts, 1200 routes over all lengths and sizes with no failure; hairpins per route 2.05 to 0.63 (45% of medium routes still have one); gates per medium route about 10 (7 to 15); no start or finish at its margin any more.
+- State: committed on `routes` because the owner said stop while the review was starting. The lead ran `npm run check` (215 tests, passes) and nothing else. The sub-step stays unticked: the next `/go` starts by sending this commit to the reviewer (the brief is the last reviewer brief of this session: sweep on other seeds, driver honesty, the strict-fit search, hairpin count, the length choice, shots).
+- Possible real bug, not looked into: in the builder's stress test (car knocked sideways onto the pavement) about 2% of races got stuck with the car pinned between a lamp pole and a building, unable to move forward or back. In the daily that would end a player's one try. To reproduce and, if real, add as a sub-step.
+- `npm run check` took 37 s of test time on the lead's last run, against the builder's 10.4 s; the stopped reviewer's sweep was probably still using the CPU. To time again on a quiet machine.
+
+## 2026-11-24: session stopped by the owner
+
+- Done this session: step 13 (PR #16) and step 14 (PR #17) merged to `main` and deployed to https://alexnajy.github.io/ASCII-Racer/. Step 15 on branch `routes`: road graph, route generator and its tests, race state, gates, race HUD ticked; test driver committed but unreviewed.
+- Open for the owner: whether Pages should keep publishing the unfinished game on every merge (asked, not answered; left as the spec says); speedometer digit size; slightly fewer trees after the city-rule fixes; the locked Vite 8.3.x has a dev-server advisory.
+- Never tried by hand in a real browser: anything. Every check so far is tests plus headless Chrome screenshots.
+- Next: review the test driver commit, tick it, tick step 15, open "Step 15: Routes", merge, then step 16 "Game states".
+
+## 2026-11-24: step 15, test driver reviewed
+
+- Reviewer passed commit `1ae1552` as it stands. Its own sweeps on other seeds: medium 251/251 finished in 71.5 / 80.3 / 89.4 s, long 201/201 in 101.7 / 110.8 / 130.1 s, short in a 6×6 city 201/201 in 51.4 / 58.5 / 66.0 s, medium in a 10×10 city 151/151 in 68.7 / 79.8 / 89.8 s, no impacts or back-outs. 2700 generated routes, none threw. `npm run check` takes 12.6 s on a quiet machine (the 37 s was load).
+- Correction to the entry above: in 6×6 cities about 1% of medium routes still fall back to start and finish at the ends of their ranges; 8×8 never.
+- Small and left: `npm run drive -- --blocks x` isn't validated; "a drifting player is 10–20% faster" is an estimate.
+- The pinned car is real: the gap between a street-light pole and the building line is exactly the car's width (1.8 m), the car collides as 3 circles of 0.9 m, and a sideways slide at 30 m/s about 0.1 rad off parallel moves 0.5 m in a tick, so a 0.4 m pole can end up between two circles with the wall on the other side. Straight throttle or reverse never frees it; steering combinations take 28 s to never. Seed 1: car at (-252.5, -287), heading pi/2 - 0.1, velocity z +30, drifting, ends at (-248.424, -283.966) with the pole at (-249, -285) inside it. Added as a sub-step of step 15.
+
+## 2026-11-24: step 15, pinned car
+
+- `game/car.ts`: the car's collision shape is a capsule (a 0.9 m circle swept along the centre line) instead of 3 circles, so nothing can hook into a notch in its side; each tick's move is resolved in steps of at most 0.1 m with up to 4 passes, against nearby colliders only. A move that touches nothing ends bit-exactly where it did before.
+- Simulation changed on purpose: `REFERENCE_HASHES` replaced by hand (seed 1: 3477829500, seed 42: 932636931). `DRIVEN_RACE_HASH` unchanged (the driven race touches nothing).
+- New `carCollision.test.ts`: the seed-1 case and a sweep of slides into poles; both fail on the old code. 217 tests, 6.8 s.
+- Builder's sweeps: 14 traps in 516k slides before, 0 in 5.8 million after (seeds 1 to 4). Reviewer passed it with its own sweep on seeds 7 and 11: nothing overlaps the car at rest any more (17 cases before), worst penetration 0.07 m (0.8 m before), no tunnelling. `stepWorld` is 7 to 9 times faster (about 200 000 ticks/s) thanks to the nearby filter. Driver sweeps identical to before.
+- Left as is: in the seed-1 case straight reverse pushes into the pole behind the tail; throttle frees the car at once. A corner hit now reports 2 or 3 impacts (the extra ones under 1 m/s, far below the debris threshold; sound will have to ignore small ones). `nearestOnSegment` is only exact while the centre line is outside a collider, which driving can't break.
+- Open for the owner, not a collision bug: a sideways slide can park the car lengthwise in a slot barely longer than itself (planter and building, two parked cars). Nothing overlaps it, but steering needs speed, so getting out is a multi-point shuffle of 8 s or more, about 0.1% of deliberately nasty slides. Making that quicker would be a new driving rule (turning at standstill, or a push out), so it is not built.
+- Found on the way, added as a sub-step: the seam between two touching building rectangles acts like a corner and turns a sideways slide into speed along the wall.
+
+## 2026-11-24: step 15, wall seams; step 15 done
+
+- The bug was still there after the capsule change: each rectangle was resolved on its own, so at a joint in a flat wall the car was pushed diagonally off one piece's corner. `game/car.ts` (`faceOf`, `covers`, `SEAM_GAP`): when the car meets a rectangle past a corner and a neighbour carries the face on, the rectangle counts as reaching over the neighbour. Real outside corners, steps in a wall and alley mouths are unchanged.
+- `wallSeam.test.ts`: walls cut in two and in five, an L cut two ways and a block cut in four behave like the uncut shape (bit-identical for flat walls); three of the five tests fail on the old code. No stored hash changed. 222 tests, 7.3 s.
+- Reviewer passed it: 32 000 random cut walls bit-identical to one rectangle (the old code differed in 5444, by up to 42 m); about 80 000 slides into the real joints of seeds 7 and 42 each identical to the merged box; no phantom walls across alleys or at set-back steps; no traps. About 10% slower in constant wall contact (135 000 ticks/s).
+- Known and left: a wedged car can rest 1 mm to 5 cm inside a collider (the 4-pass limit), same before this change; the many-pieces test doesn't assert that its slides hit.
+- Step 15 is complete: `npm run shots` gives 23 pictures, the lead looked at the race ones.

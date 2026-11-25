@@ -16,20 +16,44 @@ const DEFAULT_SEED = 1;
 const EYE = 1.2;
 
 // camera: 'x,y,z,yaw,pitch' (degrees; yaw 0 looks -Z, 90 looks -X, 180 looks +Z), or null for the chase camera.
+// race: false drives freely from the middle junction instead of starting the city seed's race; the car (and its
+// headlights) is in the fly camera's pictures too, so every shot from before races existed has it.
+// gate: the race's next gate, so a later gate shows lit; the number of gates finishes the race at the held tick.
+// car: 'x,z,quarterTurns' puts the car there once the race has started (quarter turns left of north).
 // Positions are for the default seed's city (seed 1); with another seed the same spots show something else.
 const SHOTS = [
-  { name: 'chase-junction', camera: null, mode: 'glyphs', tick: 300 },
-  { name: 'street-downtown', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300 },
-  { name: 'street-downtown-grey', camera: `4,${EYE},110,0,3`, mode: 'brightness', tick: 300 },
-  { name: 'avenue-lights', camera: `6,${EYE},40,0,9`, mode: 'glyphs', tick: 600 },
-  { name: 'towers-aerial', camera: '4,70,150,0,-17', mode: 'glyphs', tick: 300 },
-  { name: 'houses', camera: `-188,3,76,180,6`, mode: 'glyphs', tick: 300 },
-  { name: 'park', camera: `-188,3,64,0,-8`, mode: 'glyphs', tick: 300 },
-  { name: 'car-park', camera: `-236,9,112,90,-16`, mode: 'glyphs', tick: 300 },
-  { name: 'supermarket', camera: `188,${EYE},238,180,9`, mode: 'glyphs', tick: 300 },
-  { name: 'outer-wall', camera: `154,${EYE},268,180,12`, mode: 'glyphs', tick: 300 },
-  { name: 'hud-driving', camera: null, mode: 'glyphs', tick: 300, drive: true },
-  { name: 'hud-test', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, hud: 'test' },
+  { name: 'chase-junction', camera: null, mode: 'glyphs', tick: 300, race: false },
+  { name: 'street-downtown', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'street-downtown-grey', camera: `4,${EYE},110,0,3`, mode: 'brightness', tick: 300, race: false },
+  { name: 'avenue-lights', camera: `6,${EYE},40,0,9`, mode: 'glyphs', tick: 600, race: false },
+  { name: 'towers-aerial', camera: '4,70,150,0,-17', mode: 'glyphs', tick: 300, race: false },
+  { name: 'houses', camera: `-188,3,76,180,6`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'park', camera: `-188,3,64,0,-8`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'car-park', camera: `-236,9,112,90,-16`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'supermarket', camera: `188,${EYE},238,180,9`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'outer-wall', camera: `154,${EYE},268,180,12`, mode: 'glyphs', tick: 300, race: false },
+  { name: 'hud-driving', camera: null, mode: 'glyphs', tick: 300, drive: true, race: false },
+  { name: 'race-start', camera: null, mode: 'glyphs', tick: 90 },
+  { name: 'race-go', camera: null, mode: 'glyphs', tick: 200 },
+  // The default seed's route starts south down the avenue at x -76 and turns right at z -72; 4 s of held throttle
+  // after go the car is on the second leg, 62 m before that turn.
+  { name: 'race-running', camera: null, mode: 'glyphs', tick: 420, drive: true },
+  // On leg 1, heading south 43 m before the junction at z -72 where the route turns right (west) towards gate 0.
+  { name: 'race-arrow', camera: null, mode: 'glyphs', tick: 300, car: '-81,-115,2' },
+  // Heading east on the finish straight (the avenue at z -72), 150 m before the finish: its beam stands straight
+  // ahead above the road. Every gate on this route stands just after a turn, so the finish is the only one with a
+  // straight run up to it.
+  { name: 'race-gate-ahead', camera: null, mode: 'glyphs', tick: 300, gate: 9, car: '-25,-70,-1' },
+  { name: 'race-finished', camera: null, mode: 'glyphs', tick: 600, gate: 10 },
+  // Gates on the default seed's route: 4 stands at x 44, z -148 heading +x on a street; 9 is the finish, at x 125,
+  // z -72 heading +x on an avenue. Far views are from the lane at driving height. Tick 120 is the brightest of the
+  // next gate's pulse.
+  { name: 'gate-far', camera: `-206,${EYE},-145,-90,2`, mode: 'glyphs', tick: 120, gate: 4 },
+  { name: 'gate-neon', camera: `-66,${EYE},-145,-90,2`, mode: 'glyphs', tick: 120, gate: 4 },
+  { name: 'gate-near', camera: `19,${EYE},-145,-90,6`, mode: 'glyphs', tick: 120, gate: 4 },
+  { name: 'gate-finish-far', camera: `-75,${EYE},-69,-90,2`, mode: 'glyphs', tick: 120, gate: 9 },
+  { name: 'gate-finish', camera: `91,${EYE},-69,-90,6`, mode: 'glyphs', tick: 120, gate: 9 },
+  { name: 'hud-test', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, hud: 'test', race: false },
 ];
 
 const args = process.argv.slice(2);
@@ -86,8 +110,11 @@ try {
     const query = new URLSearchParams({ seed: String(seed), mode: shot.mode, tick: String(shot.tick) });
     if (shot.camera) query.set('camera', shot.camera);
     if (shot.drive) query.set('drive', '1');
+    if (shot.race === false) query.set('race', '0');
     if (shot.hud) query.set('hud', shot.hud);
+    if (shot.gate !== undefined) query.set('gate', String(shot.gate));
     if (shot.cell) query.set('cell', String(shot.cell));
+    if (shot.car) query.set('car', shot.car);
     try {
       await page.goto(`${base}?${query}`);
       await Promise.race([page.waitForSelector('canvas[data-ready="true"]', { timeout: READY_TIMEOUT_MS }), firstError]);
