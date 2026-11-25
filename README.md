@@ -137,7 +137,7 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass
   - [x] Speedometer
   - [x] Minimap: roads and the car, in a corner
-- [ ] **15. Routes**: a race from a seed
+- [x] **15. Routes**: a race from a seed
   - [x] Road graph: junctions and the segments between them as plain data from the city
   - [x] Route generator: start, ordered checkpoints and finish from a seed, by target length, no segment twice, with turns
   - [x] Route tests over 1000 seeds: every route valid, connected and inside the length range
@@ -146,7 +146,7 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Race HUD: timer, checkpoint count, the route on the minimap, arrow to the next gate
   - [x] Test driver: a simple waypoint follower that finishes any route headless, used by the tests to prove routes can be driven and to tune `ROUTE_LENGTH`
   - [x] Pinned car: a fast sideways slide onto the pavement can leave a street-light pole inside the car's outline against the building, holding it for half a minute or more; the car must never end up wedged
-  - [ ] Wall seams: where two building rectangles touch along a flat wall, the seam acts like a corner and turns a sideways slide into speed along the wall; a flat wall made of several colliders must behave like one
+  - [x] Wall seams: where two building rectangles touch along a flat wall, the seam acts like a corner and turns a sideways slide into speed along the wall; a flat wall made of several colliders must behave like one
 - [ ] **16. Menu and unlimited**
   - [ ] Game states: menu, pre-race, race, results, with the dev fly camera kept behind the dev menu
   - [ ] Main menu on the text layer over a camera flight through the city

@@ -156,3 +156,11 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Left as is: in the seed-1 case straight reverse pushes into the pole behind the tail; throttle frees the car at once. A corner hit now reports 2 or 3 impacts (the extra ones under 1 m/s, far below the debris threshold; sound will have to ignore small ones). `nearestOnSegment` is only exact while the centre line is outside a collider, which driving can't break.
 - Open for the owner, not a collision bug: a sideways slide can park the car lengthwise in a slot barely longer than itself (planter and building, two parked cars). Nothing overlaps it, but steering needs speed, so getting out is a multi-point shuffle of 8 s or more, about 0.1% of deliberately nasty slides. Making that quicker would be a new driving rule (turning at standstill, or a push out), so it is not built.
 - Found on the way, added as a sub-step: the seam between two touching building rectangles acts like a corner and turns a sideways slide into speed along the wall.
+
+## 2026-11-24: step 15, wall seams; step 15 done
+
+- The bug was still there after the capsule change: each rectangle was resolved on its own, so at a joint in a flat wall the car was pushed diagonally off one piece's corner. `game/car.ts` (`faceOf`, `covers`, `SEAM_GAP`): when the car meets a rectangle past a corner and a neighbour carries the face on, the rectangle counts as reaching over the neighbour. Real outside corners, steps in a wall and alley mouths are unchanged.
+- `wallSeam.test.ts`: walls cut in two and in five, an L cut two ways and a block cut in four behave like the uncut shape (bit-identical for flat walls); three of the five tests fail on the old code. No stored hash changed. 222 tests, 7.3 s.
+- Reviewer passed it: 32 000 random cut walls bit-identical to one rectangle (the old code differed in 5444, by up to 42 m); about 80 000 slides into the real joints of seeds 7 and 42 each identical to the merged box; no phantom walls across alleys or at set-back steps; no traps. About 10% slower in constant wall contact (135 000 ticks/s).
+- Known and left: a wedged car can rest 1 mm to 5 cm inside a collider (the 4-pass limit), same before this change; the many-pieces test doesn't assert that its slides hit.
+- Step 15 is complete: `npm run shots` gives 23 pictures, the lead looked at the race ones.

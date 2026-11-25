@@ -160,6 +160,8 @@ const MAX_COLLISION_STEP = 0.1; // m
 const COLLISION_PASSES = 4;
 // Colliders further than this from the tick's move can't be reached by the car.
 const NEARBY_MARGIN = CAR_LENGTH; // m
+// Colliders this close are taken to touch, so a wall cut into pieces has no corners at its seams.
+const SEAM_GAP = 1e-3; // m
 
 // How hard the car hit something this tick: the speed it had into the wall, and the wall's outward direction.
 export interface Impact {
@@ -203,16 +205,56 @@ function nearestOnSegment(ax: number, az: number, bx: number, bz: number, rect: 
   return [bestX, bestZ];
 }
 
+function covers(colliders: Collider[], x: number, z: number): Rect | null {
+  let found: Rect | null = null;
+  for (const { rect } of colliders) {
+    if (x >= rect.minX && x <= rect.maxX && z >= rect.minZ && z <= rect.maxZ) found = rect;
+  }
+  return found;
+}
+
+// The rectangle to push the segment out of, and the segment's point nearest it. Where that point lies past a
+// corner and a touching neighbour carries the face on beyond it, the rectangle is stretched over the neighbour,
+// so a flat wall made of several colliders pushes straight out like one, never off a seam.
+function faceOf(ax: number, az: number, bx: number, bz: number, rect: Rect, colliders: Collider[]): [Rect, number, number] {
+  let [nearX, nearZ] = nearestOnSegment(ax, az, bx, bz, rect);
+  for (let i = 0; i < colliders.length; i++) {
+    const sideX = nearX < rect.minX ? -1 : nearX > rect.maxX ? 1 : 0;
+    const sideZ = nearZ < rect.minZ ? -1 : nearZ > rect.maxZ ? 1 : 0;
+    if (sideX === 0 || sideZ === 0) break;
+    const cornerX = sideX < 0 ? rect.minX : rect.maxX;
+    const cornerZ = sideZ < 0 ? rect.minZ : rect.maxZ;
+    // Just past the corner along each face, inside the face line.
+    const alongX = covers(colliders, cornerX + sideX * SEAM_GAP, cornerZ - sideZ * SEAM_GAP);
+    const alongZ = covers(colliders, cornerX - sideX * SEAM_GAP, cornerZ + sideZ * SEAM_GAP);
+    if (alongX && !alongZ) {
+      rect = sideX < 0 ? { ...rect, minX: alongX.minX } : { ...rect, maxX: alongX.maxX };
+    } else if (alongZ && !alongX) {
+      rect = sideZ < 0 ? { ...rect, minZ: alongZ.minZ } : { ...rect, maxZ: alongZ.maxZ };
+    } else {
+      break;
+    }
+    [nearX, nearZ] = nearestOnSegment(ax, az, bx, bz, rect);
+  }
+  return [rect, nearX, nearZ];
+}
+
 // Moves the capsule centred on (x, z) out of the colliders. Returns the new centre.
 function pushCarOut(x: number, z: number, reachX: number, reachZ: number, colliders: Collider[]): [number, number] {
   for (let pass = 0; pass < COLLISION_PASSES; pass++) {
     let pushed = false;
-    for (const { rect } of colliders) {
-      const [nearX, nearZ] = nearestOnSegment(x - reachX, z - reachZ, x + reachX, z + reachZ, rect);
-      const [outX, outZ] = pushOutOfRect(nearX, nearZ, COLLISION_RADIUS, rect);
+    for (const collider of colliders) {
+      const ax = x - reachX;
+      const az = z - reachZ;
+      const bx = x + reachX;
+      const bz = z + reachZ;
+      const [nearX, nearZ] = nearestOnSegment(ax, az, bx, bz, collider.rect);
+      const [outX, outZ] = pushOutOfRect(nearX, nearZ, COLLISION_RADIUS, collider.rect);
       if (outX === nearX && outZ === nearZ) continue;
-      x += outX - nearX;
-      z += outZ - nearZ;
+      const [rect, faceX, faceZ] = faceOf(ax, az, bx, bz, collider.rect, colliders);
+      const [faceOutX, faceOutZ] = pushOutOfRect(faceX, faceZ, COLLISION_RADIUS, rect);
+      x += faceOutX - faceX;
+      z += faceOutZ - faceZ;
       pushed = true;
     }
     if (!pushed) break;
