@@ -4,7 +4,7 @@ in vec3 a_position;
 in vec3 a_color;
 in vec3 a_normal;
 in float a_emission;
-in float a_id; // -1 for nothing special; 0 and up for traffic signal lamps
+in float a_id; // -1 for nothing special; 0 and up for traffic signal lamps; -10 and down for race gates
 in float a_material; // 1-255, picks the glyph set
 in vec2 a_facadeUv; // window bays across, rows up
 in vec2 a_facade; // seed, style (0 = no windows)
@@ -18,6 +18,7 @@ uniform mat3 u_normalMatrix;
 uniform highp usampler2D u_signals;
 uniform bool u_beaconOn;
 uniform bool u_braking;
+uniform int u_nextGate; // the race's next gate; gates before it are passed
 
 out vec3 v_color;
 out vec3 v_viewPosition;
@@ -32,6 +33,8 @@ const float UNLIT = 0.2; // brightness of a lamp that is off
 const float BEACON_ID = -2.0;
 const float BRAKE_ID = -3.0;
 const float TAIL_LIGHT_DIM = 0.75; // tail lights while not braking: still glowing, but dimmer
+const float GATE_ID_BASE = -10.0; // gate ids count down from here, as built in gate.ts
+const float UPCOMING_GATE_DIM = 0.35; // gates still to come: unlit, only lit by the moon and headlights
 
 void main() {
   v_color = a_color;
@@ -46,6 +49,18 @@ void main() {
   if (a_id == BEACON_ID && !u_beaconOn) {
     v_color *= UNLIT;
     v_emission = 0.0;
+  }
+
+  if (a_id <= GATE_ID_BASE) {
+    int gate = int(GATE_ID_BASE - a_id + 0.5);
+    if (gate < u_nextGate) {
+      gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+      return;
+    }
+    if (gate > u_nextGate) {
+      v_color *= UPCOMING_GATE_DIM;
+      v_emission = 0.0;
+    }
   }
 
   // Signal lamps: id = junction * 10 + road * 5 + lamp, as built in trafficLight.ts.

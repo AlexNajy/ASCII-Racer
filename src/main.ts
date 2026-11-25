@@ -18,7 +18,7 @@ import { FENCE_HEIGHT } from './game/fences.ts';
 import { lotPavements } from './game/lots.ts';
 import { POND_RADIUS } from './game/park.ts';
 import { signalPhase } from './game/signals.ts';
-import { generateRoute, RouteError } from './game/route.ts';
+import { generateRoute, RouteError, type Route } from './game/route.ts';
 import { clearRace, createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorld, type CityData } from './game/world.ts';
 import { trackFullscreenKey, trackKeyboard, trackKeyPress, trackMouse } from './game/input.ts';
 import {
@@ -45,6 +45,7 @@ import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
 import { carVertices } from './render/models/car.ts';
+import { routeGateVertices } from './render/models/gate.ts';
 import { DEFAULT_SKY_SETTINGS, FLOATS_PER_STAR, starVertices, type SkySettings } from './render/sky.ts';
 import { headlight, HEADLIGHT_SOFT_EDGE } from './render/headlights.ts';
 import { burst, createParticles, FLOATS_PER_PARTICLE, MAX_PARTICLES, particleVertices, updateParticles, type ParticleKind } from './render/particles.ts';
@@ -95,6 +96,7 @@ const windowLitMaterialLocation = gl.getUniformLocation(program, 'u_windowLitMat
 const windowDarkMaterialLocation = gl.getUniformLocation(program, 'u_windowDarkMaterial');
 const beaconOnLocation = gl.getUniformLocation(program, 'u_beaconOn');
 const brakingLocation = gl.getUniformLocation(program, 'u_braking');
+const nextGateLocation = gl.getUniformLocation(program, 'u_nextGate');
 const signalsTextureLocation = gl.getUniformLocation(program, 'u_signals');
 const sceneScatterMaterialsLocation = gl.getUniformLocation(program, 'u_scatterMaterials');
 const scatterParamsLocation = gl.getUniformLocation(program, 'u_scatterParams');
@@ -332,11 +334,25 @@ function startCityRace() {
   }
 }
 startCityRace();
+if (urlParams.gate !== null && world.race) {
+  if (urlParams.gate >= world.race.route.gates.length) throw new Error(`URL parameter gate: the route has ${world.race.route.gates.length} gates`);
+  world.race.nextGate = urlParams.gate;
+}
 // A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
 const heldTick = urlParams.tick;
 const heldInput = urlParams.drive ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
 for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, heldInput);
 let cityMeshes = buildCityMeshes(world);
+// The race's gates, rebuilt whenever its route changes; none in free driving.
+let gateMesh: Mesh | null = null;
+let gateRoute: Route | null = null;
+function updateGateMesh() {
+  const route = world.race?.route ?? null;
+  if (route === gateRoute) return;
+  if (gateMesh) deleteMesh(gateMesh);
+  gateMesh = route ? uploadMesh(routeGateVertices(route.gates)) : null;
+  gateRoute = route;
+}
 let signals = createSignalTexture(gl, world.city.junctions.length);
 let minimap = createMinimap(world.city);
 
@@ -620,6 +636,7 @@ function frame(timeMs: number) {
   gl!.uniform1f(supersampleLocation, samples);
   gl!.uniform1i(beaconOnLocation, world.tick % BEACON_CYCLE_TICKS < BEACON_ON_TICKS ? 1 : 0);
   gl!.uniform1i(brakingLocation, carInput.brake > 0 ? 1 : 0);
+  gl!.uniform1i(nextGateLocation, world.race?.nextGate ?? 0);
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);
@@ -642,6 +659,8 @@ function frame(timeMs: number) {
   gl!.useProgram(program);
 
   for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
+  updateGateMesh();
+  if (gateMesh) draw(gateMesh, gl!.TRIANGLES, view);
   draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
 
   const particleCount = particleVertices(particles);

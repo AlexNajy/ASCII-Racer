@@ -4,7 +4,7 @@ import { MATERIAL } from './materials.ts';
 // Vertex layout: x, y, z, r, g, b, nx, ny, nz, emission, id, material, facade u, facade v, facade seed, facade style.
 // Emission 1 shows the colour at full strength whatever the lighting, for things that glow.
 // Id says which one a vertex belongs to, for things whose state changes: for now only traffic signal lamps
-// (0 and up). NO_ID for everything else.
+// (0 and up) and race gates (GATE_ID_BASE and down, models/gate.ts). NO_ID for everything else.
 // Material (1-255, see materials.ts) picks the glyph set; the scene pass writes it into the colour target's alpha, 0 = empty.
 // Facade (see models/facade.ts): u and v count window bays and rows across a wall, style 0 = no windows.
 export const FLOATS_PER_VERTEX = 16;

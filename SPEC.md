@@ -117,3 +117,4 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 - Step 15: crossing a gate backwards or out of order does nothing: no penalty, the next gate stays next.
 - Step 15: the countdown is 3 s and ignores all input; after the finish the time is frozen and the car keeps driving.
 - Step 15: race time is whole ticks from go to the tick the finish is crossed in, shown as m:ss.mmm with the milliseconds rounded down.
+- Step 15: gates are arches lit only on the side the route comes from; passed gates disappear, gates still to come stand unlit (dim, no glow), checkpoints are lime and the finish a white chequer.

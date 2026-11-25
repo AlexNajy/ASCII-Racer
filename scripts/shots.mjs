@@ -18,6 +18,7 @@ const EYE = 1.2;
 // camera: 'x,y,z,yaw,pitch' (degrees; yaw 0 looks -Z, 90 looks -X, 180 looks +Z), or null for the chase camera.
 // race: false drives freely from the middle junction instead of starting the city seed's race; the car (and its
 // headlights) is in the fly camera's pictures too, so every shot from before races existed has it.
+// gate: the race's next gate, so a later gate shows lit.
 // Positions are for the default seed's city (seed 1); with another seed the same spots show something else.
 const SHOTS = [
   { name: 'chase-junction', camera: null, mode: 'glyphs', tick: 300, race: false },
@@ -32,6 +33,10 @@ const SHOTS = [
   { name: 'outer-wall', camera: `154,${EYE},268,180,12`, mode: 'glyphs', tick: 300, race: false },
   { name: 'hud-driving', camera: null, mode: 'glyphs', tick: 300, drive: true, race: false },
   { name: 'race-start', camera: null, mode: 'glyphs', tick: 90 },
+  // Gates on the default seed's route: 8 stands at x 260, z 4 heading +x, 250 m on from gate-far's camera; 11 is the finish.
+  { name: 'gate-far', camera: `10,${EYE},7,-90,2`, mode: 'glyphs', tick: 90, gate: 8 },
+  { name: 'gate-near', camera: `235,${EYE},7,-90,6`, mode: 'glyphs', tick: 90, gate: 8 },
+  { name: 'gate-finish', camera: `130,${EYE},217,90,6`, mode: 'glyphs', tick: 90, gate: 11 },
   { name: 'hud-test', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, hud: 'test', race: false },
 ];
 
@@ -91,6 +96,7 @@ try {
     if (shot.drive) query.set('drive', '1');
     if (shot.race === false) query.set('race', '0');
     if (shot.hud) query.set('hud', shot.hud);
+    if (shot.gate !== undefined) query.set('gate', String(shot.gate));
     if (shot.cell) query.set('cell', String(shot.cell));
     try {
       await page.goto(`${base}?${query}`);

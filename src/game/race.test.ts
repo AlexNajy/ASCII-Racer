@@ -199,6 +199,7 @@ describe('race', () => {
     expect(cross(10 - edge - 0.01)).toBe(false);
     // The span is checked where the path meets the line, not at its ends.
     expect(crossesGate(gate, createCar(10 + edge + 1, 51, 0), createCar(10 + edge - 1, 49, 0))).toBe(true);
+    expect(crossesGate(gate, createCar(10 + edge - 1, 51, 0), createCar(10 + edge + 1, 49, 0))).toBe(true);
     // Wrong way, or not reaching the line.
     expect(crossesGate(gate, createCar(10, 49.8, 0), createCar(10, 50.3, 0))).toBe(false);
     expect(crossesGate(gate, createCar(10, 50.3, 0), createCar(10, 50.01, 0))).toBe(false);
