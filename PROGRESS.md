@@ -47,4 +47,10 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - What the pictures show about the game, not fixed here: car parks and the flex alley gate are dim and hard to read in glyph mode; houses and yards read well.
 - For step 20: the URL parameters also work in the shipped build (a stray `?tick=` holds the world still). `index.html` has an empty favicon so the 404 doesn't count as a page error.
 - Shots hold the car at the start junction; chase shots elsewhere need a car position parameter, to add when a sub-step needs it.
-- Next: "CI".
+
+## 2026-11-24: step 13, CI and deploy
+
+- CI: `ci.yml` runs `npm run check` on every pull request (now pull requests only). Its first run on PR #16 failed on Vitest's 5 s default timeout, the runner being 2 to 3 times slower than the Mac; `testTimeout` is now 60 s and the run is green. The stored reference hashes matched on Linux, so the simulation agrees across the two machines.
+- Deploy: `deploy.yml` on every push to `main`: `npm ci`, `npm run check`, then `dist/` to Pages (a red check doesn't deploy). `vite.config.ts` has `base: './'`, so the site works under `/ASCII-Racer/`; builder and reviewer both loaded it from a sub-path in headless Chrome with no 404s.
+- Reviewer passed it. The deploy itself only runs after the merge; checked then (see the next entry).
+- Step 13 done. Next: step 14, "Text layer".

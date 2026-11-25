@@ -125,14 +125,14 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Flicker-free glyphs: glyphs stay stable while driving instead of flickering cell to cell
   - [x] Car model: body, cabin with glass, wheels, glowing headlights and tail lights that brighten while braking, on the same collision box
   - [x] Drift particles: bursts from the bottom of the rear tyres while sliding, like crash debris
-- [ ] **13. Checks**: what the loop uses to know a change works, see `SPEC.md` for the finished game
+- [x] **13. Checks**: what the loop uses to know a change works, see `SPEC.md` for the finished game
   - [x] Test runner: Vitest as a dev dependency, `npm test`, and `npm run check` running type check, tests and build
   - [x] Headless world: setup and the per-tick step moved out of `main.ts` into `game/world.ts` (no WebGL, no DOM), so Node can build a city and drive a car in it
   - [x] Determinism tests: the same seed and inputs give the same car state after thousands of ticks, and a stored hash of a reference run that only changes on purpose
   - [x] City tests over 200 seeds: nothing solid on a road, every junction reachable, no way out of the city, no props inside buildings
   - [x] Screenshots: `npm run shots` builds the game and saves glyph mode pictures from fixed camera spots with headless Chrome (URL parameters for seed, camera and mode), for looking at changes
-  - [ ] CI: a GitHub Action running `npm run check` on every pull request
-  - [ ] Deploy: a GitHub Action publishing `dist/` to GitHub Pages on every merge to `main`
+  - [x] CI: a GitHub Action running `npm run check` on every pull request
+  - [x] Deploy: a GitHub Action publishing `dist/` to GitHub Pages on every merge to `main`
 - [ ] **14. HUD**: drawn in the glyph grid, not as HTML
   - [ ] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass
   - [ ] Speedometer
