@@ -18,6 +18,7 @@ The night setting is the core of the look: darkness becomes empty cells, light b
 - `npm run preview` — serve the production build locally
 - `npm test` — run the tests once (Vitest, Node environment, `src/**/*.test.ts` next to the code)
 - `npm run check` — type check (tests included), tests, then build; what CI runs
+- `npm run shots` — builds, serves `dist/` and saves glyph mode pictures from fixed spots to `shots/` (git-ignored) with headless Chrome (Playwright, the installed Chrome). `npm run shots -- houses park` takes only those, `--seed N` another city. Not part of `check`. The spots are the `SHOTS` list in `scripts/shots.mjs`, picked for seed 1.
 
 ## Architecture
 
@@ -70,6 +71,8 @@ src/
 - Collisions (`game/collision.ts`): everything solid is a `Collider` (footprint `rect` seen from above, plus `top`). `cityColliders` collects buildings and the poles of street lights, traffic lights and stop signs; arms, signal heads and signs hang overhead and don't collide. Pole sizes are exported from the `game/` files and imported by the models, so drawn and solid poles always match. A circle is pushed out of each rectangle (`pushOutOfRect`); colliders whose top is below it are skipped, so the fly camera can pass over.
 - The camera is a position plus yaw and pitch (`render/camera.ts`). `game/input.ts` tracks held keys (by `event.code`) and pointer-locked mouse movement; `game/flyCamera.ts` moves the camera each frame using the frame time `dt`. The fly camera is a dev tool, not simulation, so it does not use the fixed timestep.
 - Runtime settings (FOV, cell width, view distance, fog start, render mode, ambient and directional light) live in a `DevSettings` object edited by the dev menu (`dev/menu.ts`, backtick key). The dev menu is plain HTML on top of the canvas; that is fine because it is developer UI, not the game picture.
+
+- URL parameters (`dev/urlParams.ts`, read once at startup, no effect when absent): `seed`, `mode` (a `RenderMode` name, any case), `camera=x,y,z,yaw,pitch` (degrees; switches to the fly camera), `tick=N` and `shot`. With `tick` the world is stepped to that tick with no input at startup and then held: the clock never runs and `dt` is 0, so signals, beacons, neon and water are the same every load. Once a frame has been drawn the canvas gets `data-ready="true"`, which `scripts/shots.mjs` waits for. Two runs of `npm run shots` give byte-identical PNGs.
 
 ### City generation (`game/city.ts`)
 

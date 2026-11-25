@@ -1,4 +1,5 @@
 import './style.css';
+import { parseUrlParams } from './dev/urlParams.ts';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, capFrameSeconds, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
 import { blendCars, CAR_WIDTH, DEFAULT_CAR_SETTINGS, type CarSettings, type Impact } from './game/car.ts';
@@ -310,7 +311,13 @@ const citySettings: CitySettings = { ...DEFAULT_CITY_SETTINGS };
 const carSettings: CarSettings = { ...DEFAULT_CAR_SETTINGS };
 const chaseSettings: ChaseCameraSettings = { ...DEFAULT_CHASE_CAMERA_SETTINGS };
 
+const urlParams = parseUrlParams(window.location.search);
+if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
+
 const world = createWorld(citySettings, carSettings);
+// A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
+const heldTick = urlParams.tick;
+for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, NO_INPUT);
 let cityMeshes = buildCityMeshes(world);
 let signals = createSignalTexture(gl, world.city.junctions.length);
 
@@ -373,8 +380,8 @@ const settings: DevSettings = {
   cellWidth: 6,
   viewDistance: 1000,
   fogStart: 150,
-  renderMode: RenderMode.Glyphs,
-  movement: Movement.Car,
+  renderMode: urlParams.renderMode ?? RenderMode.Glyphs,
+  movement: urlParams.camera ? Movement.FlyCamera : Movement.Car,
   noclip: false,
   ambient: 0.5,
   lightIntensity: 0.4,
@@ -452,6 +459,12 @@ const camera: Camera = {
   yaw: 0,
   pitch: -0.2,
 };
+if (urlParams.camera) {
+  camera.position = urlParams.camera.position;
+  camera.yaw = urlParams.camera.yaw;
+  camera.pitch = urlParams.camera.pitch;
+}
+let framesDrawn = 0;
 const CAMERA_RADIUS = 0.5;
 
 // A fixed light high up, from +x and +z, until the night lights replace it.
@@ -477,9 +490,12 @@ let previousTimeMs = 0;
 
 function frame(timeMs: number) {
   requestAnimationFrame(frame);
-  const dt = capFrameSeconds((timeMs - previousTimeMs) / 1000);
+  // The previous frame was drawn completely, with the glyph atlas built before the loop started.
+  if (urlParams.shot && framesDrawn > 0) canvas.dataset.ready = 'true';
+  framesDrawn++;
+  const dt = heldTick === null ? capFrameSeconds((timeMs - previousTimeMs) / 1000) : 0;
   previousTimeMs = timeMs;
-  advanceClock(clock, dt, () => {
+  if (heldTick === null) advanceClock(clock, dt, () => {
     carInput = settings.movement === Movement.Car ? readCarInput() : NO_INPUT;
     const { impact } = stepWorld(world, carInput);
     if (impact) crashDebris(impact);

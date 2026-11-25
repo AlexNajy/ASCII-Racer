@@ -38,4 +38,13 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Reference hashes updated by hand for the moved start and props (seed 1: 858219843, seed 42: 3437657928).
 - Review: first verdict `fix` (any prop wholly inside another passed; `startJunction` was only the middle for even block counts). Fixed and checked by the lead; removing the kiosk clearance now fails 10 seeds instead of 5.
 - For the owner's eyes: slightly fewer trees (yard trees per houses block 3.76 to 3.49, park trees per park 13.0 to 12.6). Not compared in glyph mode yet; the screenshots sub-step makes that easy.
-- Next: "Screenshots".
+
+## 2026-11-24: step 13, screenshots
+
+- `npm run shots` (`scripts/shots.mjs`, `playwright-core` driving the installed Chrome): builds, serves `dist/`, saves 10 pictures of seed 1 to the git-ignored `shots/` in about 9 s; names after it take only those shots, `--seed N` changes the city. Fails at once on a page error.
+- URL parameters (`src/dev/urlParams.ts`, tested): `seed`, `mode`, `camera=x,y,z,yaw,pitch` in degrees, `tick` (world stepped there with no input and held, at most an hour of ticks). Nothing changes without them.
+- Checked: two runs byte-identical (builder, reviewer); the lead looked at the pictures. Review's first verdict was `fix` (five shots mostly fog or road, no parser test, a 120 s wait on a bad parameter); all fixed.
+- What the pictures show about the game, not fixed here: car parks and the flex alley gate are dim and hard to read in glyph mode; houses and yards read well.
+- For step 20: the URL parameters also work in the shipped build (a stray `?tick=` holds the world still). `index.html` has an empty favicon so the 404 doesn't count as a page error.
+- Shots hold the car at the start junction; chase shots elsewhere need a car position parameter, to add when a sub-step needs it.
+- Next: "CI".
