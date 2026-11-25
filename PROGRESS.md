@@ -82,4 +82,8 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Checked: reviewer passed it. Against the city data the map is not mirrored and the car is on the right cell in both chase shots; the mapping is monotonic on five cities; fly camera and back, resizes and city regeneration leave no stale cells (driven in headless Chrome). 77 tests; only the two chase shots changed.
 - Left open: the car glyph test restates the code's own table instead of driving a car and checking the direction (the reviewer checked the sign by hand against `car.ts`).
 - New sub-step in step 19: the map is 43% of the screen height for a 10×10 city at 1600×900 and 54% at 1280×720, so large lobby cities need a smaller scale.
-- Step 14 done. Next: step 15, "Road graph".
+
+## 2026-11-24: step 14 merged and live
+
+- PR #17 merged. The split deploy workflow worked first time; the live site serves the new bundle (same file name as the local build of `main`).
+- Next: step 15, "Road graph", on the `routes` branch.
