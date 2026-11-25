@@ -20,11 +20,11 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
 
 ## Controls
 
-- Menu: `Up` / `Down` or `W` / `S` to choose (wraps round), `Enter` to pick; or point at an entry and click
-- `Enter`: pre-race screen to race, results back to the menu
+- Menu and finish screen: `Up` / `Down` or `W` / `S` to choose (wraps round), `Enter` to pick; or point at an entry and click
+- Unlimited: a new random city and route each time; after the finish, `again` (same route), `next` (new city and route) or `menu`
 - `Esc`: back to the menu (and releases the mouse)
 - `W` / `S` or arrow keys: throttle / brake, `A` / `D`: steer, `Space`: drift
-- Click (outside the menu): capture the mouse to look around
+- Click (outside the menu and the finish screen): capture the mouse to look around
 - `F`: toggle fullscreen
 - Fly camera (switched on in the dev menu, View page, Movement):
   - `W` / `S`: fly forward / back along the view direction

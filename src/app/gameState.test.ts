@@ -5,44 +5,88 @@ import { roadGraph } from '../game/roadGraph.ts';
 import { generateRoute } from '../game/route.ts';
 import {
   afterTick,
-  DEFAULT_RACE_MODE,
+  FIRST_OPTION,
   MENU,
   moveSelection,
   preRace,
   pressEnter,
   pressEscape,
+  race,
   RESULTS_AFTER_TICKS,
+  RESULTS_OPTIONS,
   selectEntry,
   type GameState,
 } from './gameState.ts';
 import { entryEnabled, FIRST_ENTRY, MENU_ENTRIES } from './mainMenu.ts';
 
 const route = generateRoute(roadGraph(generateCity({ ...DEFAULT_CITY_SETTINGS })), 1);
-const PRE_RACE = preRace(DEFAULT_RACE_MODE, route);
-const RACE: GameState = { kind: 'race', mode: DEFAULT_RACE_MODE };
-const RESULTS: GameState = { kind: 'results', mode: DEFAULT_RACE_MODE, ticks: 100 };
+const other = generateRoute(roadGraph(generateCity({ ...DEFAULT_CITY_SETTINGS, seed: 2 })), 2);
+const PRE_RACE = preRace('unlimited', route);
+const RACE = race('unlimited', route);
+const results = (selected: number): GameState => ({ kind: 'results', mode: 'unlimited', route, ticks: 100, selected });
+const RESULTS = results(FIRST_OPTION);
+const option = (name: (typeof RESULTS_OPTIONS)[number]) => RESULTS_OPTIONS.indexOf(name);
+const never = () => {
+  throw new Error('asked');
+};
 
 describe('game state', () => {
-  it('goes menu, pre-race, race on Enter, carrying the route and the mode', () => {
-    const next = pressEnter(MENU, () => route);
-    expect(next).toEqual(PRE_RACE);
-    expect(pressEnter(PRE_RACE, () => null)).toEqual(RACE);
+  it('goes from unlimited on the menu straight to the race on a new route', () => {
+    let asked = 0;
+    const next = pressEnter(MENU, () => {
+      asked++;
+      return route;
+    });
+    expect(asked).toBe(1);
+    expect(next).toEqual({ kind: 'race', mode: 'unlimited', route });
   });
 
-  it('stays on the menu when no route fits the city', () => {
+  it('goes from the pre-race screen to its race', () => {
+    expect(pressEnter(PRE_RACE, never)).toEqual(RACE);
+  });
+
+  it('stays on the menu when no new route could be made', () => {
     expect(pressEnter(MENU, () => null)).toBe(MENU);
   });
 
-  it('ignores Enter while racing and goes from the results back to the menu', () => {
-    expect(pressEnter(RACE, () => route)).toBe(RACE);
-    expect(pressEnter(RESULTS, () => route)).toEqual(MENU);
+  it('ignores Enter while racing', () => {
+    expect(pressEnter(RACE, never)).toBe(RACE);
   });
 
-  it('asks for a route only on the menu', () => {
-    const ask = () => {
-      throw new Error('asked');
-    };
-    for (const state of [PRE_RACE, RACE, RESULTS]) expect(() => pressEnter(state, ask)).not.toThrow();
+  it('asks for a new route only on the menu and for next', () => {
+    for (const state of [PRE_RACE, RACE, results(option('again')), results(option('menu'))]) {
+      expect(() => pressEnter(state, never)).not.toThrow();
+    }
+    expect(() => pressEnter(results(option('next')), never)).toThrow('asked');
+  });
+
+  it('offers again, next and menu after the finish, again first', () => {
+    expect(RESULTS_OPTIONS).toEqual(['again', 'next', 'menu']);
+    expect(RESULTS_OPTIONS[FIRST_OPTION]).toBe('again');
+  });
+
+  it('races the same route again on again', () => {
+    const next = pressEnter(results(option('again')), never);
+    expect(next).toEqual(RACE);
+    if (next.kind === 'race') expect(next.route).toBe(route);
+  });
+
+  it('races a new route on next, or goes to the menu when none could be made', () => {
+    expect(pressEnter(results(option('next')), () => other)).toEqual(race('unlimited', other));
+    expect(pressEnter(results(option('next')), () => null)).toEqual(MENU);
+  });
+
+  it('goes to the menu on menu', () => {
+    expect(pressEnter(results(option('menu')), never)).toEqual(MENU);
+  });
+
+  it('moves and points at the finish screen options, wrapping round', () => {
+    expect(moveSelection(results(0), 1)).toEqual(results(1));
+    expect(moveSelection(results(0), -1)).toEqual(results(2));
+    expect(moveSelection(results(2), 1)).toEqual(results(0));
+    expect(selectEntry(results(0), 2)).toEqual(results(2));
+    expect(selectEntry(RESULTS, FIRST_OPTION)).toBe(RESULTS);
+    for (const index of [-1, 3, 0.5]) expect(selectEntry(RESULTS, index)).toBe(RESULTS);
   });
 
   it('goes back to the menu on Escape from every other state', () => {
@@ -51,21 +95,21 @@ describe('game state', () => {
   });
 
   it('shows the results RESULTS_AFTER_TICKS after the finish, with the race time', () => {
-    const race = createRace(route, 50);
-    expect(afterTick(RACE, race, goTick(race) + 10)).toBe(RACE);
-    race.phase = 'finished';
-    race.finishTick = goTick(race) + 1234;
-    expect(afterTick(RACE, race, race.finishTick)).toBe(RACE);
-    expect(afterTick(RACE, race, race.finishTick + RESULTS_AFTER_TICKS - 1)).toBe(RACE);
-    expect(afterTick(RACE, race, race.finishTick + RESULTS_AFTER_TICKS)).toEqual({ kind: 'results', mode: DEFAULT_RACE_MODE, ticks: 1234 });
+    const current = createRace(route, 50);
+    expect(afterTick(RACE, current, goTick(current) + 10)).toBe(RACE);
+    current.phase = 'finished';
+    current.finishTick = goTick(current) + 1234;
+    expect(afterTick(RACE, current, current.finishTick)).toBe(RACE);
+    expect(afterTick(RACE, current, current.finishTick + RESULTS_AFTER_TICKS - 1)).toBe(RACE);
+    expect(afterTick(RACE, current, current.finishTick + RESULTS_AFTER_TICKS)).toEqual({ kind: 'results', mode: 'unlimited', route, ticks: 1234, selected: FIRST_OPTION });
   });
 
   it('moves on by itself only from a finished race', () => {
-    const race = createRace(route, 0);
-    race.phase = 'finished';
-    race.finishTick = goTick(race);
-    const late = race.finishTick + RESULTS_AFTER_TICKS;
-    for (const state of [MENU, PRE_RACE, RESULTS]) expect(afterTick(state, race, late)).toBe(state);
+    const current = createRace(route, 0);
+    current.phase = 'finished';
+    current.finishTick = goTick(current);
+    const late = current.finishTick + RESULTS_AFTER_TICKS;
+    for (const state of [MENU, PRE_RACE, RESULTS]) expect(afterTick(state, current, late)).toBe(state);
     expect(afterTick(RACE, null, late)).toBe(RACE);
   });
 
@@ -82,7 +126,7 @@ describe('game state', () => {
     expect(moveSelection(at(1), -1)).toEqual(at(0));
     expect(moveSelection(at(0), -1)).toEqual(at(5));
     expect(moveSelection(at(5), 1)).toEqual(at(0));
-    for (const state of [PRE_RACE, RACE, RESULTS]) expect(moveSelection(state, 1)).toBe(state);
+    for (const state of [PRE_RACE, RACE]) expect(moveSelection(state, 1)).toBe(state);
   });
 
   it('selects an entry under the pointer, the same state when nothing changes', () => {
@@ -93,9 +137,7 @@ describe('game state', () => {
   });
 
   it('does nothing on Enter over an entry not built yet, without asking for a route', () => {
-    const ask = () => {
-      throw new Error('asked');
-    };
+    const ask = never;
     for (let i = 0; i < MENU_ENTRIES.length; i++) {
       if (entryEnabled(i)) continue;
       const state: GameState = { kind: 'menu', selected: i };

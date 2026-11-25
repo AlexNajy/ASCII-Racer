@@ -9,7 +9,7 @@ export interface MenuEntry {
 
 export const MENU_ENTRIES: readonly MenuEntry[] = [
   { label: 'daily', mode: null },
-  { label: 'unlimited', mode: 'cityRoute' },
+  { label: 'unlimited', mode: 'unlimited' },
   { label: 'join lobby', mode: null },
   { label: 'create lobby', mode: null },
   { label: 'garage', mode: null },

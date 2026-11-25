@@ -39,6 +39,11 @@ describe('parseUrlParams', () => {
     for (const bad of ['', '6', '-1', '1.5', 'garage']) expect(() => parseUrlParams(`?entry=${bad}`)).toThrow();
   });
 
+  it('selects a finish screen option with state=results', () => {
+    expect(parseUrlParams('?state=results&entry=2').entry).toBe(2);
+    expect(() => parseUrlParams('?state=results&entry=3')).toThrow();
+  });
+
   it('accepts whole gate numbers from 0', () => {
     expect(parseUrlParams('?gate=0').gate).toBe(0);
     expect(parseUrlParams('?gate=11').gate).toBe(11);

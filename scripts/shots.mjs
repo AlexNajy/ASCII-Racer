@@ -21,7 +21,7 @@ const EYE = 1.2;
 // gate: the race's next gate, so a later gate shows lit; the number of gates finishes the race at the held tick.
 // car: 'x,z,quarterTurns' puts the car there once the race has started (quarter turns left of north).
 // state: the game state the shot starts in ('menu', 'prerace', 'race', 'results'); 'race' when not given.
-// entry: the menu entry selected (0 is the first).
+// entry: the menu entry selected (0 is the first), with state 'results' the finish screen's option.
 // Positions are for the default seed's city (seed 1); with another seed the same spots show something else.
 const SHOTS = [
   { name: 'chase-junction', camera: null, mode: 'glyphs', tick: 300, race: false },

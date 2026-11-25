@@ -21,15 +21,16 @@ import { signalPhase } from './game/signals.ts';
 import type { Route } from './game/route.ts';
 import { goTick, raceTicks } from './game/race.ts';
 import { createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorld, type CityData } from './game/world.ts';
-import { cityRoute, enterState } from './app/flow.ts';
+import { cityRoute, enterState, randomCitySeed, seedRoute, unlimitedRoute } from './app/flow.ts';
 import {
   afterTick,
-  DEFAULT_RACE_MODE,
+  FIRST_OPTION,
   MENU,
   moveSelection,
   preRace,
   pressEnter,
   pressEscape,
+  race as raceState,
   selectEntry,
   type GameState,
 } from './app/gameState.ts';
@@ -51,8 +52,9 @@ import { createHudTexture, uploadHud } from './hud/hudTexture.ts';
 import { drawHud } from './hud/hud.ts';
 import { routeGuidance } from './hud/guidance.ts';
 import { createMinimap } from './hud/minimap.ts';
+import { drawFinishScreen, finishLayout } from './hud/finishScreen.ts';
 import { drawMenuScreen, menuEntryAt, menuLayout } from './hud/menuScreen.ts';
-import { drawPreRaceScreen, drawResultsScreen } from './hud/screens.ts';
+import { drawPreRaceScreen } from './hud/screens.ts';
 import { drawTestCard } from './hud/testCard.ts';
 import { printableRows, TextGrid } from './hud/textGrid.ts';
 import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS, STROKE_ROW, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
@@ -345,17 +347,17 @@ const urlParams = parseUrlParams(window.location.search);
 if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
 
 const world = createWorld(citySettings, carSettings);
-// The game starts on the menu. state=race (and results) starts racing the city seed's route at tick 0, as shots
-// do; race=0 drives freely instead.
+// The game starts on the menu. state=race (and results) starts an unlimited race on the city seed's route at tick 0,
+// as shots do; race=0 drives freely instead.
 let gameState: GameState = MENU;
 if (urlParams.state === 'race' || urlParams.state === 'results') {
-  gameState = { kind: 'race', mode: DEFAULT_RACE_MODE };
   const route = urlParams.race ? cityRoute(world) : null;
+  gameState = raceState('unlimited', route);
   if (route) startRace(world, route);
 } else if (urlParams.state === 'preRace') {
   const route = cityRoute(world);
   if (!route) throw new Error('URL parameter state: the city has no route');
-  gameState = preRace(DEFAULT_RACE_MODE, route);
+  gameState = preRace('unlimited', route);
   enterState(world, gameState, MENU);
 } else if (urlParams.entry !== null) {
   gameState = selectEntry(gameState, urlParams.entry);
@@ -382,7 +384,10 @@ if (finishAtStart && world.race) {
 }
 if (urlParams.state === 'results') {
   if (world.race?.phase !== 'finished') throw new Error('URL parameter state: results needs a finished race (gate=<gate count>)');
-  gameState = { kind: 'results', mode: DEFAULT_RACE_MODE, ticks: raceTicks(world.race, world.tick) };
+  gameState = selectEntry(
+    { kind: 'results', mode: 'unlimited', route: world.race.route, ticks: raceTicks(world.race, world.tick), selected: FIRST_OPTION },
+    urlParams.entry ?? FIRST_OPTION,
+  );
 }
 let cityMeshes = buildCityMeshes(world);
 // The race's gates, rebuilt whenever its route changes; none in free driving.
@@ -399,11 +404,11 @@ let signals = createSignalTexture(gl, world.city.junctions.length);
 let minimap = createMinimap(world.city);
 let flight = flightPath(world.roadGraph);
 
-function regenerateCity() {
+// Builds the city of the current settings: the world's data, meshes, signals, minimap and flight. Blocks the main
+// thread for a moment. The car and the race are left as they were; the caller changes the game state next.
+function loadCity() {
   cityMeshes.forEach(deleteMesh);
   regenerateWorldCity(world);
-  // The old route and the car's place mean nothing in the new city.
-  setGameState(MENU);
   cityMeshes = buildCityMeshes(world);
   gl!.deleteTexture(signals.texture);
   signals = createSignalTexture(gl!, world.city.junctions.length);
@@ -411,6 +416,22 @@ function regenerateCity() {
   if (urlParams.hud !== 'test') hud.clear();
   minimap = createMinimap(world.city);
   flight = flightPath(world.roadGraph);
+}
+
+// The dev menu's regenerate: the old route and the car's place mean nothing in the new city.
+function regenerateCity() {
+  loadCity();
+  setGameState(MENU);
+}
+
+// Unlimited's next race: a random city that holds a route, built; null when none was found. The seed goes into the
+// settings the dev menu edits, so its info line shows the city.
+function newUnlimitedRoute(): Route | null {
+  const route = unlimitedRoute(randomCitySeed, (seed) => seedRoute(citySettings, seed));
+  if (!route) return null;
+  citySettings.seed = route.seed;
+  loadCity();
+  return route;
 }
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
@@ -540,7 +561,7 @@ const devMenu = createDevMenu(
   uploadStars,
   (open) => {
     if (open) document.exitPointerLock();
-    else if (gameState.kind !== 'menu') canvas.requestPointerLock().catch(() => {});
+    else if (!hasList(gameState)) canvas.requestPointerLock().catch(() => {});
   },
 );
 
@@ -590,28 +611,33 @@ function setGameState(next: GameState) {
   // Every state but the results puts the car somewhere new.
   if (next.kind !== 'results') faceCarHeading();
   gameState = next;
-  if (next.kind === 'menu' && document.pointerLockElement) document.exitPointerLock();
+  if (hasList(next) && document.pointerLockElement) document.exitPointerLock();
   if (urlParams.hud !== 'test') hud.clear();
 }
-// The menu is only on screen in the car movement; the fly camera hides the text layer.
-function menuShown(): boolean {
-  return gameState.kind === 'menu' && settings.movement === Movement.Car;
+// The menu and the finish screen are lists chosen from with the keys and the mouse, which is never captured there.
+function hasList(state: GameState): boolean {
+  return state.kind === 'menu' || state.kind === 'results';
+}
+// Only on screen in the car movement; the fly camera hides the text layer.
+function listShown(): boolean {
+  return hasList(gameState) && settings.movement === Movement.Car;
 }
 function changeState(next: GameState) {
   if (next === gameState) return;
   // A new selection only redraws the two entry rows.
-  if (next.kind === 'menu' && gameState.kind === 'menu') gameState = next;
+  if (next.kind === gameState.kind && hasList(next)) gameState = next;
   else setGameState(next);
 }
 function moveMenuSelection(step: number) {
-  if (menuShown() && !devMenu.isOpen()) changeState(moveSelection(gameState, step));
+  if (listShown() && !devMenu.isOpen()) changeState(moveSelection(gameState, step));
 }
 trackKeyPress('ArrowUp', () => moveMenuSelection(-1));
 trackKeyPress('KeyW', () => moveMenuSelection(-1));
 trackKeyPress('ArrowDown', () => moveMenuSelection(1));
 trackKeyPress('KeyS', () => moveMenuSelection(1));
 function menuEntryUnder(event: MouseEvent): number | null {
-  const layout = menuLayout(hud.columns, hud.rows);
+  const layout =
+    gameState.kind === 'results' ? finishLayout(hud.columns, hud.rows, gameState.ticks) : menuLayout(hud.columns, hud.rows);
   const cell = pointerCell(event.offsetX, event.offsetY, {
     pixelRatio: dpr,
     cellWidth,
@@ -623,23 +649,24 @@ function menuEntryUnder(event: MouseEvent): number | null {
   return layout && cell ? menuEntryAt(layout, cell.column, cell.row) : null;
 }
 canvas.addEventListener('mousemove', (event) => {
-  if (!menuShown()) return;
+  if (!listShown()) return;
   const entry = menuEntryUnder(event);
   if (entry !== null) changeState(selectEntry(gameState, entry));
 });
-// The one click path: in the menu a click picks an entry and never captures the pointer; elsewhere it captures it.
+// The one click path: in the menu and the finish screen a click picks an entry and never captures the pointer;
+// elsewhere it captures it.
 trackMouse(canvas, (event) => {
-  if (!menuShown()) return gameState.kind !== 'menu';
+  if (!listShown()) return !hasList(gameState);
   const entry = menuEntryUnder(event);
   if (entry !== null) {
     const selected = selectEntry(gameState, entry);
     changeState(selected);
-    changeState(pressEnter(selected, () => cityRoute(world)));
+    changeState(pressEnter(selected, newUnlimitedRoute));
   }
   return false;
 });
 trackKeyPress('Enter', () => {
-  if (!devMenu.isOpen()) changeState(pressEnter(gameState, () => cityRoute(world)));
+  if (!devMenu.isOpen()) changeState(pressEnter(gameState, newUnlimitedRoute));
 });
 trackKeyPress('Escape', () => {
   if (!devMenu.isOpen()) changeState(pressEscape(gameState));
@@ -690,7 +717,7 @@ function frame(timeMs: number) {
     } else if (gameState.kind === 'preRace') {
       drawPreRaceScreen(hud, { minimap, car: drawnCar, route: gameState.route });
     } else if (gameState.kind === 'results') {
-      drawResultsScreen(hud, gameState.ticks);
+      drawFinishScreen(hud, gameState.ticks, gameState.selected);
     } else {
       drawHud(hud, {
         speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ),
