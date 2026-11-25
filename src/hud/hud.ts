@@ -1,7 +1,8 @@
+import { drawMinimap, type Minimap, type MinimapCar } from './minimap.ts';
 import type { TextGrid } from './textGrid.ts';
 
-// The driving HUD. The bottom right corner is the speedometer; the minimap takes another corner and the
-// race timer and checkpoint count the top centre.
+// The driving HUD. The bottom right corner is the speedometer, the bottom left the minimap; the race timer and
+// checkpoint count will take the top centre.
 export const MS_TO_KMH = 3.6;
 const MARGIN = 1; // cells between the panel and the edge of the grid
 const SPEED_DIGITS = 3;
@@ -38,6 +39,7 @@ const BAR_EMPTY_COLOR = 0x4a3c1c;
 export interface HudValues {
   speed: number; // m/s, how fast the car moves in any direction
   topSpeed: number; // m/s, the full mark of the bar
+  minimap?: { minimap: Minimap; car: MinimapCar };
 }
 
 interface Cell {
@@ -58,10 +60,16 @@ function numberRows(kmh: number): string[] {
   return rows;
 }
 
-export function drawHud(grid: TextGrid, { speed, topSpeed }: HudValues): void {
+export function drawHud(grid: TextGrid, { speed, topSpeed, minimap }: HudValues): void {
   const left = grid.columns - MARGIN - PANEL_WIDTH;
   const top = grid.rows - MARGIN - PANEL_HEIGHT;
   if (left < 0 || top < 0) return;
+  if (minimap) {
+    const { width, height } = minimap.minimap.layout;
+    const mapTop = grid.rows - MARGIN - height;
+    // Only beside the speedometer with a margin between them, never over it.
+    if (mapTop >= 0 && MARGIN + width + MARGIN <= left) drawMinimap(grid, minimap.minimap, MARGIN, mapTop, minimap.car);
+  }
 
   const kmh = Math.min(10 ** SPEED_DIGITS - 1, Math.round(Math.abs(speed) * MS_TO_KMH));
   const share = topSpeed > 0 ? Math.min(1, Math.abs(speed) / topSpeed) : 0;

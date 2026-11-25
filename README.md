@@ -133,10 +133,10 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Screenshots: `npm run shots` builds the game and saves glyph mode pictures from fixed camera spots with headless Chrome (URL parameters for seed, camera and mode), for looking at changes
   - [x] CI: a GitHub Action running `npm run check` on every pull request
   - [x] Deploy: a GitHub Action publishing `dist/` to GitHub Pages on every merge to `main`
-- [ ] **14. HUD**: drawn in the glyph grid, not as HTML
+- [x] **14. HUD**: drawn in the glyph grid, not as HTML
   - [x] Text layer: a full printable-character row in the atlas and a per-cell HUD texture (character + colour) written from TypeScript like a terminal, uploaded when it changes and drawn over the scene by the ASCII pass
   - [x] Speedometer
-  - [ ] Minimap: roads and the car, in a corner
+  - [x] Minimap: roads and the car, in a corner
 - [ ] **15. Routes**: a race from a seed
   - [ ] Road graph: junctions and the segments between them as plain data from the city
   - [ ] Route generator: start, ordered checkpoints and finish from a seed, by target length, no segment twice, with turns
@@ -170,6 +170,7 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [ ] Ambience: a low city hum
   - [ ] Race sounds: countdown, checkpoint, finish
 - [ ] **19. Lobbies**
+  - [ ] Minimap scale for large cities: a smaller cell count per block when the map would cover more than about a third of the screen height (10×10 cities on laptop screens)
   - [ ] Create lobby screen: settings, generated city, lobby code
   - [ ] Join lobby screen and lobby presence over Supabase Realtime
   - [ ] WebRTC data channels between players, signalled through the lobby

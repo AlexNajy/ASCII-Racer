@@ -33,6 +33,7 @@ import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { createHudTexture, uploadHud } from './hud/hudTexture.ts';
 import { drawHud } from './hud/hud.ts';
+import { createMinimap } from './hud/minimap.ts';
 import { drawTestCard } from './hud/testCard.ts';
 import { printableRows, TextGrid } from './hud/textGrid.ts';
 import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS, STROKE_ROW, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
@@ -325,6 +326,7 @@ const heldInput = urlParams.drive ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
 for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, heldInput);
 let cityMeshes = buildCityMeshes(world);
 let signals = createSignalTexture(gl, world.city.junctions.length);
+let minimap = createMinimap(world.city);
 
 function regenerateCity() {
   cityMeshes.forEach(deleteMesh);
@@ -332,6 +334,9 @@ function regenerateCity() {
   cityMeshes = buildCityMeshes(world);
   gl!.deleteTexture(signals.texture);
   signals = createSignalTexture(gl!, world.city.junctions.length);
+  // The new map may be smaller than the old one; the HUD draws itself again next frame.
+  if (urlParams.hud !== 'test') hud.clear();
+  minimap = createMinimap(world.city);
 }
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
@@ -531,7 +536,11 @@ function frame(timeMs: number) {
   }
   if (urlParams.hud !== 'test') {
     if (settings.movement === Movement.Car) {
-      drawHud(hud, { speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ), topSpeed: carSettings.topSpeed });
+      drawHud(hud, {
+        speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ),
+        topSpeed: carSettings.topSpeed,
+        minimap: { minimap, car: drawnCar },
+      });
     } else {
       hud.clear();
     }
