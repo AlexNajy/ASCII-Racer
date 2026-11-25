@@ -142,7 +142,7 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Route generator: start, ordered checkpoints and finish from a seed, by target length, no segment twice, with turns
   - [x] Route tests over 1000 seeds: every route valid, connected and inside the length range
   - [x] Race state in the simulation: countdown, running, finished, checkpoints crossed in order and direction, time in ticks
-  - [ ] Gates: glowing checkpoint and finish gates across the road, only the next one lit
+  - [x] Gates: glowing checkpoint and finish gates across the road, only the next one lit
   - [ ] Race HUD: timer, checkpoint count, the route on the minimap, arrow to the next gate
   - [ ] Test driver: a simple waypoint follower that finishes any route headless, used by the tests to prove routes can be driven and to tune `ROUTE_LENGTH`
 - [ ] **16. Menu and unlimited**

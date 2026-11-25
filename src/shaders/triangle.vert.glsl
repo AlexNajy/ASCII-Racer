@@ -19,6 +19,7 @@ uniform highp usampler2D u_signals;
 uniform bool u_beaconOn;
 uniform bool u_braking;
 uniform int u_nextGate; // the race's next gate; gates before it are passed
+uniform float u_gatePulse; // the next gate's glow, breathing with the tick
 
 out vec3 v_color;
 out vec3 v_viewPosition;
@@ -34,6 +35,12 @@ const float BEACON_ID = -2.0;
 const float BRAKE_ID = -3.0;
 const float TAIL_LIGHT_DIM = 0.75; // tail lights while not braking: still glowing, but dimmer
 const float GATE_ID_BASE = -10.0; // gate ids count down from here, as built in gate.ts
+const int BEAM_ID_OFFSET = 1000; // beam ids are this much below their gate's id, as built in gate.ts
+// The beam fades in from BEAM_NEAR_GLOW closer than BEAM_FADE_NEAR to full beyond BEAM_FADE_FAR (m), so it
+// marks the gate from afar without flooding the street close up.
+const float BEAM_NEAR_GLOW = 0.25;
+const float BEAM_FADE_NEAR = 60.0;
+const float BEAM_FADE_FAR = 150.0;
 const float UPCOMING_GATE_DIM = 0.35; // gates still to come: unlit, only lit by the moon and headlights
 
 void main() {
@@ -53,13 +60,21 @@ void main() {
 
   if (a_id <= GATE_ID_BASE) {
     int gate = int(GATE_ID_BASE - a_id + 0.5);
-    if (gate < u_nextGate) {
+    bool beam = gate >= BEAM_ID_OFFSET;
+    if (beam) gate -= BEAM_ID_OFFSET;
+    if (gate < u_nextGate || (beam && gate > u_nextGate)) {
       gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
       return;
     }
     if (gate > u_nextGate) {
       v_color *= UPCOMING_GATE_DIM;
       v_emission = 0.0;
+    } else if (a_emission > 0.0) {
+      v_color *= u_gatePulse;
+    }
+    if (beam) {
+      float distance = length((u_modelView * vec4(a_position, 1.0)).xyz);
+      v_color *= mix(BEAM_NEAR_GLOW, 1.0, smoothstep(BEAM_FADE_NEAR, BEAM_FADE_FAR, distance));
     }
   }
 

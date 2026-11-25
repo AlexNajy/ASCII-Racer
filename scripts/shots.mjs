@@ -33,10 +33,13 @@ const SHOTS = [
   { name: 'outer-wall', camera: `154,${EYE},268,180,12`, mode: 'glyphs', tick: 300, race: false },
   { name: 'hud-driving', camera: null, mode: 'glyphs', tick: 300, drive: true, race: false },
   { name: 'race-start', camera: null, mode: 'glyphs', tick: 90 },
-  // Gates on the default seed's route: 8 stands at x 260, z 4 heading +x, 250 m on from gate-far's camera; 11 is the finish.
-  { name: 'gate-far', camera: `10,${EYE},7,-90,2`, mode: 'glyphs', tick: 90, gate: 8 },
-  { name: 'gate-near', camera: `235,${EYE},7,-90,6`, mode: 'glyphs', tick: 90, gate: 8 },
-  { name: 'gate-finish', camera: `130,${EYE},217,90,6`, mode: 'glyphs', tick: 90, gate: 11 },
+  // Gates on the default seed's route: 8 stands at x 260, z 4 heading +x, by a green neon shop; 11 is the finish, at
+  // x 96, z 220 heading -x. Far views are from the lane at driving height. Tick 120 is the brightest of the next gate's pulse.
+  { name: 'gate-far', camera: `10,${EYE},7,-90,2`, mode: 'glyphs', tick: 120, gate: 8 },
+  { name: 'gate-neon', camera: `60,${EYE},7,-90,2`, mode: 'glyphs', tick: 120, gate: 8 },
+  { name: 'gate-near', camera: `235,${EYE},7,-90,6`, mode: 'glyphs', tick: 120, gate: 8 },
+  { name: 'gate-finish-far', camera: `296,${EYE},217,90,2`, mode: 'glyphs', tick: 120, gate: 11 },
+  { name: 'gate-finish', camera: `130,${EYE},217,90,6`, mode: 'glyphs', tick: 120, gate: 11 },
   { name: 'hud-test', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, hud: 'test', race: false },
 ];
 

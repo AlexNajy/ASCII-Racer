@@ -108,4 +108,12 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Browser, until the menu exists: the game starts in a race on the city's own route, `R` restarts it, regenerating the city starts that city's route. URL parameter `race=0` is free driving; all 12 older shots carry it and are byte-identical. New shot `race-start`.
 - Checked: reviewer passed it; eight mutations of the rules were caught by the tests, one survived (the span test only has a case whose end point is inside the span; carried into the gates brief). 160 tests.
 - Worth knowing: a car that cuts a corner through a park or car park crosses a gate's line outside its span, so the gate doesn't count and the driver has to go back. Kept as is (road plus pavement is the course); the gate models have to make the span obvious.
-- Next: "Gates".
+
+## 2026-11-24: step 15, gates
+
+- `render/models/gate.ts`: an arch per gate (lit posts 0.8 m from the kerb, a header 8.5 to 13.5 m up with its panel lit on the approach side), lime checkpoints, a white chequered finish, not solid. One mesh per route; `u_nextGate` hides passed gates, leaves the next one at full glow and dims the ones to come. The next gate also has a beam of light 6 m wide up to 50 m (pink-white for the finish), faded close up, and breathes between 70% and 100% over 2 s (`u_gatePulse` from the tick). Own steady glyph sets `gate` and `gateBeam`.
+- URL parameter `gate=N` sets the next gate for screenshots. Shots: `gate-near`, `gate-finish`, `gate-far` (250 m), `gate-neon` (200 m beside a green neon shop), `gate-finish-far`.
+- Review: correct on the first pass, but the gate was only obvious up to 100 m (9 × 1.3 cells at 250 m) and its posts went through awnings at 30% of gates. The look round added the beam, pulse, glyph sets and moved the posts; the lead checked it: 166 tests, non-gate shots byte-identical, the beam is 4 columns × 11 rows at 250 m and the first thing the eye lands on.
+- Known and accepted: a mall canopy can poke 0.2 m into a post; a street light can stand inside a finish post; about 1.5% of posts stand in a car park entrance gap; a passed gate vanishes in one frame as the car goes under it.
+- From the review's numbers: the first gate is never on the start leg and 77% of hops between gates need a turn first, so the HUD arrow and the route on the minimap (next) carry "which way".
+- Next: "Race HUD".

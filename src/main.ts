@@ -97,6 +97,7 @@ const windowDarkMaterialLocation = gl.getUniformLocation(program, 'u_windowDarkM
 const beaconOnLocation = gl.getUniformLocation(program, 'u_beaconOn');
 const brakingLocation = gl.getUniformLocation(program, 'u_braking');
 const nextGateLocation = gl.getUniformLocation(program, 'u_nextGate');
+const gatePulseLocation = gl.getUniformLocation(program, 'u_gatePulse');
 const signalsTextureLocation = gl.getUniformLocation(program, 'u_signals');
 const sceneScatterMaterialsLocation = gl.getUniformLocation(program, 'u_scatterMaterials');
 const scatterParamsLocation = gl.getUniformLocation(program, 'u_scatterParams');
@@ -252,6 +253,9 @@ const ZONE_SURFACES: Record<Zone, { material: Material; color: Vec3; sidewalk?: 
 const WINDOW_STYLE_PARAMS = windowStyleParams();
 const BEACON_CYCLE_TICKS = 2 * TICKS_PER_SECOND;
 const BEACON_ON_TICKS = TICKS_PER_SECOND / 2;
+// The next gate breathes between GATE_PULSE_MIN and full glow, brightest on whole cycles of the tick.
+const GATE_PULSE_TICKS = 2 * TICKS_PER_SECOND;
+const GATE_PULSE_MIN = 0.7;
 const POND_SIDES = 24;
 const POND_COLOR: Vec3 = [0.15, 0.3, 0.6];
 const FENCE_COLOR: Vec3 = [0.45, 0.35, 0.25];
@@ -637,6 +641,8 @@ function frame(timeMs: number) {
   gl!.uniform1i(beaconOnLocation, world.tick % BEACON_CYCLE_TICKS < BEACON_ON_TICKS ? 1 : 0);
   gl!.uniform1i(brakingLocation, carInput.brake > 0 ? 1 : 0);
   gl!.uniform1i(nextGateLocation, world.race?.nextGate ?? 0);
+  const pulse = 0.5 + 0.5 * Math.cos((2 * Math.PI * (world.tick % GATE_PULSE_TICKS)) / GATE_PULSE_TICKS);
+  gl!.uniform1f(gatePulseLocation, GATE_PULSE_MIN + (1 - GATE_PULSE_MIN) * pulse);
   const aspect = canvas.width / canvas.height;
   const projection = perspective(((settings.fovDegrees + fovBoost) * Math.PI) / 180, aspect, NEAR_PLANE, settings.viewDistance);
   gl!.uniformMatrix4fv(projectionLocation, false, projection);

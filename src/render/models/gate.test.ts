@@ -4,12 +4,13 @@ import { DEFAULT_CITY_SETTINGS } from '../../game/city.ts';
 import { generateRoute } from '../../game/route.ts';
 import { generateCityData } from '../../game/world.ts';
 import { FLOATS_PER_VERTEX } from '../shapes.ts';
-import { gateId, gateVertices, routeGateVertices } from './gate.ts';
+import { beamId, BEAM_TOP, gateId, gateVertices, POST_FROM_CURB, POST_WIDTH, routeGateVertices } from './gate.ts';
 
 const graph = generateCityData({ ...DEFAULT_CITY_SETTINGS }, false).roadGraph;
 const routes = [1, 2, 3, 4].map((seed) => generateRoute(graph, seed));
 const ROOM_ABOVE_CAR = 5; // m of clear height over the road
 const MAX_VERTICES = 2000;
+const POST_TOP = 8; // m, below the header
 
 function vertices(data: number[]) {
   const list = [];
@@ -27,7 +28,8 @@ describe('gate model', () => {
       expect(all.length).toBe(perGate.reduce((sum, count) => sum + count, 0));
       let start = 0;
       perGate.forEach((count, index) => {
-        expect(all.slice(start, start + count).every(({ id }) => id === gateId(index))).toBe(true);
+        expect(all.slice(start, start + count).every(({ id }) => id === gateId(index) || id === beamId(index))).toBe(true);
+        expect(all.slice(start, start + count).some(({ id }) => id === beamId(index))).toBe(true);
         start += count;
       });
     }
@@ -35,7 +37,15 @@ describe('gate model', () => {
 
   it('uses ids clear of the beacon, brake light and signal ids', () => {
     for (let index = 0; index < 100; index++) expect(gateId(index)).toBeLessThan(-3);
-    expect(new Set(Array.from({ length: 100 }, (_, index) => gateId(index))).size).toBe(100);
+    const ids = Array.from({ length: 100 }, (_, index) => [gateId(index), beamId(index)]).flat();
+    expect(new Set(ids).size).toBe(200);
+  });
+
+  it('puts the beam above the header, rising to BEAM_TOP', () => {
+    const gate = routes[0].gates[0];
+    const beam = vertices(gateVertices(gate, 0, false)).filter(({ id }) => id === beamId(0));
+    expect(Math.max(...beam.map(({ y }) => y))).toBe(BEAM_TOP);
+    expect(Math.min(...beam.map(({ y }) => y))).toBeGreaterThan(POST_TOP);
   });
 
   it('builds whole triangles of a sane size, with a different finish', () => {
@@ -62,6 +72,11 @@ describe('gate model', () => {
           expect(across).toBeLessThanOrEqual(gate.width / 2 + SETBACK);
           expect(along).toBeLessThan(1);
           if (across < gate.width / 2) expect(y).toBeGreaterThanOrEqual(ROOM_ABOVE_CAR);
+          // Posts stand at the kerb side of the pavement, clear of awnings and canopies from the building line.
+          if (y < POST_TOP) {
+            expect(across).toBeGreaterThanOrEqual(gate.width / 2);
+            expect(across).toBeLessThanOrEqual(gate.width / 2 + POST_FROM_CURB + POST_WIDTH / 2 + 1e-9);
+          }
         }
       });
     }
