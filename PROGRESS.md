@@ -139,3 +139,10 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Open for the owner: whether Pages should keep publishing the unfinished game on every merge (asked, not answered; left as the spec says); speedometer digit size; slightly fewer trees after the city-rule fixes; the locked Vite 8.3.x has a dev-server advisory.
 - Never tried by hand in a real browser: anything. Every check so far is tests plus headless Chrome screenshots.
 - Next: review the test driver commit, tick it, tick step 15, open "Step 15: Routes", merge, then step 16 "Game states".
+
+## 2026-11-24: step 15, test driver reviewed
+
+- Reviewer passed commit `1ae1552` as it stands. Its own sweeps on other seeds: medium 251/251 finished in 71.5 / 80.3 / 89.4 s, long 201/201 in 101.7 / 110.8 / 130.1 s, short in a 6×6 city 201/201 in 51.4 / 58.5 / 66.0 s, medium in a 10×10 city 151/151 in 68.7 / 79.8 / 89.8 s, no impacts or back-outs. 2700 generated routes, none threw. `npm run check` takes 12.6 s on a quiet machine (the 37 s was load).
+- Correction to the entry above: in 6×6 cities about 1% of medium routes still fall back to start and finish at the ends of their ranges; 8×8 never.
+- Small and left: `npm run drive -- --blocks x` isn't validated; "a drifting player is 10–20% faster" is an estimate.
+- The pinned car is real: the gap between a street-light pole and the building line is exactly the car's width (1.8 m), the car collides as 3 circles of 0.9 m, and a sideways slide at 30 m/s about 0.1 rad off parallel moves 0.5 m in a tick, so a 0.4 m pole can end up between two circles with the wall on the other side. Straight throttle or reverse never frees it; steering combinations take 28 s to never. Seed 1: car at (-252.5, -287), heading pi/2 - 0.1, velocity z +30, drifting, ends at (-248.424, -283.966) with the pole at (-249, -285) inside it. Added as a sub-step of step 15.
