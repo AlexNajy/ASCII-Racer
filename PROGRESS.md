@@ -123,4 +123,19 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Guidance follows the route like a navigator: the next real turn with the distance along the route to its junction, or `GATE` with its distance when no turn is left (then only a one-row readout, so the beam stays in view); off the route, a bearing arrow to the gate. Never "straight".
 - New URL parameters `car=x,z,quarterTurns` and `gate=<count>` (finished); shots `race-go`, `race-running`, `race-arrow`, `race-gate-ahead`, `race-finished`.
 - Review: first verdict `fix`: guidance flipped to the bearing arrow or the next leg's instruction within 15 m before a right turn (a leg claimed the car without the car facing along it); `STRAIGHT n m` was noise; the arrow panel covered the beam; the FINISH banner never went away. All fixed; the lead checked: 195 tests including a walk of 240 routes at 1 m steps with lane offsets and heading jitter, non-race shots byte-identical, the race shots read well at 1600×900.
-- Next: "Test driver", with route tuning (hairpins, start and finish margins).
+
+## 2026-11-24: step 15, test driver (built, not reviewed, not ticked)
+
+- Built: `game/driver.ts` (`driverInput`, `driveRace`: follows the route's centre line, brakes to 10 m/s for turns, recovers from stalls and missed gates), `driver.test.ts` (16 full races, two recovery races, a replay of the recorded inputs in a separately built world, a stored `DRIVEN_RACE_HASH`), and `npm run drive -- first last [--length ...] [--blocks N]` for sweeps.
+- Route tuning in the same change: lengths 1250 / 1800 / 2500 m; start and finish margins 20 m with a search that only stops when both fit strictly inside their stretches; `REPEAT_TURN_WEIGHT` against two same-side turns at neighbouring junctions; `finishRange` guarded. Route digests updated by hand on purpose; the free-driving reference hashes are untouched. Gate and race shots re-aimed to the new seed-1 route.
+- Builder's numbers, not confirmed by a reviewer: 600 medium routes all finished in 70.5 / 80.5 / 93.8 s (min / mean / max) with no impacts, 1200 routes over all lengths and sizes with no failure; hairpins per route 2.05 to 0.63 (45% of medium routes still have one); gates per medium route about 10 (7 to 15); no start or finish at its margin any more.
+- State: committed on `routes` because the owner said stop while the review was starting. The lead ran `npm run check` (215 tests, passes) and nothing else. The sub-step stays unticked: the next `/go` starts by sending this commit to the reviewer (the brief is the last reviewer brief of this session: sweep on other seeds, driver honesty, the strict-fit search, hairpin count, the length choice, shots).
+- Possible real bug, not looked into: in the builder's stress test (car knocked sideways onto the pavement) about 2% of races got stuck with the car pinned between a lamp pole and a building, unable to move forward or back. In the daily that would end a player's one try. To reproduce and, if real, add as a sub-step.
+- `npm run check` took 37 s of test time on the lead's last run, against the builder's 10.4 s; the stopped reviewer's sweep was probably still using the CPU. To time again on a quiet machine.
+
+## 2026-11-24: session stopped by the owner
+
+- Done this session: step 13 (PR #16) and step 14 (PR #17) merged to `main` and deployed to https://alexnajy.github.io/ASCII-Racer/. Step 15 on branch `routes`: road graph, route generator and its tests, race state, gates, race HUD ticked; test driver committed but unreviewed.
+- Open for the owner: whether Pages should keep publishing the unfinished game on every merge (asked, not answered; left as the spec says); speedometer digit size; slightly fewer trees after the city-rule fixes; the locked Vite 8.3.x has a dev-server advisory.
+- Never tried by hand in a real browser: anything. Every check so far is tests plus headless Chrome screenshots.
+- Next: review the test driver commit, tick it, tick step 15, open "Step 15: Routes", merge, then step 16 "Game states".

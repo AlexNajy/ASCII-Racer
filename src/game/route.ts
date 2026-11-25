@@ -1,17 +1,17 @@
 import { CAR_LENGTH } from './car.ts';
-import { directionFrom, otherEnd, turnBetween, type Point, type RoadGraph, type RoadSegment, type Turn } from './roadGraph.ts';
+import { directionFrom, otherEnd, turnBetween, type Point, type RoadGraph, type RoadLink, type RoadSegment, type Turn } from './roadGraph.ts';
 import { blockSeed, createRandom } from '../math/random.ts';
 
-// Driving distances along the centre lines, metres. Medium is about 60 to 90 s at a good pace (top speed 32 m/s,
-// slower through turns); the test driver will tune them.
-export const ROUTE_LENGTHS = { short: 1400, medium: 2000, long: 2800 } as const;
+// Driving distances along the centre lines, metres. The cautious test driver (driver.ts) averages about 22 m/s,
+// so medium takes it 70 to 94 s (80 on average); a player who drifts through turns should land nearer 70.
+export const ROUTE_LENGTHS = { short: 1250, medium: 1800, long: 2500 } as const;
 export type RouteLengthName = keyof typeof ROUTE_LENGTHS;
 export const ROUTE_LENGTH = ROUTE_LENGTHS.medium;
 export const ROUTE_LENGTH_TOLERANCE = 100; // m either way
 
 export const START_GRID_LENGTH = 30; // m of straight road behind the start line, clear of the junction: 2 × 4 cars
-const START_LINE_MARGIN = 10; // m from the start line to the junction square ahead
-const FINISH_MARGIN = 10; // m from the finish line to either junction square
+const START_LINE_MARGIN = 20; // m from the start line to the junction square ahead
+const FINISH_MARGIN = 20; // m from the finish line to either junction square, so it isn't crossed still cornering
 export const START_POSE_BEHIND = CAR_LENGTH; // m from the start line back to the car's centre
 
 export const GATE_SPACING = 300; // m, the most route between two gates (start line included) along straights
@@ -21,6 +21,9 @@ const GATE_CLEAR_FRACTION = 0.5; // where on a segment's clear stretch its gate 
 const STRAIGHT_WEIGHT = 8;
 const TURN_WEIGHT = 1;
 const RING_WEIGHT = 0.3; // times the above for a segment of the ring road
+// Times the above for turning the same way as at the junction before, so loops round a single block are occasional.
+const REPEAT_TURN_WEIGHT = 0.02;
+const FORCED_DEPTH = 4; // junctions looked ahead for a repeat that every way on runs into
 export const MAX_RING_RUN = 3; // ring segments in a row
 
 const SEARCH_STEPS = 20000; // candidates tried per attempt before giving up on it
@@ -97,6 +100,7 @@ function clearRange(segment: RoadSegment, entry: number): [number, number] {
   return [lo, lo + segment.clearLength];
 }
 
+// Empty (lo > hi) when the clear stretch is too short, as startRange.
 function finishRange(segment: RoadSegment, entry: number): [number, number] {
   const [lo, hi] = clearRange(segment, entry);
   return [lo + FINISH_MARGIN, hi - FINISH_MARGIN];
@@ -124,8 +128,10 @@ export class RouteError extends Error {}
 
 // A path from a seed: a walk from a random segment (never on the ring) that never uses a segment twice, picking
 // each way out of a junction by weight and backtracking when it gets stuck or overshoots. It may cross its own
-// path at a junction. It stops as soon as start and finish can be placed on the clear stretches of the first
-// and last segments for the target length, or failing that a length within the tolerance above it. Throws a RouteError if the graph can't hold it.
+// path at a junction. It stops as soon as start and finish can be placed strictly inside their ranges on the
+// clear stretches of the first and last segments for the target length. Failing that in every attempt, the first
+// attempt's best effort: start and finish at the ends of their ranges, or a length within the tolerance above the
+// target. Throws a RouteError if the graph can't hold it.
 export function generateRoute(graph: RoadGraph, seed: number, options: RouteOptions = DEFAULT_ROUTE_OPTIONS): Route {
   const target = options.length;
   const total = graph.segments.reduce((sum, segment) => sum + segment.length, 0);
@@ -135,17 +141,23 @@ export function generateRoute(graph: RoadGraph, seed: number, options: RouteOpti
   if (starts.length === 0) throw new RouteError('no segment off the ring road to start on');
 
   let backtracks = 0;
+  let fallback: (() => Route) | null = null;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const random = createRandom(blockSeed(seed, ROUTE_SEED_INDEX + attempt));
     const first = starts[Math.min(starts.length - 1, Math.floor(random() * starts.length))];
     const forwards = random() < 0.5;
     const entry = forwards ? first.a : first.b;
     const [startLo, startHi] = startRange(first, entry);
+    if (startLo > startHi) continue;
     const found = search(graph, ring, random, first, entry, target);
     backtracks += found.backtracks;
-    if (startLo > startHi || !found.frames) continue;
-    return buildRoute(graph, ring, random, seed, target, entry, found.frames, attempt + 1, backtracks);
+    const { frames } = found;
+    if (!frames) continue;
+    if (found.exact) return buildRoute(graph, ring, random, seed, target, entry, frames, attempt + 1, backtracks);
+    const attempts = attempt + 1;
+    fallback ??= () => buildRoute(graph, ring, random, seed, target, entry, frames, attempts, backtracks);
   }
+  if (fallback) return fallback();
   throw new RouteError(`no ${target} m route found in ${MAX_ATTEMPTS} attempts`);
 }
 
@@ -156,18 +168,31 @@ function search(
   first: RoadSegment,
   entry: number,
   target: number,
-): { frames: Frame[] | null; backtracks: number } {
+): { frames: Frame[] | null; exact: boolean; backtracks: number } {
   const used = new Uint8Array(graph.segments.length);
   const [startLo, startHi] = startRange(first, entry);
   const hi = target + ROUTE_LENGTH_TOLERANCE;
 
-  const optionsAt = (segment: number, exit: number, ringRun: number): number[] => {
-    const candidates = graph.links[exit]
-      .filter((link) => used[link.segment] === 0 && !(ring[link.segment] && ringRun >= MAX_RING_RUN))
-      .map((link) => {
-        const turn = turnBetween(graph, segment, link.segment, exit);
-        return { segment: link.segment, weight: (turn === 'straight' ? STRAIGHT_WEIGHT : TURN_WEIGHT) * (ring[link.segment] ? RING_WEIGHT : 1) };
-      });
+  const waysOn = (segment: number, node: number, ringRun: number) =>
+    graph.links[node].filter((link) => link.segment !== segment && used[link.segment] === 0 && !(ring[link.segment] && ringRun >= MAX_RING_RUN));
+
+  // Whether taking `link` turns the same way at two neighbouring junctions, now or unavoidably within the next few
+  // (every way on does: a ring corner, the end of a ring run).
+  const repeatsTurn = (segment: number, previousTurn: Turn, exit: number, ringRun: number, link: RoadLink, depth = 0): boolean => {
+    const turn = turnBetween(graph, segment, link.segment, exit);
+    if (turn !== 'straight' && turn === previousTurn) return true;
+    if (depth + 1 >= FORCED_DEPTH) return false;
+    const run = ring[link.segment] ? ringRun + 1 : 0;
+    const ways = waysOn(link.segment, link.node, run);
+    return ways.length > 0 && ways.every((way) => repeatsTurn(link.segment, turn, link.node, run, way, depth + 1));
+  };
+
+  const optionsAt = (segment: number, previousTurn: Turn, exit: number, ringRun: number): number[] => {
+    const candidates = waysOn(segment, exit, ringRun).map((link) => {
+      const turn = turnBetween(graph, segment, link.segment, exit);
+      const weight = (turn === 'straight' ? STRAIGHT_WEIGHT : TURN_WEIGHT) * (repeatsTurn(segment, previousTurn, exit, ringRun, link) ? REPEAT_TURN_WEIGHT : 1);
+      return { segment: link.segment, weight: weight * (ring[link.segment] ? RING_WEIGHT : 1) };
+    });
     const order: number[] = [];
     while (candidates.length > 0) {
       const sum = candidates.reduce((s, c) => s + c.weight, 0);
@@ -182,7 +207,10 @@ function search(
 
   const exit = otherEnd(graph, first.index, entry);
   used[first.index] = 1;
-  const frames: Frame[] = [{ segment: first.index, exit, options: optionsAt(first.index, exit, 0), ringRun: 0 }];
+  const frames: Frame[] = [{ segment: first.index, exit, options: optionsAt(first.index, 'straight', exit, 0), ringRun: 0 }];
+  // The first leg that fits only with start and finish at the ends of their stretches, or by overshooting the
+  // target (within the tolerance): used if nothing better turns up.
+  let fallback: Frame[] | null = null;
   let middle = 0; // full lengths of every leg after the first
   let backtracks = 0;
   for (let step = 0; step < SEARCH_STEPS; step++) {
@@ -191,27 +219,34 @@ function search(
     if (next === undefined) {
       frames.pop();
       backtracks++;
-      if (frames.length === 0) return { frames: null, backtracks };
+      if (frames.length === 0) return { frames: fallback, exact: false, backtracks };
       used[top.segment] = 0;
       middle -= graph.segments[top.segment].length;
       continue;
     }
     const segment = graph.segments[next];
     const [finishLo, finishHi] = finishRange(segment, top.exit);
-    const shortest = first.length - startHi + middle + finishLo;
+    const fits = finishLo <= finishHi;
+    // Without room for the finish here, the route runs on through the whole segment.
+    const shortest = first.length - startHi + middle + (fits ? finishLo : segment.length);
     const longest = first.length - startLo + middle + finishHi;
     if (shortest > hi) continue;
     const ringRun = ring[next] ? top.ringRun + 1 : 0;
     const nextExit = otherEnd(graph, next, top.exit);
-    if (longest >= target) {
-      frames.push({ segment: next, exit: nextExit, options: [], ringRun });
-      return { frames, backtracks };
+    const turn = turnBetween(graph, top.segment, next, top.exit);
+    const leg: Frame = { segment: next, exit: nextExit, options: [], ringRun };
+    if (fits && longest >= target) {
+      // Strictly inside, so start and finish aren't both pushed to the ends of their stretches.
+      if (shortest < target && longest > target) return { frames: [...frames, leg], exact: true, backtracks };
+      fallback ??= [...frames, leg];
+      if (shortest >= target) continue;
     }
     used[next] = 1;
     middle += segment.length;
-    frames.push({ segment: next, exit: nextExit, options: optionsAt(next, nextExit, ringRun), ringRun });
+    leg.options = optionsAt(next, turn, nextExit, ringRun);
+    frames.push(leg);
   }
-  return { frames: null, backtracks };
+  return { frames: fallback, exact: false, backtracks };
 }
 
 function buildRoute(

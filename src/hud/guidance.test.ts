@@ -125,9 +125,9 @@ describe('routeGuidance', () => {
       expect(route.legs[leg + 1].turn).toBe('right');
       return routeGuidance(graph, running(route, next), { x, z, heading });
     };
-    // Leg 5, heading north 8 m before the junction at (-296, -148), where the route turns right.
-    expect(route.polyline[6]).toEqual({ x: -296, z: -148 });
-    expect(at(5, -296, -140, 0)).toEqual({ kind: 'turn', turn: 'right', distance: 8 });
+    // Leg 6, heading north 8 m before the junction at (-296, -220), where the route turns right.
+    expect(route.polyline[7]).toEqual({ x: -296, z: -220 });
+    expect(at(6, -296, -212, 0)).toEqual({ kind: 'turn', turn: 'right', distance: 8 });
     // Leg 1, heading south 5 m before the junction at (-76, -72), where the route turns right.
     expect(route.polyline[2]).toEqual({ x: -76, z: -72 });
     expect(at(1, -76, -77, Math.PI)).toEqual({ kind: 'turn', turn: 'right', distance: 5 });

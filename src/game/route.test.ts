@@ -244,9 +244,9 @@ describe('route determinism', () => {
   // Update on purpose only: the daily route of a day must never change by accident.
   const REFERENCE_ROUTES: [number, number, number][] = [
     // city seed, route seed, hash
-    [1, 1, 563025338],
-    [42, 42, 3449126921],
-    [7, 12345, 926552218],
+    [1, 1, 1172941461],
+    [42, 42, 473546309],
+    [7, 12345, 469151771],
   ];
 
   it.each(REFERENCE_ROUTES)('matches the stored digest for city %i route %i', (citySeed, routeSeed, stored) => {
@@ -293,11 +293,12 @@ describe('routes in other city sizes and lengths', { timeout: 30000 }, () => {
   }
 
   it('throws a RouteError when the city is too small for the route', () => {
+    const TOO_LONG = 2800; // m, more than a 4×4 city's longest trail
     const tiny = roadGraph(generateCity(settings({ seed: 1, blocksPerSide: 3 })));
-    expect(() => generateRoute(tiny, 1, { length: ROUTE_LENGTHS.long })).toThrow(RouteError);
+    expect(() => generateRoute(tiny, 1, { length: TOO_LONG })).toThrow(RouteError);
     // Enough road in total, but no single trail through it is that long: the search gives up.
     const small = roadGraph(generateCity(settings({ seed: 1, blocksPerSide: 4 })));
-    expect(small.segments.reduce((sum, s) => sum + s.length, 0)).toBeGreaterThan(ROUTE_LENGTHS.long);
-    expect(() => generateRoute(small, 1, { length: ROUTE_LENGTHS.long })).toThrow(RouteError);
+    expect(small.segments.reduce((sum, s) => sum + s.length, 0)).toBeGreaterThan(TOO_LONG);
+    expect(() => generateRoute(small, 1, { length: TOO_LONG })).toThrow(RouteError);
   });
 });

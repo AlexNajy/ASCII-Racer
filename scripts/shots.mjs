@@ -40,16 +40,19 @@ const SHOTS = [
   { name: 'race-running', camera: null, mode: 'glyphs', tick: 420, drive: true },
   // On leg 1, heading south 43 m before the junction at z -72 where the route turns right (west) towards gate 0.
   { name: 'race-arrow', camera: null, mode: 'glyphs', tick: 300, car: '-81,-115,2' },
-  // Heading east on gate 8's leg, 150 m before it: its beam stands straight ahead above the road.
-  { name: 'race-gate-ahead', camera: null, mode: 'glyphs', tick: 300, gate: 8, car: '110,6,-1' },
-  { name: 'race-finished', camera: null, mode: 'glyphs', tick: 600, gate: 12 },
-  // Gates on the default seed's route: 8 stands at x 260, z 4 heading +x, by a green neon shop; 11 is the finish, at
-  // x 96, z 220 heading -x. Far views are from the lane at driving height. Tick 120 is the brightest of the next gate's pulse.
-  { name: 'gate-far', camera: `10,${EYE},7,-90,2`, mode: 'glyphs', tick: 120, gate: 8 },
-  { name: 'gate-neon', camera: `60,${EYE},7,-90,2`, mode: 'glyphs', tick: 120, gate: 8 },
-  { name: 'gate-near', camera: `235,${EYE},7,-90,6`, mode: 'glyphs', tick: 120, gate: 8 },
-  { name: 'gate-finish-far', camera: `296,${EYE},217,90,2`, mode: 'glyphs', tick: 120, gate: 11 },
-  { name: 'gate-finish', camera: `130,${EYE},217,90,6`, mode: 'glyphs', tick: 120, gate: 11 },
+  // Heading east on the finish straight (the avenue at z -72), 150 m before the finish: its beam stands straight
+  // ahead above the road. Every gate on this route stands just after a turn, so the finish is the only one with a
+  // straight run up to it.
+  { name: 'race-gate-ahead', camera: null, mode: 'glyphs', tick: 300, gate: 9, car: '-25,-70,-1' },
+  { name: 'race-finished', camera: null, mode: 'glyphs', tick: 600, gate: 10 },
+  // Gates on the default seed's route: 4 stands at x 44, z -148 heading +x on a street; 9 is the finish, at x 125,
+  // z -72 heading +x on an avenue. Far views are from the lane at driving height. Tick 120 is the brightest of the
+  // next gate's pulse.
+  { name: 'gate-far', camera: `-206,${EYE},-145,-90,2`, mode: 'glyphs', tick: 120, gate: 4 },
+  { name: 'gate-neon', camera: `-66,${EYE},-145,-90,2`, mode: 'glyphs', tick: 120, gate: 4 },
+  { name: 'gate-near', camera: `19,${EYE},-145,-90,6`, mode: 'glyphs', tick: 120, gate: 4 },
+  { name: 'gate-finish-far', camera: `-75,${EYE},-69,-90,2`, mode: 'glyphs', tick: 120, gate: 9 },
+  { name: 'gate-finish', camera: `91,${EYE},-69,-90,6`, mode: 'glyphs', tick: 120, gate: 9 },
   { name: 'hud-test', camera: `4,${EYE},110,0,3`, mode: 'glyphs', tick: 300, hud: 'test', race: false },
 ];
 

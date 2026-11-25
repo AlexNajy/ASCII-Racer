@@ -79,8 +79,9 @@ export function generateCityData(settings: CitySettings, vertices = true): CityD
   };
 }
 
-export function createWorld(citySettings: CitySettings, carSettings: CarSettings): World {
-  const data = generateCityData(citySettings);
+// Without `vertices` nothing is drawn but the simulation is the same (for tests and a server).
+export function createWorld(citySettings: CitySettings, carSettings: CarSettings, vertices = true): World {
+  const data = generateCityData(citySettings, vertices);
   const { x, z } = startJunction(data.city);
   const car = createCar(x, z, START_HEADING);
   return { ...data, citySettings, carSettings, car, previousCar: { ...car }, tick: 0, race: null };
@@ -104,8 +105,9 @@ export function createRaceWorld(
   carSettings: CarSettings,
   routeSeed: number,
   options: RouteOptions = DEFAULT_ROUTE_OPTIONS,
+  vertices = true,
 ): World {
-  const world = createWorld(citySettings, carSettings);
+  const world = createWorld(citySettings, carSettings, vertices);
   startRace(world, generateRoute(world.roadGraph, routeSeed, options));
   return world;
 }

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "check": "tsc && npm test && vite build",
-    "shots": "node scripts/shots.mjs"
+    "shots": "node scripts/shots.mjs",
+    "drive": "node --disable-warning=ExperimentalWarning scripts/drive.ts"
   },
   "devDependencies": {
     "playwright-core": "^1.65.1",
