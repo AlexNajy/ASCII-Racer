@@ -2,7 +2,7 @@ import './style.css';
 import { parseUrlParams } from './dev/urlParams.ts';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, capFrameSeconds, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
-import { blendCars, CAR_WIDTH, DEFAULT_CAR_SETTINGS, type CarSettings, type Impact } from './game/car.ts';
+import { blendCars, CAR_WIDTH, createCar, DEFAULT_CAR_SETTINGS, type CarSettings, type Impact } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import {
@@ -19,6 +19,7 @@ import { lotPavements } from './game/lots.ts';
 import { POND_RADIUS } from './game/park.ts';
 import { signalPhase } from './game/signals.ts';
 import { generateRoute, RouteError, type Route } from './game/route.ts';
+import { goTick } from './game/race.ts';
 import { clearRace, createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorld, type CityData } from './game/world.ts';
 import { trackFullscreenKey, trackKeyboard, trackKeyPress, trackMouse } from './game/input.ts';
 import {
@@ -34,6 +35,7 @@ import { viewMatrix, type Camera } from './render/camera.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { createHudTexture, uploadHud } from './hud/hudTexture.ts';
 import { drawHud } from './hud/hud.ts';
+import { routeGuidance } from './hud/guidance.ts';
 import { createMinimap } from './hud/minimap.ts';
 import { drawTestCard } from './hud/testCard.ts';
 import { printableRows, TextGrid } from './hud/textGrid.ts';
@@ -338,14 +340,26 @@ function startCityRace() {
   }
 }
 startCityRace();
-if (urlParams.gate !== null && world.race) {
-  if (urlParams.gate >= world.race.route.gates.length) throw new Error(`URL parameter gate: the route has ${world.race.route.gates.length} gates`);
+// gate=N with N the number of gates finishes the race once the held tick is reached, at that time.
+const finishAtStart = urlParams.gate !== null && world.race !== null && urlParams.gate === world.race.route.gates.length;
+if (urlParams.gate !== null && world.race && !finishAtStart) {
+  if (urlParams.gate > world.race.route.gates.length) throw new Error(`URL parameter gate: the route has ${world.race.route.gates.length} gates`);
   world.race.nextGate = urlParams.gate;
+}
+if (urlParams.car) {
+  const { x, z, quarterTurns } = urlParams.car;
+  world.car = createCar(x, z, (quarterTurns * Math.PI) / 2);
+  world.previousCar = { ...world.car };
 }
 // A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
 const heldTick = urlParams.tick;
 const heldInput = urlParams.drive ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
 for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, heldInput);
+if (finishAtStart && world.race) {
+  world.race.nextGate = world.race.route.gates.length;
+  world.race.phase = 'finished';
+  world.race.finishTick = Math.max(world.tick, goTick(world.race));
+}
 let cityMeshes = buildCityMeshes(world);
 // The race's gates, rebuilt whenever its route changes; none in free driving.
 let gateMesh: Mesh | null = null;
@@ -586,6 +600,9 @@ function frame(timeMs: number) {
         speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ),
         topSpeed: carSettings.topSpeed,
         minimap: { minimap, car: drawnCar },
+        race: world.race
+          ? { race: world.race, tick: world.tick, guidance: routeGuidance(world.roadGraph, world.race, { ...drawnCar, heading: camera.yaw }) }
+          : undefined,
       });
     } else {
       hud.clear();

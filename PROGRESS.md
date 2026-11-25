@@ -116,4 +116,11 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Review: correct on the first pass, but the gate was only obvious up to 100 m (9 × 1.3 cells at 250 m) and its posts went through awnings at 30% of gates. The look round added the beam, pulse, glyph sets and moved the posts; the lead checked it: 166 tests, non-gate shots byte-identical, the beam is 4 columns × 11 rows at 250 m and the first thing the eye lands on.
 - Known and accepted: a mall canopy can poke 0.2 m into a post; a street light can stand inside a finish post; about 1.5% of posts stand in a car park entrance gap; a passed gate vanishes in one frame as the car goes under it.
 - From the review's numbers: the first gate is never on the start leg and 77% of hops between gates need a turn first, so the HUD arrow and the route on the minimap (next) carry "which way".
-- Next: "Race HUD".
+
+## 2026-11-24: step 15, race HUD
+
+- `src/hud/`: `blockFont.ts` (3×5 block characters, shared with the speedometer), `raceHud.ts` (timer top centre in block digits with `GATE n/N` in its frame; guidance beside it; a banner under it for 3, 2, 1, GO and, for 5 s, FINISH with the time), `guidance.ts`, and the route on the minimap (cyan line, driven part dim, `S`, `o` gates to come, `@` next gate, `F` finish).
+- Guidance follows the route like a navigator: the next real turn with the distance along the route to its junction, or `GATE` with its distance when no turn is left (then only a one-row readout, so the beam stays in view); off the route, a bearing arrow to the gate. Never "straight".
+- New URL parameters `car=x,z,quarterTurns` and `gate=<count>` (finished); shots `race-go`, `race-running`, `race-arrow`, `race-gate-ahead`, `race-finished`.
+- Review: first verdict `fix`: guidance flipped to the bearing arrow or the next leg's instruction within 15 m before a right turn (a leg claimed the car without the car facing along it); `STRAIGHT n m` was noise; the arrow panel covered the beam; the FINISH banner never went away. All fixed; the lead checked: 195 tests including a walk of 240 routes at 1 m steps with lane offsets and heading jitter, non-race shots byte-identical, the race shots read well at 1600×900.
+- Next: "Test driver", with route tuning (hairpins, start and finish margins).

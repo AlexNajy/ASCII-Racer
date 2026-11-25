@@ -5,7 +5,7 @@ import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null });
+    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null, car: null });
   });
 
   it('reads drive=1 and nothing else as driving', () => {
@@ -29,6 +29,16 @@ describe('parseUrlParams', () => {
     expect(() => parseUrlParams('?gate=-1')).toThrow();
     expect(() => parseUrlParams('?gate=1.5')).toThrow();
     expect(() => parseUrlParams('?gate=x')).toThrow();
+  });
+
+  it('reads the car pose as x,z,quarterTurns', () => {
+    expect(parseUrlParams('?car=12.5,-40,1').car).toEqual({ x: 12.5, z: -40, quarterTurns: 1 });
+    expect(parseUrlParams('?car=0,0,-1').car).toEqual({ x: 0, z: 0, quarterTurns: -1 });
+    expect(() => parseUrlParams('?car=1,2')).toThrow();
+    expect(() => parseUrlParams('?car=1,2,3,4')).toThrow();
+    expect(() => parseUrlParams('?car=1,2,0.5')).toThrow();
+    expect(() => parseUrlParams('?car=1,x,0')).toThrow();
+    expect(() => parseUrlParams('?car=')).toThrow();
   });
 
   it('rejects empty and non-numeric values', () => {
