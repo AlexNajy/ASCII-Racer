@@ -60,6 +60,8 @@ const SETS = {
   // Race gates: steady, so they don't read as neon signs.
   gate: { ramp: ' .:-=#%@@@' },
   gateBeam: { ramp: ' .:!|H#@@@' },
+  // The garage's lit spot: dots thickening to rings, so the car's own glyphs stand out on it.
+  garageFloor: { ramp: ' .,:;oooOO' },
 } satisfies Record<string, GlyphSet>;
 
 export type Material = keyof typeof SETS;

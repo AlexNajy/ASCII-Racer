@@ -1,8 +1,8 @@
 import type { RaceMode } from './gameState.ts';
 
-// Screens an entry can open instead of a race. The garage joins this list.
-export type MenuScreen = 'settings';
-export const MENU_SCREENS: readonly MenuScreen[] = ['settings'];
+// Screens an entry can open instead of a race.
+export type MenuScreen = 'garage' | 'settings';
+export const MENU_SCREENS: readonly MenuScreen[] = ['garage', 'settings'];
 
 // The main menu's entries in the spec's order. `opens` is the race or screen an entry leads to; null means not
 // built yet, shown dimmed, and Enter on it does nothing. Enabling an entry is changing its row.
@@ -16,7 +16,7 @@ export const MENU_ENTRIES: readonly MenuEntry[] = [
   { label: 'unlimited', opens: 'unlimited' },
   { label: 'join lobby', opens: null },
   { label: 'create lobby', opens: null },
-  { label: 'garage', opens: null },
+  { label: 'garage', opens: 'garage' },
   { label: 'settings', opens: 'settings' },
 ];
 

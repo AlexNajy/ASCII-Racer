@@ -42,12 +42,12 @@ describe('main menu screen', () => {
     const label = 5;
     drawMenuScreen(grid, 1);
     const built = at(1, label);
-    const unselected = at(4, label);
-    drawMenuScreen(grid, 4);
-    expect(line(grid, layout.entryRows[4])).toMatch(/> garage +</);
+    const unselected = at(2, label);
+    drawMenuScreen(grid, 2);
+    expect(line(grid, layout.entryRows[2])).toMatch(/> join lobby +</);
     expect(line(grid, layout.entryRows[1])).not.toContain('>');
-    expect(at(4, marker)).toBe(0xffd070);
-    expect(at(4, label)).toBe(unselected);
+    expect(at(2, marker)).toBe(0xffd070);
+    expect(at(2, label)).toBe(unselected);
     expect(at(1, label)).not.toBe(built);
     drawMenuScreen(grid, 1);
     expect(at(1, marker)).toBe(0xffd070);

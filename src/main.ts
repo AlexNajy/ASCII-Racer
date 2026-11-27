@@ -25,6 +25,7 @@ import { cityRoute, enterState, randomCitySeed, seedRoute, unlimitedRoute } from
 import {
   afterTick,
   FIRST_OPTION,
+  GARAGE,
   MENU,
   moveSelection,
   preRace,
@@ -34,6 +35,7 @@ import {
   selectEntry,
   type GameState,
 } from './app/gameState.ts';
+import { cycleChoice, GARAGE_ROWS, garageClick, type GarageChange } from './app/garageMenu.ts';
 import { pointerCell } from './app/pointer.ts';
 import { DEFAULT_PLAYER_SETTINGS, loadSettings, saveSettings, serialiseSettings, type PlayerSettings } from './app/settings.ts';
 import { modifiedKeyOutcome, settingsClick, settingsKey, settingsKeyFromEvent, type SettingsChange } from './app/settingsMenu.ts';
@@ -63,6 +65,7 @@ import { drawHud } from './hud/hud.ts';
 import { routeGuidance } from './hud/guidance.ts';
 import { createMinimap } from './hud/minimap.ts';
 import { drawFinishScreen, finishLayout } from './hud/finishScreen.ts';
+import { drawGarageScreen, garageLayout, garageRowAt } from './hud/garageScreen.ts';
 import { drawMenuScreen, menuEntryAt, menuLayout } from './hud/menuScreen.ts';
 import { drawPreRaceScreen } from './hud/screens.ts';
 import { drawSettingsScreen, settingsLayout, settingsRowAt } from './hud/settingsScreen.ts';
@@ -76,6 +79,15 @@ import { streetLightVertices } from './render/models/street/streetLight.ts';
 import { stopSignVertices } from './render/models/street/stopSign.ts';
 import { trafficLightVertices } from './render/models/street/trafficLight.ts';
 import { carVertices } from './render/models/car.ts';
+import { carColor } from './render/models/palettes.ts';
+import {
+  GARAGE_AMBIENT,
+  GARAGE_CAMERA,
+  GARAGE_LIGHT_DIRECTION,
+  GARAGE_LIGHT_INTENSITY,
+  garageFloorVertices,
+  garageHeading,
+} from './render/garage.ts';
 import { routeGateVertices } from './render/models/gate.ts';
 import { DEFAULT_SKY_SETTINGS, FLOATS_PER_STAR, starVertices, type SkySettings } from './render/sky.ts';
 import { headlight, HEADLIGHT_SOFT_EDGE } from './render/headlights.ts';
@@ -175,7 +187,19 @@ function deleteMesh(mesh: Mesh) {
   gl!.deleteVertexArray(mesh.vao);
 }
 
-const carMesh = uploadMesh(carVertices());
+// The player's car, rebuilt whenever the garage's choice changes.
+let carMesh: Mesh | null = null;
+let carMeshChoice = '';
+function updateCarMesh(): Mesh {
+  const choice = `${playerSettings.carShape} ${playerSettings.carColor}`;
+  if (!carMesh || choice !== carMeshChoice) {
+    if (carMesh) deleteMesh(carMesh);
+    carMesh = uploadMesh(carVertices(playerSettings.carShape, carColor(playerSettings.carColor)));
+    carMeshChoice = choice;
+  }
+  return carMesh;
+}
+const garageFloorMesh = uploadMesh(garageFloorVertices());
 
 const skyProgram = createProgram(gl, skyVertexSource, skyFragmentSource);
 const skyViewRotationLocation = gl.getUniformLocation(skyProgram, 'u_viewRotation');
@@ -360,6 +384,9 @@ if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
 // never write, so every load gives the same picture.
 const storage = () => window.localStorage;
 let playerSettings: PlayerSettings = urlParams.shot ? { ...DEFAULT_PLAYER_SETTINGS } : loadSettings(storage);
+// shape= and color= pick the car as the garage would (saved with the next change unless under shot).
+if (urlParams.shape) playerSettings = { ...playerSettings, carShape: urlParams.shape };
+if (urlParams.color) playerSettings = { ...playerSettings, carColor: urlParams.color };
 
 const world = createWorld(citySettings, carSettings);
 // The game starts on the menu. state=race (and results) starts an unlimited race on the city seed's route at tick 0,
@@ -377,6 +404,8 @@ if (urlParams.state === 'race' || urlParams.state === 'results') {
 } else if (urlParams.state === 'settings') {
   const editing = urlParams.edit === null ? null : { text: urlParams.edit, tooShort: false };
   gameState = { kind: 'settings', selected: urlParams.entry ?? 0, editing };
+} else if (urlParams.state === 'garage') {
+  gameState = selectEntry(GARAGE, urlParams.entry ?? 0);
 } else if (urlParams.entry !== null) {
   gameState = selectEntry(gameState, urlParams.entry);
 }
@@ -633,10 +662,10 @@ function setGameState(next: GameState) {
   if (hasList(next) && document.pointerLockElement) document.exitPointerLock();
   if (urlParams.hud !== 'test') hud.clear();
 }
-// The menu, the finish screen and the settings are lists chosen from with the keys and the mouse, which is never
-// captured there.
+// The menu, the finish screen, the garage and the settings are lists chosen from with the keys and the mouse, which
+// is never captured there.
 function hasList(state: GameState): boolean {
-  return state.kind === 'menu' || state.kind === 'results' || state.kind === 'settings';
+  return state.kind === 'menu' || state.kind === 'results' || state.kind === 'settings' || state.kind === 'garage';
 }
 // Only on screen in the car movement; the fly camera hides the text layer.
 function listShown(): boolean {
@@ -676,9 +705,19 @@ function settingUnder(event: MouseEvent) {
   const cell = cellUnder(event);
   return layout && cell ? settingsRowAt(layout, cell.column, cell.row) : null;
 }
+function garageRowUnder(event: MouseEvent) {
+  const layout = garageLayout(hud.columns, hud.rows);
+  const cell = cellUnder(event);
+  return layout && cell ? garageRowAt(layout, cell.column, cell.row) : null;
+}
 canvas.addEventListener('mousemove', (event) => {
   if (!listShown()) return;
-  const entry = gameState.kind === 'settings' ? (settingUnder(event)?.index ?? null) : menuEntryUnder(event);
+  const entry =
+    gameState.kind === 'settings'
+      ? (settingUnder(event)?.index ?? null)
+      : gameState.kind === 'garage'
+        ? (garageRowUnder(event)?.index ?? null)
+        : menuEntryUnder(event);
   if (entry !== null) changeState(selectEntry(gameState, entry));
 });
 // The one click path: in the menu, the finish screen and the settings a click picks an entry and never captures the
@@ -688,6 +727,11 @@ trackMouse(canvas, (event) => {
   if (gameState.kind === 'settings') {
     const setting = settingUnder(event);
     if (setting) applySettingsChange(settingsClick(gameState, shownPlayerSettings(), setting.index, setting.offset));
+    return false;
+  }
+  if (gameState.kind === 'garage') {
+    const row = garageRowUnder(event);
+    if (row) applyGarageChange(garageClick(gameState.selected, shownPlayerSettings(), row.index, row.offset));
     return false;
   }
   const entry = menuEntryUnder(event);
@@ -704,6 +748,16 @@ trackKeyPress('Enter', () => {
 trackKeyPress('Escape', () => {
   if (!devMenu.isOpen()) changeState(pressEscape(gameState));
 });
+// The garage's Left and Right change the selected row's choice.
+function cycleGarage(step: number) {
+  if (gameState.kind !== 'garage' || !listShown() || devMenu.isOpen()) return;
+  const { selected } = gameState;
+  applyGarageChange({ selected, settings: cycleChoice(shownPlayerSettings(), GARAGE_ROWS[selected], step) });
+}
+trackKeyPress('ArrowLeft', () => cycleGarage(-1));
+trackKeyPress('KeyA', () => cycleGarage(-1));
+trackKeyPress('ArrowRight', () => cycleGarage(1));
+trackKeyPress('KeyD', () => cycleGarage(1));
 
 // The player's settings with the cell width the renderer uses: the dev menu's, which the URL parameter cell= may
 // have set instead of the stored one.
@@ -716,6 +770,12 @@ function storePlayerSettings(next: PlayerSettings) {
   if (serialiseSettings(stored) === serialiseSettings(playerSettings)) return;
   playerSettings = stored;
   if (!urlParams.shot) saveSettings(storage, playerSettings);
+}
+// Saved at once; the car mesh follows next frame.
+function applyGarageChange({ selected, settings: next }: GarageChange) {
+  if (gameState.kind !== 'garage') return;
+  storePlayerSettings(next);
+  changeState(selectEntry(gameState, selected));
 }
 function applySettingsChange({ screen, settings: next, toggleFullscreen: fullscreen, leave }: SettingsChange) {
   if (gameState.kind !== 'settings') return;
@@ -776,6 +836,11 @@ function frame(timeMs: number) {
   if (settings.movement === Movement.FlyCamera) {
     updateFlyCamera(camera, dt);
     if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, world.colliders);
+  } else if (gameState.kind === 'garage') {
+    takeMouseMovement();
+    camera.position = [...GARAGE_CAMERA.position];
+    camera.yaw = GARAGE_CAMERA.yaw;
+    camera.pitch = GARAGE_CAMERA.pitch;
   } else if (gameState.kind === 'menu' || gameState.kind === 'settings') {
     takeMouseMovement();
     const pose = flightPose(flight, world.tick + clock.leftover / TICK_SECONDS);
@@ -794,6 +859,8 @@ function frame(timeMs: number) {
       drawPreRaceScreen(hud, { minimap, car: drawnCar, route: gameState.route });
     } else if (gameState.kind === 'results') {
       drawFinishScreen(hud, gameState.ticks, gameState.selected);
+    } else if (gameState.kind === 'garage') {
+      drawGarageScreen(hud, { selected: gameState.selected, settings: playerSettings });
     } else if (gameState.kind === 'settings') {
       drawSettingsScreen(hud, { screen: gameState, settings: shownPlayerSettings(), fullscreen: isFullscreen() });
     } else {
@@ -834,11 +901,13 @@ function frame(timeMs: number) {
   gl!.uniform1f(fogStartLocation, settings.fogStart);
   gl!.uniform1f(fogEndLocation, settings.viewDistance);
   gl!.uniform1i(showNormalsLocation, showNormals ? 1 : 0);
-  gl!.uniform3fv(lightDirectionLocation, LIGHT_DIRECTION);
-  gl!.uniform1f(ambientLocation, settings.ambient);
-  gl!.uniform1f(lightIntensityLocation, settings.lightIntensity);
   // The menu's flight passes over the car parked on the middle junction; it and its headlights stay out of the way.
-  const carShown = gameState.kind !== 'menu' && gameState.kind !== 'settings';
+  // The garage draws its own car instead, on its own stage, under its own light.
+  const inGarage = gameState.kind === 'garage';
+  gl!.uniform3fv(lightDirectionLocation, inGarage ? GARAGE_LIGHT_DIRECTION : LIGHT_DIRECTION);
+  gl!.uniform1f(ambientLocation, inGarage ? GARAGE_AMBIENT : settings.ambient);
+  gl!.uniform1f(lightIntensityLocation, inGarage ? GARAGE_LIGHT_INTENSITY : settings.lightIntensity);
+  const carShown = gameState.kind !== 'menu' && gameState.kind !== 'settings' && !inGarage;
   const light = headlight(drawnCar);
   const halfAngle = (settings.headlightAngle * Math.PI) / 360;
   gl!.uniform3fv(headlightPositionLocation, light.position);
@@ -882,10 +951,16 @@ function frame(timeMs: number) {
   gl!.enable(gl!.DEPTH_TEST);
   gl!.useProgram(program);
 
-  for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
   updateGateMesh();
-  if (gateMesh) draw(gateMesh, gl!.TRIANGLES, view);
-  if (carShown) draw(carMesh, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
+  const playerCar = updateCarMesh();
+  if (inGarage) {
+    draw(garageFloorMesh, gl!.TRIANGLES, view);
+    draw(playerCar, gl!.TRIANGLES, view, rotationY(garageHeading(world.tick + clock.leftover / TICK_SECONDS)));
+  } else {
+    for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
+    if (gateMesh) draw(gateMesh, gl!.TRIANGLES, view);
+  }
+  if (carShown) draw(playerCar, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
 
   const particleCount = particleVertices(particles);
   if (particleCount > 0) {

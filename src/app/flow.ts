@@ -71,7 +71,8 @@ export function enterState(world: World, next: GameState, previous: GameState): 
       if (next.route && previous.kind !== 'race') startRace(world, next.route);
       return;
     case 'results':
-    case 'settings': // reached from the menu, the car stays where the menu stood it
+    case 'garage': // reached from the menu, the car stays where the menu stood it; the garage turns its own
+    case 'settings':
       return;
   }
 }

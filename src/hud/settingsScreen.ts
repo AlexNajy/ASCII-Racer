@@ -179,7 +179,7 @@ function hint({ screen }: SettingsView, sizes: Metrics): { text: string; color: 
 }
 
 // Writes `inner` cells from `left`: spaces, with each piece of text at its offset in its colour.
-function writeLine(grid: TextGrid, left: number, row: number, innerWidth: number, pieces: { at: number; text: string; color: number }[]): void {
+export function writeLine(grid: TextGrid, left: number, row: number, innerWidth: number, pieces: { at: number; text: string; color: number }[]): void {
   let x = 0;
   for (const { at, text, color } of pieces) {
     if (at > x) grid.write(left + x, row, ' '.repeat(at - x), { color, background: true });

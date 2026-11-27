@@ -1,4 +1,6 @@
 import { CELL_WIDTH_MAX, CELL_WIDTH_MIN, DEFAULT_CELL_WIDTH } from '../dev/menu.ts';
+import { CAR_SHAPES, type CarShape } from '../render/models/car.ts';
+import { CAR_COLORS } from '../render/models/palettes.ts';
 
 // The player's settings, kept in the browser. Parsing and checking are pure; loading and saving only touch the
 // storage they are given and never throw, so the game runs without storage (private mode).
@@ -14,6 +16,8 @@ export interface PlayerSettings {
   volume: number; // steps, 0 to VOLUME_STEPS
   muted: boolean;
   cellWidth: number; // CSS px, as the dev menu's cell width
+  carShape: CarShape; // the garage's choice, by id
+  carColor: string; // a CAR_COLORS id
 }
 
 export const DEFAULT_PLAYER_SETTINGS: Readonly<PlayerSettings> = {
@@ -21,6 +25,8 @@ export const DEFAULT_PLAYER_SETTINGS: Readonly<PlayerSettings> = {
   volume: 8,
   muted: false,
   cellWidth: DEFAULT_CELL_WIDTH,
+  carShape: CAR_SHAPES[0],
+  carColor: CAR_COLORS[0].id,
 };
 
 const NICKNAME_CHARACTER = /^[A-Za-z0-9 ]$/;
@@ -54,6 +60,8 @@ const FIELDS: { [K in keyof PlayerSettings]: (value: unknown) => PlayerSettings[
   volume: (value) => wholeNumber(value, 0, VOLUME_STEPS),
   muted: (value) => (typeof value === 'boolean' ? value : null),
   cellWidth: (value) => wholeNumber(value, CELL_WIDTH_MIN, CELL_WIDTH_MAX),
+  carShape: (value) => CAR_SHAPES.find((shape) => shape === value) ?? null,
+  carColor: (value) => CAR_COLORS.find(({ id }) => id === value)?.id ?? null,
 };
 
 function readField<K extends keyof PlayerSettings>(settings: PlayerSettings, stored: Record<string, unknown>, key: K): void {

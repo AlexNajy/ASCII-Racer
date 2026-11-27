@@ -6,6 +6,7 @@ import { generateRoute } from '../game/route.ts';
 import {
   afterTick,
   FIRST_OPTION,
+  GARAGE,
   MENU,
   moveSelection,
   preRace,
@@ -119,7 +120,7 @@ describe('game state', () => {
     expect(MENU_ENTRIES.map((entry) => entry.label)).toEqual(['daily', 'unlimited', 'join lobby', 'create lobby', 'garage', 'settings']);
     expect(FIRST_ENTRY).toBe(1);
     expect(MENU).toEqual({ kind: 'menu', selected: 1 });
-    expect(MENU_ENTRIES.map((_, i) => entryEnabled(i))).toEqual([false, true, false, false, false, true]);
+    expect(MENU_ENTRIES.map((_, i) => entryEnabled(i))).toEqual([false, true, false, false, true, true]);
   });
 
   it('moves the selection up and down, wrapping round at both ends', () => {
@@ -182,5 +183,28 @@ describe('game state', () => {
     const typing: GameState = { kind: 'settings', selected: 0, editing: { text: 'w', tooShort: false } };
     expect(moveSelection(typing, 1)).toBe(typing);
     expect(selectEntry(typing, 2)).toBe(typing);
+  });
+
+  it('opens the garage from its entry without asking for a route, and goes back to it on Escape', () => {
+    const entry = MENU_ENTRIES.findIndex((e) => e.label === 'garage');
+    expect(screenEntry('garage')).toBe(entry);
+    const opened = pressEnter({ kind: 'menu', selected: entry }, never);
+    expect(opened).toEqual({ kind: 'garage', selected: 0 });
+    expect(opened).toBe(GARAGE);
+    expect(pressEscape(opened)).toEqual({ kind: 'menu', selected: entry });
+    expect(pressEnter(opened, never)).toBe(opened);
+    expect(afterTick(opened, null, 1000)).toBe(opened);
+  });
+
+  it('moves and points at the garage rows, wrapping round', () => {
+    const at = (selected: number): GameState => ({ kind: 'garage', selected });
+    expect(moveSelection(at(0), 1)).toEqual(at(1));
+    expect(moveSelection(at(1), 1)).toEqual(at(0));
+    expect(moveSelection(at(0), -1)).toEqual(at(1));
+    expect(selectEntry(at(0), 1)).toEqual(at(1));
+    const same = at(1);
+    expect(selectEntry(same, 1)).toBe(same);
+    expect(selectEntry(same, 2)).toBe(same);
+    expect(selectEntry(same, -1)).toBe(same);
   });
 });

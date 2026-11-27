@@ -17,7 +17,7 @@ import {
   type SettingsStorage,
 } from './settings.ts';
 
-const CUSTOM: PlayerSettings = { nickname: 'Speedy 7', volume: 3, muted: true, cellWidth: 9 };
+const CUSTOM: PlayerSettings = { nickname: 'Speedy 7', volume: 3, muted: true, cellWidth: 9, carShape: 'van', carColor: 'teal' };
 
 function memoryStorage(initial: Record<string, string> = {}): SettingsStorage & { items: Record<string, string> } {
   const items = { ...initial };
@@ -29,8 +29,8 @@ function memoryStorage(initial: Record<string, string> = {}): SettingsStorage & 
 }
 
 describe('player settings', () => {
-  it('defaults to anon, a fairly loud volume, not muted, the default cell width', () => {
-    expect(DEFAULT_PLAYER_SETTINGS).toEqual({ nickname: 'anon', volume: 8, muted: false, cellWidth: 6 });
+  it('defaults to anon, a fairly loud volume, not muted, the default cell width, the red coupe', () => {
+    expect(DEFAULT_PLAYER_SETTINGS).toEqual({ nickname: 'anon', volume: 8, muted: false, cellWidth: 6, carShape: 'coupe', carColor: 'ember' });
     expect(validNickname(DEFAULT_PLAYER_SETTINGS.nickname)).toBe(true);
   });
 
@@ -59,6 +59,9 @@ describe('player settings', () => {
     expect(parse({ cellWidth: CELL_WIDTH_MIN - 1 }).cellWidth).toBe(6);
     expect(parse({ cellWidth: CELL_WIDTH_MAX + 1 }).cellWidth).toBe(6);
     expect(parse({ cellWidth: null }).cellWidth).toBe(6);
+    for (const carShape of ['Van', 'truck', '', 3, null, ['van']]) expect(parse({ carShape }).carShape).toBe('coupe');
+    for (const carColor of ['Teal', 'red', '', 0, false]) expect(parse({ carColor }).carColor).toBe('ember');
+    expect(parse({ carShape: 'wedge', carColor: 'silver' })).toEqual({ ...CUSTOM, carShape: 'wedge', carColor: 'silver' });
     const mixed = parse({ volume: 'loud', extra: { deep: true } });
     expect(mixed).toEqual({ ...CUSTOM, volume: 8 });
     expect(mixed).not.toHaveProperty('extra');

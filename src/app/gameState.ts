@@ -2,6 +2,7 @@ import { raceTicks, type Race } from '../game/race.ts';
 import type { Route } from '../game/route.ts';
 import { FINISH_SHOWN_TICKS } from '../hud/raceHud.ts';
 import { FIRST_ENTRY, isMenuScreen, MENU_ENTRIES, screenEntry, wrapEntry, type MenuScreen } from './mainMenu.ts';
+import { GARAGE_ROWS, wrapGarageRow } from './garageMenu.ts';
 import { selectSettingsRow, wrapSettingsRow, type SettingsScreen } from './settingsMenu.ts';
 
 // App flow, not simulation: which screen the game is on. Plain data and pure transitions; main.ts does what a
@@ -20,7 +21,8 @@ export type GameState =
   | { kind: 'preRace'; mode: RaceMode; route: Route }
   | { kind: 'race'; mode: RaceMode; route: Route | null } // null: free driving, only from the URL parameter race=0
   | { kind: 'results'; mode: RaceMode; route: Route; ticks: number; selected: number } // index into RESULTS_OPTIONS
-  | ({ kind: 'settings' } & SettingsScreen);
+  | ({ kind: 'settings' } & SettingsScreen)
+  | { kind: 'garage'; selected: number }; // index into GARAGE_ROWS
 
 export type GameStateKind = GameState['kind'];
 
@@ -29,7 +31,8 @@ export const RESULTS_AFTER_TICKS = FINISH_SHOWN_TICKS;
 
 export const MENU: GameState = { kind: 'menu', selected: FIRST_ENTRY };
 export const SETTINGS: GameState = { kind: 'settings', selected: 0, editing: null };
-const SCREEN_STATES: Record<MenuScreen, GameState> = { settings: SETTINGS };
+export const GARAGE: GameState = { kind: 'garage', selected: 0 };
+const SCREEN_STATES: Record<MenuScreen, GameState> = { garage: GARAGE, settings: SETTINGS };
 
 export function preRace(mode: RaceMode, route: Route): GameState {
   return { kind: 'preRace', mode, route };
@@ -41,13 +44,15 @@ export function race(mode: RaceMode, route: Route | null): GameState {
 
 function optionCount(state: GameState): number {
   if (state.kind === 'menu') return MENU_ENTRIES.length;
+  if (state.kind === 'garage') return GARAGE_ROWS.length;
   return state.kind === 'results' ? RESULTS_OPTIONS.length : 0;
 }
 
-// The menu's, the finish screen's or the settings' selection moved by `step` (up is -1), wrapping round. Other states
+// The menu's, the finish screen's, the garage's or the settings' selection moved by `step` (up is -1), wrapping round. Other states
 // are left alone, and so are the settings while the nickname is being typed.
 export function moveSelection(state: GameState, step: number): GameState {
   if (state.kind === 'menu') return selectEntry(state, wrapEntry(state.selected + step));
+  if (state.kind === 'garage') return selectEntry(state, wrapGarageRow(state.selected + step));
   if (state.kind === 'settings') {
     if (state.editing || step === 0) return state;
     return { ...state, selected: wrapSettingsRow(state.selected + step) };
@@ -63,7 +68,7 @@ export function selectEntry(state: GameState, index: number): GameState {
     const screen = selectSettingsRow(state, index);
     return screen === state ? state : { ...state, ...screen };
   }
-  if (state.kind !== 'menu' && state.kind !== 'results') return state;
+  if (state.kind !== 'menu' && state.kind !== 'results' && state.kind !== 'garage') return state;
   if (index === state.selected || !Number.isInteger(index) || index < 0 || index >= optionCount(state)) return state;
   return { ...state, selected: index };
 }
@@ -82,6 +87,7 @@ export function pressEnter(state: GameState, newRoute: () => Route | null): Game
     case 'preRace':
       return race(state.mode, state.route);
     case 'race':
+    case 'garage': // Left and Right change the car, Enter nothing
     case 'settings': // its keys are settingsKey's
       return state;
     case 'results': {
@@ -94,8 +100,10 @@ export function pressEnter(state: GameState, newRoute: () => Route | null): Game
   }
 }
 
-// Back to the menu, from the settings with their entry selected again; a nickname being typed is only dropped.
+// Back to the menu, from the garage and the settings with their entry selected again; a nickname being typed is only
+// dropped.
 export function pressEscape(state: GameState): GameState {
+  if (state.kind === 'garage') return { kind: 'menu', selected: screenEntry('garage') };
   if (state.kind === 'settings') return state.editing ? { ...state, editing: null } : { kind: 'menu', selected: screenEntry('settings') };
   return state.kind === 'menu' ? state : MENU;
 }

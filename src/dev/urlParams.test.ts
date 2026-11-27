@@ -5,7 +5,7 @@ import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', entry: null, edit: null });
+    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', entry: null, edit: null, shape: null, color: null });
   });
 
   it('reads drive=1 and nothing else as driving', () => {
@@ -54,6 +54,15 @@ describe('parseUrlParams', () => {
     for (const bad of ['?edit=abc', '?state=menu&edit=abc', '?state=settings&edit=abcdefghijklm', '?state=settings&edit=a_b']) {
       expect(() => parseUrlParams(bad)).toThrow();
     }
+  });
+
+  it('starts in the garage with a row selected, and picks the car', () => {
+    expect(parseUrlParams('?state=garage').state).toBe('garage');
+    expect(parseUrlParams('?state=garage&entry=1').entry).toBe(1);
+    expect(() => parseUrlParams('?state=garage&entry=2')).toThrow();
+    const car = parseUrlParams('?shape=pickup&color=teal');
+    expect([car.shape, car.color]).toEqual(['pickup', 'teal']);
+    for (const bad of ['?shape=', '?shape=Van', '?shape=truck', '?color=', '?color=red', '?color=Teal']) expect(() => parseUrlParams(bad)).toThrow();
   });
 
   it('accepts whole gate numbers from 0', () => {

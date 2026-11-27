@@ -20,9 +20,12 @@ const EYE = 1.2;
 // headlights) is in the fly camera's pictures too, so every shot from before races existed has it.
 // gate: the race's next gate, so a later gate shows lit; the number of gates finishes the race at the held tick.
 // car: 'x,z,quarterTurns' puts the car there once the race has started (quarter turns left of north).
-// state: the game state the shot starts in ('menu', 'prerace', 'race', 'results', 'settings'); 'race' when not given.
-// entry: the menu entry selected (0 is the first), with state 'results' the finish screen's option, 'settings' the row.
+// state: the game state the shot starts in ('menu', 'prerace', 'race', 'results', 'settings', 'garage'); 'race' when
+// not given.
+// entry: the menu entry selected (0 is the first), with state 'results' the finish screen's option, 'settings' and
+// 'garage' the row.
 // edit: with state 'settings', the nickname being typed.
+// shape, color: the car's body shape and colour instead of the default red coupe.
 // Positions are for the default seed's city (seed 1); with another seed the same spots show something else.
 const SHOTS = [
   { name: 'chase-junction', camera: null, mode: 'glyphs', tick: 300, race: false },
@@ -67,6 +70,16 @@ const SHOTS = [
   { name: 'state-results', camera: null, mode: 'glyphs', tick: 600, gate: 10, state: 'results' },
   { name: 'settings', camera: null, mode: 'glyphs', tick: 5400, state: 'settings' },
   { name: 'settings-edit', camera: null, mode: 'glyphs', tick: 5400, state: 'settings', edit: 'Speedy 7' },
+  // The garage's car turns left once every 960 ticks, from facing away at 0: 120 shows its back and left side, 240
+  // its left side, 360 its front and left side, 720 its right side, 840 its back and right side.
+  { name: 'garage', camera: null, mode: 'glyphs', tick: 120, state: 'garage' },
+  { name: 'garage-hatchback', camera: null, mode: 'glyphs', tick: 240, state: 'garage', shape: 'hatchback', color: 'sky' },
+  { name: 'garage-pickup', camera: null, mode: 'glyphs', tick: 840, state: 'garage', shape: 'pickup', color: 'gold', entry: 1 },
+  { name: 'garage-van', camera: null, mode: 'glyphs', tick: 360, state: 'garage', shape: 'van', color: 'silver' },
+  { name: 'garage-wedge', camera: null, mode: 'glyphs', tick: 720, state: 'garage', shape: 'wedge', color: 'magenta' },
+  { name: 'race-pickup', camera: null, mode: 'glyphs', tick: 420, drive: true, shape: 'pickup', color: 'teal' },
+  // From behind, standing in the countdown: the hatch must read as part of the car.
+  { name: 'race-hatchback', camera: null, mode: 'glyphs', tick: 120, shape: 'hatchback', color: 'sky' },
 ];
 
 const args = process.argv.slice(2);
@@ -130,6 +143,8 @@ try {
     if (shot.car) query.set('car', shot.car);
     if (shot.entry !== undefined) query.set('entry', String(shot.entry));
     if (shot.edit !== undefined) query.set('edit', shot.edit);
+    if (shot.shape) query.set('shape', shot.shape);
+    if (shot.color) query.set('color', shot.color);
     try {
       await page.goto(`${base}?${query}`);
       await Promise.race([page.waitForSelector('canvas[data-ready="true"]', { timeout: READY_TIMEOUT_MS }), firstError]);
