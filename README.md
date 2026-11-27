@@ -154,7 +154,7 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
 - [ ] **16. Menu and unlimited**
   - [x] Game states: menu, pre-race, race, results, with the dev fly camera kept behind the dev menu
   - [x] Main menu on the text layer over a camera flight through the city
-  - [ ] Unlimited: random city and route, finish screen with again, next and menu
+  - [x] Unlimited: random city and route, finish screen with again, next and menu
   - [ ] Settings: nickname, volume, glyph size, fullscreen, key list, saved in the browser
   - [ ] Garage: body shapes on the same collision box, colour list, turning preview, saved in the browser
   - [ ] Loading line while a city builds

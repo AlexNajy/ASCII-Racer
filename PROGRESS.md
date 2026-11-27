@@ -195,3 +195,9 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Open for the owner: whether Pages should keep publishing on every merge (still unanswered; the live site has step 15 and still starts straight in a race); a slide can park the car in a slot barely longer than itself, getting out is a multi-point shuffle of 8 s or more (a quicker way out would be a new driving rule, not built); the menu flight is mostly one composition; the menu list is normal cell size; the finish screen's options sit over the car.
 - To try by hand in a real browser, since nothing has been: Esc with the mouse captured (probably two presses to leave a race), and everything else.
 - Next: review the unlimited commit, tick it, then "Settings", "Garage", "Loading line", and step 16's pull request.
+
+## 2026-11-26: step 16, unlimited reviewed
+
+- Reviewer passed commit `14f25a0` as it stands, with a real-clock walk-through: unlimited into new cities (a dozen different seeds, the new city's route on the gates and minimap), a real finish, the results by themselves, `again` back at the start with the gates reset while W was held, `next` into another city, Esc in the countdown, the mouse at pixel ratio 1 and 2; no console errors. The route checked before loading is exactly the route raced. Memory flat over 10 more cities (85.2 to 85.8 MB), every GL object of the old city deleted. `Math.random` only in `randomCitySeed`. Only `state-results` differs from the shots before. A new city blocks for about 0.5 s.
+- Left: sparks or debris thrown just before `again` or `next` fly on for under a second; the finish screen's options sit on the car (moving the list up under the time would group it, the owner's call).
+- The Mac sleeping: `caffeinate` now runs with `-ims`.
