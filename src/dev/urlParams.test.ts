@@ -5,7 +5,7 @@ import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', entry: null, edit: null, shape: null, color: null });
+    expect(parseUrlParams('')).toEqual({ seed: null, day: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', entry: null, edit: null, shape: null, color: null });
   });
 
   it('reads drive=1 and nothing else as driving', () => {
@@ -120,6 +120,14 @@ describe('parseUrlParams', () => {
     expect(() => parseUrlParams('?tick=-1')).toThrow();
     expect(() => parseUrlParams('?tick=1.5')).toThrow();
     expect(() => parseUrlParams(`?tick=${MAX_URL_TICK + 1}`)).toThrow();
+  });
+
+  it('reads a day, negative ones too', () => {
+    expect(parseUrlParams('?day=5').day).toBe(5);
+    expect(parseUrlParams('?day=-3').day).toBe(-3);
+    expect(parseUrlParams('?day=5&seed=7')).toMatchObject({ day: 5, seed: 7 });
+    expect(() => parseUrlParams('?day=1.5')).toThrow();
+    expect(() => parseUrlParams('?day=x')).toThrow();
   });
 
   it('rejects bad seeds', () => {

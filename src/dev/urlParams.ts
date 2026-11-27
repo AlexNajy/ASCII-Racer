@@ -11,6 +11,7 @@ import { CAR_COLORS } from '../render/models/palettes.ts';
 // Read once at startup, for repeatable pictures (`npm run shots`). With none of them present nothing changes.
 export interface UrlParams {
   seed: number | null;
+  day: number | null; // start in this day's daily city instead of today's; seed= wins
   renderMode: RenderMode | null;
   camera: Camera | null; // a fly camera pose, which switches to the fly camera
   tick: number | null; // the world is stepped to this tick with no input and then held
@@ -41,6 +42,7 @@ function number(name: string, value: string): number {
 export function parseUrlParams(search: string): UrlParams {
   const query = new URLSearchParams(search);
   const seed = query.get('seed');
+  const day = query.get('day');
   const mode = query.get('mode');
   const camera = query.get('camera');
   const tick = query.get('tick');
@@ -79,6 +81,9 @@ export function parseUrlParams(search: string): UrlParams {
   if (seedNumber !== null && (!Number.isInteger(seedNumber) || seedNumber < 0)) {
     throw new Error('URL parameter seed: expected a whole number, 0 or more');
   }
+
+  const dayNumber = day === null ? null : number('day', day);
+  if (dayNumber !== null && !Number.isInteger(dayNumber)) throw new Error('URL parameter day: expected a whole number');
 
   if (hud !== null && hud !== 'test') throw new Error(`URL parameter hud: "${hud}" is not test`);
   const cellWidth = cell === null ? null : number('cell', cell);
@@ -124,6 +129,7 @@ export function parseUrlParams(search: string): UrlParams {
 
   return {
     seed: seedNumber,
+    day: dayNumber,
     renderMode,
     camera: pose,
     tick: tickNumber,

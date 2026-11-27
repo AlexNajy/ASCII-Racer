@@ -225,3 +225,10 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Lead's own small fix from the review: a build that throws goes back to the menu instead of being retried every frame.
 - Left: a click on the loading line captures the mouse (the race does anyway); an Esc pressed during the blocking build arrives afterwards and leaves the countdown for the menu; a startup error leaves the loading line up (it used to leave a black screen), the error is in the console.
 - Step 16 is complete; `npm run shots` gives 39 pictures.
+
+## 2026-11-27: step 16 merged, step 17 day number
+
+- Step 16 merged as PR #19 and deployed: the live site opens on the menu. Branch `daily` for step 17.
+- `src/game/daily.ts` (pure, loads without DOM or rendering code, for the server later): `dayNumber(ms)` (whole days since 2026-01-01 UTC, negative before), `millisecondsToNextDay`, `dailySeed(day, attempt)` (1 to 1 000 000, mixed with `blockSeed`), `dailyCitySettings`, `dailyRace(day)` (the first attempt whose city holds a medium route; route seed = city seed). Reference seeds and two route digests stored in the test. With no `seed=` the game starts in today's city; `day=N` pins another day. The clock is read once, in `main.ts`.
+- Reviewer passed it: its own calendar count agrees on every date tried and under two other time zones; days 0 to 2999 all have an 1800 m route with 7 to 17 gates and none needs a fallback (1 ms per day); the route `dailyRace` gives is the route a full world races; dev menu edits and unlimited can't leak into the daily's settings; over ten years 4 pairs of days share a city (chance alone gives about 7). All 39 shots byte-identical, 387 tests.
+- Left: the fallback loop has no test of its own (no day needs it); `dailySeed(NaN)` gives day 0's seed; a page left open over midnight stays on the old day until reload (the daily flow will have to read the clock again).

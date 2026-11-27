@@ -21,6 +21,7 @@ import { signalPhase } from './game/signals.ts';
 import type { Route } from './game/route.ts';
 import { goTick, raceTicks } from './game/race.ts';
 import { createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorld, type CityData } from './game/world.ts';
+import { dailyRace, dayNumber } from './game/daily.ts';
 import { cityRoute, enterState, randomCitySeed, seedRoute, unlimitedRoute } from './app/flow.ts';
 import {
   afterTick,
@@ -382,7 +383,8 @@ const carSettings: CarSettings = { ...DEFAULT_CAR_SETTINGS };
 const chaseSettings: ChaseCameraSettings = { ...DEFAULT_CHASE_CAMERA_SETTINGS };
 
 const urlParams = parseUrlParams(window.location.search);
-if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
+// The city is today's daily one (the only place the clock is read), day= another day's, seed= any seed.
+citySettings.seed = urlParams.seed ?? dailyRace(urlParams.day ?? dayNumber(Date.now())).seed;
 // Even reaching localStorage can throw; loadSettings and saveSettings catch it. Shots run with the defaults and
 // never write, so every load gives the same picture.
 const storage = () => window.localStorage;

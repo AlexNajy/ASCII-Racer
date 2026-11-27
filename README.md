@@ -162,7 +162,7 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Garage: body shapes on the same collision box, colour list, turning preview, saved in the browser
   - [x] Loading line while a city builds
 - [ ] **17. Daily**: the main mode
-  - [ ] Day number from the UTC date, city seed and route from the day number
+  - [x] Day number from the UTC date, city seed and route from the day number
   - [ ] Input recording: one input per tick packed into a compact log, and a headless replay that gives the same finish tick
   - [ ] Simulation version constant, bumped by any change to simulation or generation (a test fails when the reference run changes without it)
   - [ ] Daily flow without a backend: pre-race screen, one try kept in the browser, results with time, countdown to the next day
