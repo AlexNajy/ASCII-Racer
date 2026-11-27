@@ -12,7 +12,7 @@ export interface MenuEntry {
 }
 
 export const MENU_ENTRIES: readonly MenuEntry[] = [
-  { label: 'daily', opens: null },
+  { label: 'daily', opens: 'daily' },
   { label: 'unlimited', opens: 'unlimited' },
   { label: 'join lobby', opens: null },
   { label: 'create lobby', opens: null },
@@ -28,8 +28,8 @@ export function entryEnabled(index: number): boolean {
   return MENU_ENTRIES[index]?.opens != null;
 }
 
-// The entry that opens a screen, selected again when that screen is left.
-export function screenEntry(screen: MenuScreen): number {
+// The entry that opens a screen or a race mode, selected again when it is left.
+export function screenEntry(screen: MenuScreen | RaceMode): number {
   return MENU_ENTRIES.findIndex((entry) => entry.opens === screen);
 }
 

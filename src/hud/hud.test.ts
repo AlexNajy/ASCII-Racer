@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { drawHud, MS_TO_KMH } from './hud.ts';
+import { DEFAULT_CITY_SETTINGS, generateCity } from '../game/city.ts';
+import { createRace } from '../game/race.ts';
+import { roadGraph } from '../game/roadGraph.ts';
+import { generateRoute } from '../game/route.ts';
+import { drawHud, GIVE_UP_MIN_TEXT, GIVE_UP_SHORT_TEXT, GIVE_UP_TEXT, giveUpShown, MS_TO_KMH } from './hud.ts';
+import { minimapLayout, type Minimap } from './minimap.ts';
 import { TextGrid } from './textGrid.ts';
 
 const PANEL_WIDTH = 15;
@@ -138,5 +143,81 @@ describe('drawHud', () => {
     const grid = new TextGrid(100, 40);
     drawHud(grid, { speed: 10, topSpeed: 0 });
     expect(row(grid, 7)).not.toContain('#');
+  });
+});
+
+describe('give-up question', () => {
+  const route = generateRoute(roadGraph(generateCity({ ...DEFAULT_CITY_SETTINGS })), 1);
+  const SHOT_GRID: [number, number] = [266, 81];
+  const text = (grid: TextGrid) =>
+    Array.from({ length: grid.rows }, (_, y) => Array.from({ length: grid.columns }, (_, x) => String.fromCharCode(grid.get(x, y)?.code || 32)).join('')).join('\n');
+  const draw = (grid: TextGrid, giveUp: boolean | undefined, tick = 30) =>
+    drawHud(grid, { speed: 0, topSpeed: 32, race: { race: createRace(route, 0), tick, guidance: null, giveUp } });
+
+  it('asks plainly while Esc waits for Enter, and only in the daily', () => {
+    const grid = new TextGrid(...SHOT_GRID);
+    draw(grid, true);
+    expect(text(grid)).toContain(GIVE_UP_TEXT);
+    const unlimited = new TextGrid(...SHOT_GRID);
+    draw(unlimited, undefined);
+    const daily = new TextGrid(...SHOT_GRID);
+    draw(daily, false);
+    expect(text(daily)).toBe(text(unlimited));
+    expect(text(daily)).not.toContain('give up');
+  });
+
+  it('goes again without a trace, and leaves the grid clean when drawn again', () => {
+    const grid = new TextGrid(...SHOT_GRID);
+    draw(grid, true);
+    grid.dirty = false;
+    draw(grid, true);
+    expect(grid.dirty).toBe(false);
+    draw(grid, false);
+    const fresh = new TextGrid(...SHOT_GRID);
+    draw(fresh, false);
+    for (let y = 0; y < grid.rows; y++) {
+      for (let x = 0; x < grid.columns; x++) {
+        const [cell, other] = [grid.get(x, y)!, fresh.get(x, y)!];
+        expect([cell.code || 32, cell.background]).toEqual([other.code || 32, other.background]);
+      }
+    }
+  });
+
+  it('stays clear of the countdown banner, and takes the short form on a narrow grid', () => {
+    const grid = new TextGrid(...SHOT_GRID);
+    draw(grid, true, 10);
+    expect(text(grid)).toContain(GIVE_UP_TEXT);
+    const narrow = new TextGrid(60, 40);
+    draw(narrow, true);
+    expect(text(narrow)).toContain(GIVE_UP_SHORT_TEXT);
+  });
+
+  it('is drawn whenever it is asked on any grid that can hold its smallest form, and leaves no trace', () => {
+    const city = generateCity({ ...DEFAULT_CITY_SETTINGS });
+    const layout = minimapLayout(city);
+    const car = { x: 0, z: 0, heading: 0 };
+    const drawWithMap = (grid: TextGrid, minimap: Minimap, giveUp: boolean) =>
+      drawHud(grid, { speed: 5, topSpeed: 32, minimap: { minimap, car }, race: { race: createRace(route, 0), tick: 30, guidance: null, giveUp } });
+    const cells = (grid: TextGrid) => Array.from({ length: grid.columns * grid.rows }, (_, i) => grid.get(i % grid.columns, Math.floor(i / grid.columns))!).map((cell) => [cell.code || 32, cell.background]);
+    const sizes: [number, number][] = [];
+    for (let columns = 1; columns <= 130; columns += 3) for (let rows = 1; rows <= 70; rows += 3) sizes.push([columns, rows]);
+    sizes.push([17, 5], [18, 1], [40, 14], [GIVE_UP_MIN_TEXT.length + 4, 5]);
+    for (const [columns, rows] of sizes) {
+      const label = `${columns} x ${rows}`;
+      const grid = new TextGrid(columns, rows);
+      const minimap: Minimap = { layout, drawn: null, route: null, overlay: new Map() };
+      drawWithMap(grid, minimap, false);
+      drawWithMap(grid, minimap, true);
+      const shown = text(grid);
+      const asked = [GIVE_UP_TEXT, GIVE_UP_SHORT_TEXT, GIVE_UP_MIN_TEXT].some((form) => shown.includes(form));
+      expect(asked, label).toBe(giveUpShown(columns, rows));
+      grid.dirty = false;
+      drawWithMap(grid, minimap, true);
+      expect(grid.dirty, label).toBe(false);
+      drawWithMap(grid, minimap, false);
+      const fresh = new TextGrid(columns, rows);
+      drawWithMap(fresh, { layout, drawn: null, route: null, overlay: new Map() }, false);
+      expect(cells(grid), label).toEqual(cells(fresh));
+    }
   });
 });

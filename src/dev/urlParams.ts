@@ -23,14 +23,31 @@ export interface UrlParams {
   race: boolean; // race=0: the race state drives freely from the middle junction instead of on the city seed's route
   gate: number | null; // the race's next gate once it starts, to show a later gate lit; the gate count finishes it
   car: { x: number; z: number; quarterTurns: number } | null; // the car's place after the race starts, heading in quarter turns left of north
-  state: GameStateKind; // the screen the game starts on, the menu without the parameter; loading is held, never built
+  state: UrlState; // the screen the game starts on, the menu without the parameter; loading is held, never built; the daily states only under shot
+  dnf: boolean; // with state=dailyresults: the try did not finish (else gate=<gate count> finishes it)
+  next: number | null; // with a daily state: seconds to the next daily on the pinned clock
+  giveUp: boolean; // with state=dailyrace: Esc has asked whether to give up
   entry: number | null; // the menu entry (with state=results the finish screen's option, state=settings or garage the row) selected at the start, 0 first
   edit: string | null; // with state=settings: the nickname being typed, as if typed so far
   shape: CarShape | null; // the car's body shape instead of the stored one
   color: string | null; // the car's colour (a CAR_COLORS id) instead of the stored one
 }
 
-const URL_STATES: Record<string, GameStateKind> = { menu: 'menu', prerace: 'preRace', race: 'race', results: 'results', settings: 'settings', garage: 'garage', loading: 'loading' };
+// The game states, plus the daily's race (the race state of the daily mode).
+export type UrlState = GameStateKind | 'dailyRace';
+const URL_STATES: Record<string, UrlState> = {
+  menu: 'menu',
+  daily: 'preRace',
+  dailyrace: 'dailyRace',
+  dailyresults: 'dailyResults',
+  race: 'race',
+  results: 'results',
+  settings: 'settings',
+  garage: 'garage',
+  loading: 'loading',
+};
+const DAILY_STATES: readonly UrlState[] = ['preRace', 'dailyRace', 'dailyResults'];
+export const MAX_URL_NEXT = 2 * 86_400; // s; a day, or two when the clock is behind a stored try
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
 
@@ -57,6 +74,9 @@ export function parseUrlParams(search: string): UrlParams {
   const edit = query.get('edit');
   const shape = query.get('shape');
   const color = query.get('color');
+  const dnf = query.get('dnf');
+  const next = query.get('next');
+  const giveUp = query.get('giveup');
 
   let renderMode: RenderMode | null = null;
   if (mode !== null) {
@@ -122,6 +142,21 @@ export function parseUrlParams(search: string): UrlParams {
     throw new Error(`URL parameter edit: needs state=settings and up to ${NICKNAME_MAX} letters, digits or spaces`);
   }
 
+  const urlState = state === null ? 'menu' : URL_STATES[state];
+  const daily = DAILY_STATES.includes(urlState);
+  if (daily && (dayNumber === null || seedNumber !== null)) throw new Error(`URL parameter state: ${state} needs day= and no seed=`);
+  if (dnf !== null && (dnf !== '1' || urlState !== 'dailyResults')) throw new Error('URL parameter dnf: only dnf=1, with state=dailyresults');
+  const nextNumber = next === null ? null : number('next', next);
+  if (nextNumber !== null && (!daily || !Number.isInteger(nextNumber) || nextNumber < 0 || nextNumber > MAX_URL_NEXT)) {
+    throw new Error(`URL parameter next: needs a daily state and a whole number of seconds, 0 to ${MAX_URL_NEXT}`);
+  }
+  if (giveUp !== null && (giveUp !== '1' || urlState !== 'dailyRace')) throw new Error('URL parameter giveup: only giveup=1, with state=dailyrace');
+
+  // The daily states are for pictures: on a normal load they would race a day's route or show a result without its
+  // stored try, so they are ignored there and the game opens on the menu.
+  const shot = query.has('shot') || tick !== null;
+  const ignored = daily && !shot;
+
   const carShape = shape === null ? null : (CAR_SHAPES.find((name) => name === shape) ?? null);
   if (shape !== null && !carShape) throw new Error(`URL parameter shape: "${shape}" is not one of ${CAR_SHAPES.join(', ')}`);
   if (color !== null && !CAR_COLORS.some(({ id }) => id === color)) {
@@ -134,7 +169,7 @@ export function parseUrlParams(search: string): UrlParams {
     renderMode,
     camera: pose,
     tick: tickNumber,
-    shot: query.has('shot') || tick !== null,
+    shot,
     drive: query.get('drive') === '1',
     replay: query.get('replay') === '1',
     hud,
@@ -142,7 +177,10 @@ export function parseUrlParams(search: string): UrlParams {
     race: race !== '0',
     gate: gateNumber,
     car: carPose,
-    state: state === null ? 'menu' : URL_STATES[state],
+    state: ignored ? 'menu' : urlState,
+    dnf: !ignored && dnf === '1',
+    next: ignored ? null : nextNumber,
+    giveUp: !ignored && giveUp === '1',
     entry: entryNumber,
     edit,
     shape: carShape,

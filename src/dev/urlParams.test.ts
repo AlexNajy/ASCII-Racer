@@ -5,7 +5,7 @@ import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, day: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, replay: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', entry: null, edit: null, shape: null, color: null });
+    expect(parseUrlParams('')).toEqual({ seed: null, day: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, replay: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', dnf: false, next: null, giveUp: false, entry: null, edit: null, shape: null, color: null });
   });
 
   it('reads replay=1 and nothing else as replaying', () => {
@@ -30,13 +30,57 @@ describe('parseUrlParams', () => {
   it('starts on the state given, the menu by default', () => {
     expect(parseUrlParams('').state).toBe('menu');
     expect(parseUrlParams('?state=menu').state).toBe('menu');
-    expect(parseUrlParams('?state=prerace').state).toBe('preRace');
+    expect(parseUrlParams('?state=daily&day=3&shot').state).toBe('preRace');
+    expect(parseUrlParams('?state=dailyrace&day=3&tick=0').state).toBe('dailyRace');
+    expect(parseUrlParams('?state=dailyresults&day=3&dnf=1&shot').state).toBe('dailyResults');
+    expect(() => parseUrlParams('?state=prerace')).toThrow();
     expect(parseUrlParams('?state=race').state).toBe('race');
     expect(parseUrlParams('?state=results').state).toBe('results');
     expect(parseUrlParams('?state=loading').state).toBe('loading');
     expect(() => parseUrlParams('?state=')).toThrow();
     expect(() => parseUrlParams('?state=preRace')).toThrow();
     expect(() => parseUrlParams('?state=toString')).toThrow();
+  });
+
+  it('needs day= and no seed= for the daily states', () => {
+    for (const state of ['daily', 'dailyrace', 'dailyresults']) {
+      expect(parseUrlParams(`?state=${state}&day=-4&shot`).day).toBe(-4);
+      expect(() => parseUrlParams(`?state=${state}`)).toThrow();
+      expect(() => parseUrlParams(`?state=${state}&day=3&seed=1`)).toThrow();
+    }
+  });
+
+  it('ignores the daily states on a normal load, where they would race or show a day without its stored try', () => {
+    for (const query of ['?state=daily&day=3', '?state=dailyrace&day=3&giveup=1', '?state=dailyresults&day=3&dnf=1&next=10']) {
+      const params = parseUrlParams(query);
+      expect([params.state, params.dnf, params.giveUp, params.next, params.shot]).toEqual(['menu', false, false, null, false]);
+      expect(params.day).toBe(3);
+      expect(parseUrlParams(`${query}&shot`).state).not.toBe('menu');
+      expect(parseUrlParams(`${query}&tick=5`).state).not.toBe('menu');
+    }
+  });
+
+  it('reads dnf=1, giveup=1 and a pinned countdown only with their daily states', () => {
+    expect(parseUrlParams('?state=dailyresults&day=3&dnf=1&shot').dnf).toBe(true);
+    expect(parseUrlParams('?state=dailyresults&day=3&shot').dnf).toBe(false);
+    expect(parseUrlParams('?state=dailyrace&day=3&giveup=1&shot').giveUp).toBe(true);
+    expect(parseUrlParams('?state=dailyresults&day=3&next=0&shot').next).toBe(0);
+    expect(parseUrlParams('?state=daily&day=3&next=172800&shot').next).toBe(172800);
+    for (const bad of [
+      '?dnf=1',
+      '?state=dailyrace&day=3&dnf=1',
+      '?state=dailyresults&day=3&dnf=0',
+      '?giveup=1',
+      '?state=daily&day=3&giveup=1',
+      '?state=dailyrace&day=3&giveup=yes',
+      '?next=10',
+      '?state=race&next=10',
+      '?state=daily&day=3&next=-1',
+      '?state=daily&day=3&next=1.5',
+      '?state=daily&day=3&next=172801',
+    ]) {
+      expect(() => parseUrlParams(bad)).toThrow();
+    }
   });
 
   it('selects a menu entry by its place in the list', () => {

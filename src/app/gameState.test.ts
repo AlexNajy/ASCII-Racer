@@ -5,7 +5,14 @@ import { roadGraph } from '../game/roadGraph.ts';
 import { generateRoute } from '../game/route.ts';
 import {
   afterTick,
+  dailyRacing,
+  dailyResults,
   FIRST_OPTION,
+  giveUp,
+  loadingDaily,
+  menuAt,
+  opensDaily,
+  raceFinished,
   GARAGE,
   loaded,
   loading,
@@ -26,7 +33,10 @@ import { SETTINGS_ROWS } from './settingsMenu.ts';
 
 const route = generateRoute(roadGraph(generateCity({ ...DEFAULT_CITY_SETTINGS })), 1);
 const other = generateRoute(roadGraph(generateCity({ ...DEFAULT_CITY_SETTINGS, seed: 2 })), 2);
-const PRE_RACE = preRace('unlimited', route);
+const DAY = 330;
+const PRE_RACE = preRace(DAY, route);
+const DAILY = dailyRacing(DAY, route);
+const UNLIMITED_MENU = menuAt('unlimited');
 const RACE = race('unlimited', route);
 const results = (selected: number): GameState => ({ kind: 'results', mode: 'unlimited', route, ticks: 100, selected });
 const RESULTS = results(FIRST_OPTION);
@@ -35,18 +45,18 @@ const LOADING = loading('unlimited');
 
 describe('game state', () => {
   it('goes from unlimited on the menu through loading to the race on the new route', () => {
-    const next = pressEnter(MENU);
+    const next = pressEnter(UNLIMITED_MENU);
     expect(next).toEqual({ kind: 'loading', mode: 'unlimited' });
     expect(next).toEqual(loading('unlimited'));
     expect(loaded(next, route)).toEqual({ kind: 'race', mode: 'unlimited', route });
   });
 
-  it('goes from the pre-race screen to its race', () => {
-    expect(pressEnter(PRE_RACE)).toEqual(RACE);
+  it("goes from the daily's pre-race screen to its race on the same day", () => {
+    expect(pressEnter(PRE_RACE)).toEqual({ kind: 'race', mode: 'daily', day: DAY, route, givingUp: false, finished: null });
   });
 
-  it('goes to the menu when no new route could be made', () => {
-    expect(loaded(LOADING, null)).toEqual(MENU);
+  it('goes to the menu when no new route could be made, unlimited selected', () => {
+    expect(loaded(LOADING, null)).toEqual(UNLIMITED_MENU);
   });
 
   it('ignores Enter while racing', () => {
@@ -90,11 +100,11 @@ describe('game state', () => {
   it('races a new route on next, or goes to the menu when none could be made', () => {
     const next = pressEnter(results(option('next')));
     expect(loaded(next, other)).toEqual(race('unlimited', other));
-    expect(loaded(next, null)).toEqual(MENU);
+    expect(loaded(next, null)).toEqual(UNLIMITED_MENU);
   });
 
-  it('goes to the menu on menu', () => {
-    expect(pressEnter(results(option('menu')))).toEqual(MENU);
+  it('goes to the menu on menu, unlimited selected', () => {
+    expect(pressEnter(results(option('menu')))).toEqual(UNLIMITED_MENU);
   });
 
   it('moves and points at the finish screen options, wrapping round', () => {
@@ -107,7 +117,8 @@ describe('game state', () => {
   });
 
   it('goes back to the menu on Escape from every other state', () => {
-    for (const state of [PRE_RACE, RACE, RESULTS]) expect(pressEscape(state)).toEqual(MENU);
+    for (const state of [RACE, RESULTS]) expect(pressEscape(state)).toEqual(UNLIMITED_MENU);
+    for (const state of [PRE_RACE, dailyResults(DAY, null)]) expect(pressEscape(state)).toEqual(MENU);
     expect(pressEscape(MENU)).toBe(MENU);
     expect(pressEscape(LOADING)).toBe(LOADING);
   });
@@ -131,11 +142,12 @@ describe('game state', () => {
     expect(afterTick(RACE, null, late)).toBe(RACE);
   });
 
-  it('starts the menu on unlimited, the first entry built so far', () => {
+  it('starts the menu on daily, the first entry built', () => {
     expect(MENU_ENTRIES.map((entry) => entry.label)).toEqual(['daily', 'unlimited', 'join lobby', 'create lobby', 'garage', 'settings']);
-    expect(FIRST_ENTRY).toBe(1);
-    expect(MENU).toEqual({ kind: 'menu', selected: 1 });
-    expect(MENU_ENTRIES.map((_, i) => entryEnabled(i))).toEqual([false, true, false, false, true, true]);
+    expect(FIRST_ENTRY).toBe(0);
+    expect(MENU).toEqual({ kind: 'menu', selected: 0 });
+    expect(UNLIMITED_MENU).toEqual({ kind: 'menu', selected: 1 });
+    expect(MENU_ENTRIES.map((_, i) => entryEnabled(i))).toEqual([true, true, false, false, true, true]);
   });
 
   it('moves the selection up and down, wrapping round at both ends', () => {
@@ -162,8 +174,9 @@ describe('game state', () => {
     }
   });
 
-  it('goes back to the menu with the first entry selected', () => {
-    expect(pressEscape(RACE)).toEqual({ kind: 'menu', selected: FIRST_ENTRY });
+  it('goes back to the menu with the entry it came from selected', () => {
+    expect(pressEscape(RACE)).toEqual({ kind: 'menu', selected: screenEntry('unlimited') });
+    expect(pressEscape(PRE_RACE)).toEqual({ kind: 'menu', selected: screenEntry('daily') });
     const elsewhere: GameState = { kind: 'menu', selected: 4 };
     expect(pressEscape(elsewhere)).toBe(elsewhere);
   });
@@ -220,5 +233,77 @@ describe('game state', () => {
     expect(selectEntry(same, 1)).toBe(same);
     expect(selectEntry(same, 2)).toBe(same);
     expect(selectEntry(same, -1)).toBe(same);
+  });
+});
+
+describe('daily game state', () => {
+  it('opens the daily from its menu entry, and from its results once the next day has begun', () => {
+    expect(opensDaily({ kind: 'menu', selected: screenEntry('daily') }, DAY)).toBe(true);
+    expect(opensDaily(UNLIMITED_MENU, DAY)).toBe(false);
+    expect(opensDaily(dailyResults(DAY, 100), DAY)).toBe(false);
+    expect(opensDaily(dailyResults(DAY, 100), DAY + 1)).toBe(true);
+    expect(opensDaily(dailyResults(DAY, null), DAY + 1)).toBe(true);
+    for (const state of [PRE_RACE, DAILY, RACE, RESULTS, LOADING, SETTINGS, GARAGE]) expect(opensDaily(state, DAY + 1)).toBe(false);
+  });
+
+  it("leaves the daily entry's Enter to dailyEntry", () => {
+    const state: GameState = { kind: 'menu', selected: screenEntry('daily') };
+    expect(pressEnter(state)).toBe(state);
+  });
+
+  it('builds the city of the day, then shows the pre-race screen of the same day', () => {
+    expect(loaded(loadingDaily(DAY, route), route)).toEqual(PRE_RACE);
+    expect(loaded(loadingDaily(DAY, route), null)).toEqual(MENU);
+    const held = loadingDaily(DAY, route);
+    expect(pressEnter(held)).toBe(held);
+    expect(pressEscape(held)).toBe(held);
+  });
+
+  it('asks on Escape before giving up, a second Escape keeps driving, Enter gives up', () => {
+    const asking = pressEscape(DAILY);
+    expect(asking).toEqual({ ...DAILY, givingUp: true });
+    expect(pressEscape(asking)).toEqual(DAILY);
+    expect(pressEnter(DAILY)).toBe(DAILY);
+    expect(pressEnter(asking)).toEqual(dailyResults(DAY, null));
+  });
+
+  it('never asks, nor gives up, where the question cannot be shown', () => {
+    expect(pressEscape(DAILY, false)).toBe(DAILY);
+    const asking = pressEscape(DAILY);
+    expect(pressEnter(asking, false)).toBe(asking);
+    expect(pressEscape(asking, false)).toEqual(DAILY);
+    expect(pressEscape(RACE, false)).toEqual(pressEscape(RACE));
+  });
+
+  it('gives up only a daily race', () => {
+    expect(giveUp(DAILY)).toEqual(dailyResults(DAY, null));
+    for (const state of [RACE, PRE_RACE, MENU, RESULTS]) expect(giveUp(state)).toBe(state);
+  });
+
+  it('stops asking at the finish, and Escape then goes straight to the time', () => {
+    const finished = raceFinished(pressEscape(DAILY), 4321);
+    expect(finished).toEqual({ ...DAILY, finished: 4321 });
+    expect(raceFinished(finished, 9999)).toBe(finished);
+    expect(raceFinished(RACE, 9999)).toBe(RACE);
+    expect(pressEscape(finished)).toEqual(dailyResults(DAY, 4321));
+    expect(pressEnter(finished)).toBe(finished);
+  });
+
+  it('shows the daily results RESULTS_AFTER_TICKS after the finish, for the day the race belongs to', () => {
+    const current = createRace(route, 0);
+    current.phase = 'finished';
+    current.finishTick = goTick(current) + 777;
+    const finished = raceFinished(DAILY, 777);
+    expect(afterTick(finished, current, current.finishTick + RESULTS_AFTER_TICKS - 1)).toBe(finished);
+    expect(afterTick(finished, current, current.finishTick + RESULTS_AFTER_TICKS)).toEqual(dailyResults(DAY, 777));
+  });
+
+  it('goes from the daily results to the menu on Enter and Escape, and has nothing to select', () => {
+    const shown = dailyResults(DAY, 100);
+    expect(pressEnter(shown)).toEqual(MENU);
+    expect(pressEscape(shown)).toEqual(MENU);
+    expect(moveSelection(shown, 1)).toBe(shown);
+    expect(selectEntry(shown, 0)).toBe(shown);
+    expect(afterTick(shown, null, 1000)).toBe(shown);
   });
 });

@@ -25,8 +25,9 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
 - Menu and finish screen: `Up` / `Down` or `W` / `S` to choose (wraps round), `Enter` to pick; or point at an entry and click
 - Settings: `Up` / `Down` or `W` / `S` to choose, `Left` / `Right` or `A` / `D` to change volume and glyph size, `Enter` to switch mute and fullscreen or to type a nickname (`Enter` saves, `Esc` cancels); clicks work too (on the volume bar, on the glyph size's `<` `>`); saved in the browser. Its key list is `src/app/keys.ts`, the same as this list
 - Garage: `Up` / `Down` or `W` / `S` to choose shape or colour, `Left` / `Right` or `A` / `D` to change it (wraps round), or click its `<` `>`; the car turns on a lit spot and shows each change at once; saved in the browser and used in every race
+- Daily: one race a day, the same for everyone, one try; the pre-race screen shows the day and the route (`Enter` starts, `Esc` goes back without using the try); afterwards the daily entry shows the time (or did not finish) and the countdown to the next one
 - Unlimited: a new random city and route each time; after the finish, `again` (same route), `next` (new city and route) or `menu`
-- `Esc`: back to the menu (and releases the mouse)
+- `Esc`: back to the menu (and releases the mouse); in the daily race it first asks, `Enter` gives up the try, `Esc` again keeps driving
 - `W` / `S` or arrow keys: throttle / brake, `A` / `D`: steer, `Space`: drift
 - Click (outside the menu and the finish screen): capture the mouse to look around
 - `H`: headlights on and off

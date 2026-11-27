@@ -5,8 +5,33 @@ import { DEFAULT_CITY_SETTINGS } from '../game/city.ts';
 import { goTick } from '../game/race.ts';
 import { RouteError } from '../game/route.ts';
 import { createWorld, START_HEADING, startJunction, stepWorld } from '../game/world.ts';
-import { cityRoute, enterState, randomCitySeed, seedRoute, UNLIMITED_SEEDS, UNLIMITED_TRIES, unlimitedRoute } from './flow.ts';
-import { FIRST_OPTION, loaded, loading, MENU, preRace, race } from './gameState.ts';
+import {
+  carSettingsFor,
+  cityRoute,
+  DAILY_CAR_SETTINGS,
+  enterState,
+  randomCitySeed,
+  seedRoute,
+  UNLIMITED_SEEDS,
+  UNLIMITED_TRIES,
+  unlimitedRoute,
+} from './flow.ts';
+import {
+  dailyRacing,
+  dailyResults,
+  FIRST_OPTION,
+  GARAGE,
+  loaded,
+  loading,
+  loadingDaily,
+  MENU,
+  preRace,
+  race,
+  SETTINGS,
+  type GameState,
+} from './gameState.ts';
+
+const DAY = 330;
 
 describe('game state flow', () => {
   const world = createWorld({ ...DEFAULT_CITY_SETTINGS }, { ...DEFAULT_CAR_SETTINGS }, false);
@@ -20,7 +45,7 @@ describe('game state flow', () => {
 
   it('stands the car on the route start before the race, with no race yet', () => {
     for (let i = 0; i < 10; i++) stepWorld(world, NO_INPUT);
-    const state = preRace('unlimited', route);
+    const state = preRace(DAY, route);
     enterState(world, state, MENU);
     expect(world.race).toBeNull();
     expect([world.car.x, world.car.z, world.car.heading]).toEqual([route.pose.x, route.pose.z, route.pose.heading]);
@@ -29,7 +54,7 @@ describe('game state flow', () => {
     expect([world.car.x, world.car.z]).toEqual([route.pose.x, route.pose.z]);
 
     const tick = world.tick;
-    enterState(world, RACE, state);
+    enterState(world, dailyRacing(DAY, route), state);
     expect(world.race?.route).toBe(route);
     expect(world.race?.phase).toBe('countdown');
     expect(goTick(world.race!)).toBeGreaterThan(tick);
@@ -44,8 +69,8 @@ describe('game state flow', () => {
   });
 
   it('leaves the world alone when the results come up', () => {
-    enterState(world, preRace('unlimited', route), MENU);
-    enterState(world, RACE, preRace('unlimited', route));
+    enterState(world, preRace(DAY, route), MENU);
+    enterState(world, RACE, preRace(DAY, route));
     const current = world.race;
     const car = { ...world.car };
     enterState(world, { kind: 'results', mode: 'unlimited', route, ticks: 0, selected: FIRST_OPTION }, RACE);
@@ -81,10 +106,36 @@ describe('game state flow', () => {
     expect([world.car.x, world.car.z, world.car.heading]).toEqual([route.pose.x, route.pose.z, route.pose.heading]);
   });
 
+  it('keeps a finished daily race for its results, and drops one that did not finish', () => {
+    enterState(world, dailyRacing(DAY, route), MENU);
+    const current = world.race;
+    enterState(world, dailyResults(DAY, 1234), dailyRacing(DAY, route));
+    expect(world.race).toBe(current);
+    enterState(world, dailyResults(DAY, null), dailyRacing(DAY, route));
+    expect(world.race).toBeNull();
+  });
+
   it('drives freely in a race state without a route', () => {
     enterState(world, MENU, RACE);
     enterState(world, race('unlimited', null), MENU);
     expect(world.race).toBeNull();
+  });
+});
+
+describe('daily car settings', () => {
+  it('are the defaults, and cannot be changed', () => {
+    expect(DAILY_CAR_SETTINGS).toEqual(DEFAULT_CAR_SETTINGS);
+    expect(Object.isFrozen(DAILY_CAR_SETTINGS)).toBe(true);
+  });
+
+  it('drive every daily screen whatever the dev menu holds, and only those', () => {
+    const edited = { ...DEFAULT_CAR_SETTINGS, topSpeed: DEFAULT_CAR_SETTINGS.topSpeed * 3, gripFollow: 0 };
+    const world = createWorld({ ...DEFAULT_CITY_SETTINGS }, edited, false);
+    const route = cityRoute(world)!;
+    const daily: GameState[] = [preRace(DAY, route), dailyRacing(DAY, route), dailyResults(DAY, null), loadingDaily(DAY, route)];
+    for (const state of daily) expect(carSettingsFor(state, edited)).toBe(DAILY_CAR_SETTINGS);
+    const others: GameState[] = [MENU, race('unlimited', route), loading('unlimited'), SETTINGS, GARAGE];
+    for (const state of others) expect(carSettingsFor(state, edited)).toBe(edited);
   });
 });
 

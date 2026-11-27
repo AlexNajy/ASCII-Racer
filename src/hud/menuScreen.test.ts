@@ -30,8 +30,8 @@ describe('main menu screen', () => {
       expect(next).toBeGreaterThan(at);
       at = next;
     }
-    expect(line(grid, layout.entryRows[FIRST_ENTRY])).toMatch(/> unlimited +</);
-    expect(line(grid, layout.entryRows[0])).not.toContain('>');
+    expect(line(grid, layout.entryRows[FIRST_ENTRY])).toMatch(/> daily +</);
+    expect(line(grid, layout.entryRows[1])).not.toContain('>');
   });
 
   it('marks the selected entry with bright yellow markers, the label grey when not built', () => {

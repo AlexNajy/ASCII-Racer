@@ -20,8 +20,11 @@ const EYE = 1.2;
 // headlights) is in the fly camera's pictures too, so every shot from before races existed has it.
 // gate: the race's next gate, so a later gate shows lit; the number of gates finishes the race at the held tick.
 // car: 'x,z,quarterTurns' puts the car there once the race has started (quarter turns left of north).
-// state: the game state the shot starts in ('menu', 'prerace', 'race', 'results', 'settings', 'garage', 'loading',
-// which holds the loading line); 'race' when not given.
+// state: the game state the shot starts in ('menu', 'race', 'results', 'settings', 'garage', 'loading', which holds
+// the loading line, and the daily's 'daily' (pre-race), 'dailyrace', 'dailyresults'); 'race' when not given.
+// day: the daily's day for its states, in place of the seed (its city is the day's).
+// dnf: with 'dailyresults', the try did not finish; next: seconds to the next daily on the pinned clock;
+// giveup: with 'dailyrace', Esc has asked whether to give up.
 // entry: the menu entry selected (0 is the first), with state 'results' the finish screen's option, 'settings' and
 // 'garage' the row.
 // edit: with state 'settings', the nickname being typed.
@@ -66,7 +69,6 @@ const SHOTS = [
   { name: 'menu-flight-2', camera: null, mode: 'glyphs', tick: 1200, state: 'menu' },
   { name: 'menu-flight-3', camera: null, mode: 'glyphs', tick: 7800, state: 'menu' },
   { name: 'menu-garage', camera: null, mode: 'glyphs', tick: 5400, state: 'menu', entry: 4 },
-  { name: 'state-prerace', camera: null, mode: 'glyphs', tick: 300, state: 'prerace' },
   { name: 'state-results', camera: null, mode: 'glyphs', tick: 600, gate: 10, state: 'results' },
   { name: 'settings', camera: null, mode: 'glyphs', tick: 5400, state: 'settings' },
   { name: 'settings-edit', camera: null, mode: 'glyphs', tick: 5400, state: 'settings', edit: 'Speedy 7' },
@@ -81,6 +83,14 @@ const SHOTS = [
   // From behind, standing in the countdown: the hatch must read as part of the car.
   { name: 'race-hatchback', camera: null, mode: 'glyphs', tick: 120, shape: 'hatchback', color: 'sky' },
   { name: 'loading', camera: null, mode: 'glyphs', tick: 300, state: 'loading' },
+  // Day 329 (seed 424449): 10 gates, 1800 m. The flyover's marker runs the route in about 8 s, so 300 and 420 show
+  // it in two places.
+  { name: 'daily-prerace', camera: null, mode: 'glyphs', tick: 300, state: 'daily', day: 329 },
+  { name: 'daily-prerace-2', camera: null, mode: 'glyphs', tick: 420, state: 'daily', day: 329 },
+  { name: 'daily-finished', camera: null, mode: 'glyphs', tick: 600, gate: 10, state: 'dailyresults', day: 329 },
+  { name: 'daily-dnf', camera: null, mode: 'glyphs', tick: 5400, state: 'dailyresults', day: 329, dnf: true },
+  { name: 'daily-ready', camera: null, mode: 'glyphs', tick: 5400, state: 'dailyresults', day: 329, dnf: true, next: 0 },
+  { name: 'daily-giveup', camera: null, mode: 'glyphs', tick: 420, drive: true, state: 'dailyrace', day: 329, giveup: true },
 ];
 
 const args = process.argv.slice(2);
@@ -134,7 +144,12 @@ try {
       onError(new Error('page error'));
     });
     page.on('console', (message) => message.type() === 'error' && errors.push(message.text()));
-    const query = new URLSearchParams({ seed: String(seed), mode: shot.mode, tick: String(shot.tick), state: shot.state ?? 'race' });
+    const query = new URLSearchParams({ mode: shot.mode, tick: String(shot.tick), state: shot.state ?? 'race' });
+    if (shot.day !== undefined) query.set('day', String(shot.day));
+    else query.set('seed', String(seed));
+    if (shot.dnf) query.set('dnf', '1');
+    if (shot.next !== undefined) query.set('next', String(shot.next));
+    if (shot.giveup) query.set('giveup', '1');
     if (shot.camera) query.set('camera', shot.camera);
     if (shot.drive) query.set('drive', '1');
     if (shot.race === false) query.set('race', '0');
