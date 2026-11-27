@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dailyCitySettings, DAILY_EPOCH, DAILY_SEEDS, dailyRace, dailySeed, dayNumber, MS_PER_DAY, millisecondsToNextDay } from './daily.ts';
 import { Hasher } from './referenceRun.ts';
+import { REFERENCE_RACES, REFERENCE_SEEDS } from './referenceValues.ts';
 import type { Route } from './route.ts';
 
 const DAYS_TESTED = 1000;
@@ -39,13 +40,6 @@ describe('day number', () => {
 });
 
 describe('daily seed', () => {
-  const REFERENCE_SEEDS: [number, number][] = [
-    [0, 746813],
-    [1, 661912],
-    [329, 424449],
-    [1000, 14021],
-  ];
-
   it.each(REFERENCE_SEEDS)('is stable for day %i', (day, stored) => {
     expect(dailySeed(day)).toBe(stored);
   });
@@ -79,12 +73,6 @@ function digest(route: Route): number {
 }
 
 describe('daily race', { timeout: 30000 }, () => {
-  const REFERENCE_RACES: [number, number, number][] = [
-    // day, city and route seed, route digest
-    [0, 746813, 2422616063],
-    [329, 424449, 1818073889],
-  ];
-
   it.each(REFERENCE_RACES)('matches the stored seed and route for day %i', (day, seed, stored) => {
     const race = dailyRace(day);
     expect(race.seed).toBe(seed);
@@ -93,8 +81,8 @@ describe('daily race', { timeout: 30000 }, () => {
       [
         `The daily route of day ${day} changed.`,
         'The day number, seed derivation, city generation or route generation now gives another race, so runs recorded',
-        'before it no longer replay on the same route. Only fine if meant: replace REFERENCE_RACES here',
-        '(and bump the simulation version once it exists).',
+        'before it no longer replay on the same route. Only fine if meant: replace REFERENCE_RACES in src/game/referenceValues.ts',
+        '(and bump SIMULATION_VERSION, see version.test.ts).',
       ].join('\n'),
     ).toBe(stored);
   });

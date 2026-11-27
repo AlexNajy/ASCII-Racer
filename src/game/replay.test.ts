@@ -8,6 +8,7 @@ import { COUNTDOWN_TICKS } from './race.ts';
 import { decodeLogText, encodeLog, encodeLogText, inputCode, InputLogError, InputRecorder, type InputLog } from './inputLog.ts';
 import { replayDaily, replayInWorld, replayRun } from './replay.ts';
 import { Hasher } from './referenceRun.ts';
+import { PACKED_RACE_HASH } from './referenceValues.ts';
 import { DEFAULT_ROUTE_OPTIONS, ROUTE_LENGTHS, type RouteLengthName, type RouteOptions } from './route.ts';
 import { createRaceWorld, createWorld, startRace, stepWorld, type World } from './world.ts';
 import { enterState } from '../app/flow.ts';
@@ -143,10 +144,6 @@ describe('replay', { timeout: 30000 }, () => {
     expect(replayDaily(day, log)).toEqual({ finished: true, ticks, gates });
     expect(replayDaily(day + 1, log).finished).toBe(false);
   });
-
-  // Update on purpose only: the packed form of a recorded race. A change here means the format changed (bump
-  // INPUT_LOG_VERSION) or the recorded race did.
-  const PACKED_RACE_HASH = 3079937558;
 
   it('matches the stored hash of the packed driven race in city 1', () => {
     const bytes = encodeLog(recordedCase(CASES[0]).log);

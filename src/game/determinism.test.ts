@@ -5,6 +5,7 @@ import { advanceClock, capFrameSeconds, createClock } from './clock.ts';
 import { DEFAULT_CITY_SETTINGS } from './city.ts';
 import { cityDigest, referenceInputs, runReference, hashCar, Hasher, REFERENCE_SAMPLE_EVERY, REFERENCE_TICKS } from './referenceRun.ts';
 import { createRandom } from '../math/random.ts';
+import { REFERENCE_HASHES } from './referenceValues.ts';
 import { createWorld, stepWorld, type World } from './world.ts';
 
 const SEEDS = [1, 42];
@@ -40,12 +41,6 @@ function defaultRun(seed: number) {
   }
   return result;
 }
-
-// Update these on purpose only: they are the hash of generation plus driving for the default settings.
-const REFERENCE_HASHES: Record<number, number> = {
-  1: 3477829500,
-  42: 932636931,
-};
 
 describe('determinism', () => {
   it('gives the same car state at every sampled tick in two separately built worlds', () => {
@@ -108,8 +103,8 @@ describe('determinism', () => {
         `Reference run hash for seed ${seed} changed (${hash}, stored ${REFERENCE_HASHES[seed]}).`,
         'The simulation or the city generation now gives different results. That is only fine if it was meant:',
         'a recorded run no longer replays the same, so times recorded before it are void.',
-        'If it was meant, replace the numbers in REFERENCE_HASHES in src/game/determinism.test.ts with the new hashes',
-        '(and bump the simulation version once it exists). If not, find what changed the simulation.',
+        'If it was meant, replace the numbers in REFERENCE_HASHES in src/game/referenceValues.ts with the new hashes',
+        '(and bump SIMULATION_VERSION, see version.test.ts). If not, find what changed the simulation.',
       ].join('\n'),
     ).toBe(REFERENCE_HASHES[seed]);
   });

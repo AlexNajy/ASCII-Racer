@@ -3,6 +3,7 @@ import { CAR_WIDTH } from './car.ts';
 import { DEFAULT_CITY_SETTINGS, generateCity, type CitySettings, type Rect } from './city.ts';
 import type { Collider } from './collision.ts';
 import { Hasher } from './referenceRun.ts';
+import { REFERENCE_ROUTES } from './referenceValues.ts';
 import { otherEnd, roadGraph, turnBetween, type Point, type RoadGraph, type RoadSegment } from './roadGraph.ts';
 import {
   GATE_SPACING,
@@ -241,14 +242,6 @@ describe('route determinism', () => {
     expect(keys.size).toBeGreaterThanOrEqual(SEEDS - 2);
   });
 
-  // Update on purpose only: the daily route of a day must never change by accident.
-  const REFERENCE_ROUTES: [number, number, number][] = [
-    // city seed, route seed, hash
-    [1, 1, 1172941461],
-    [42, 42, 473546309],
-    [7, 12345, 469151771],
-  ];
-
   it.each(REFERENCE_ROUTES)('matches the stored digest for city %i route %i', (citySeed, routeSeed, stored) => {
     const route = generateRoute(roadGraph(generateCity(settings({ seed: citySeed }))), routeSeed);
     const hasher = new Hasher();
@@ -262,8 +255,8 @@ describe('route determinism', () => {
         `Route digest for city ${citySeed}, route seed ${routeSeed} changed (${hash}, stored ${stored}).`,
         'Route generation or the road graph now gives different routes. That is only fine if it was meant:',
         'the daily route of a day changes, so runs recorded before it no longer replay on the same route.',
-        'If it was meant, replace the numbers in REFERENCE_ROUTES in src/game/route.test.ts',
-        '(and bump the simulation version once it exists). If not, find what changed the routes.',
+        'If it was meant, replace the numbers in REFERENCE_ROUTES in src/game/referenceValues.ts',
+        '(and bump SIMULATION_VERSION, see version.test.ts). If not, find what changed the routes.',
       ].join('\n'),
     ).toBe(stored);
   });

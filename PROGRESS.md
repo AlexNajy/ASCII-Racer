@@ -247,3 +247,9 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 
 - `src/app/gameName.ts`: `GAME_NAME = 'driftle'`. The menu title draws `DRIFTLE` (block letters `D` and `L` added), the one-line fallback `driftle`, the page title is `driftle`, the README's heading is `# driftle` with the working name under it. Not changed: repository and Pages address, package name, the storage key.
 - A small change, checked by the lead instead of a reviewer: the diff read line by line, 423 tests, only the four menu shots differ, the title reads at a glance in `state-menu`.
+
+## 2026-11-27: step 17, simulation version
+
+- `src/game/version.ts`: `SIMULATION_VERSION = 1`. `src/game/referenceValues.ts` now holds every stored reference value (moved out of the tests unchanged: the lead compared all twelve numbers). `version.test.ts` hashes them with `INPUT_LOG_VERSION` into one fingerprint and checks it against a table of version to fingerprint: replacing a stored value without bumping the version fails with the exact line to add; a bump without a new fingerprint fails; a fingerprint can't be reused, so a bump with no change is refused. 427 tests.
+- A small change, checked by the lead instead of a reviewer; the builder tried the guard by changing a hash and by bumping the version, and undid both.
+- Limit, as before: a change no stored reference exercises trips nothing.
