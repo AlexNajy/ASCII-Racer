@@ -163,7 +163,8 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Loading line while a city builds
 - [ ] **17. Daily**: the main mode
   - [x] Day number from the UTC date, city seed and route from the day number
-  - [ ] Input recording: one input per tick packed into a compact log, and a headless replay that gives the same finish tick
+  - [x] Input recording: one input per tick packed into a compact log, and a headless replay that gives the same finish tick
+  - [ ] Name: the game is called driftle wherever a player sees it (menu title, page title, README heading; one constant for the share text and the release step to use)
   - [ ] Simulation version constant, bumped by any change to simulation or generation (a test fails when the reference run changes without it)
   - [ ] Daily flow without a backend: pre-race screen, one try kept in the browser, results with time, countdown to the next day
   - [ ] Supabase project files: migrations for attempts and runs with row level security, anonymous sign-ins, local config

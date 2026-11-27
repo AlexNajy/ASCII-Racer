@@ -2,7 +2,7 @@ import './style.css';
 import { parseUrlParams } from './dev/urlParams.ts';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, capFrameSeconds, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
-import { blendCars, CAR_WIDTH, createCar, DEFAULT_CAR_SETTINGS, type CarSettings, type Impact } from './game/car.ts';
+import { blendCars, CAR_WIDTH, createCar, DEFAULT_CAR_SETTINGS, type Car, type CarSettings, type Impact } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import {
@@ -18,8 +18,10 @@ import { FENCE_HEIGHT } from './game/fences.ts';
 import { lotPavements } from './game/lots.ts';
 import { POND_RADIUS } from './game/park.ts';
 import { signalPhase } from './game/signals.ts';
-import type { Route } from './game/route.ts';
-import { goTick, raceTicks } from './game/race.ts';
+import { generateRoute, type Route } from './game/route.ts';
+import { goTick, raceTicks, type Race } from './game/race.ts';
+import { decodeLogText, encodeLogText, InputRecorder } from './game/inputLog.ts';
+import { replayInWorld } from './game/replay.ts';
 import { createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorld, type CityData } from './game/world.ts';
 import { dailyRace, dayNumber } from './game/daily.ts';
 import { cityRoute, enterState, randomCitySeed, seedRoute, unlimitedRoute } from './app/flow.ts';
@@ -629,11 +631,15 @@ if (urlParams.gate !== null && world.race && !finishAtStart) {
   if (urlParams.gate > world.race.route.gates.length) throw new Error(`URL parameter gate: the route has ${world.race.route.gates.length} gates`);
   world.race.nextGate = urlParams.gate;
 }
-if (urlParams.car) {
+function placeUrlCar(target: typeof world) {
+  if (!urlParams.car) return;
   const { x, z, quarterTurns } = urlParams.car;
-  world.car = createCar(x, z, (quarterTurns * Math.PI) / 2);
-  world.previousCar = { ...world.car };
+  target.car = createCar(x, z, (quarterTurns * Math.PI) / 2);
+  target.previousCar = { ...target.car };
 }
+placeUrlCar(world);
+// gate= and car= changed this race at its start; a replay of it does the same.
+const urlChangedRace = urlParams.gate !== null || urlParams.car ? world.race : null;
 // A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
 const heldTick = urlParams.tick;
 const heldInput = urlParams.drive && gameState.kind === 'race' ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
@@ -932,6 +938,32 @@ window.addEventListener(
   { capture: true },
 );
 let carInput = NO_INPUT;
+// The inputs of the race being driven, one per tick it reads them.
+const recorder = new InputRecorder();
+let recordedRace: Race | null = null;
+
+// In dev builds and with replay=1: the finished race's log, packed and unpacked, replayed headless as a server would.
+function checkReplay(race: Race, car: Car) {
+  const decoded = decodeLogText(encodeLogText(recorder.log()));
+  if (!decoded.ok) {
+    console.log(`replay: the log was refused (${decoded.fault})`);
+    return;
+  }
+  const started = performance.now();
+  const replayWorld = createWorld({ ...citySettings }, { ...carSettings }, false);
+  startRace(replayWorld, generateRoute(replayWorld.roadGraph, race.route.seed, { length: race.route.target }));
+  if (race === urlChangedRace) {
+    if (urlParams.gate !== null) replayWorld.race!.nextGate = urlParams.gate;
+    placeUrlCar(replayWorld);
+  }
+  const result = replayInWorld(replayWorld, decoded.log);
+  const replayed = result.finished ? String(result.ticks) : `none (${result.reason})`;
+  const ms = Math.round(performance.now() - started);
+  const sameCar = JSON.stringify(replayWorld.car) === JSON.stringify(car);
+  console.log(
+    `replay: finish tick live ${raceTicks(race, world.tick)} vs replay ${replayed}, car ${sameCar ? 'same' : 'different'}, ${decoded.log.length} ticks, ${encodeLogText(decoded.log).length} characters, ${ms} ms`,
+  );
+}
 
 // Larger than needed up close, so the depth buffer keeps precision for curbs and markings far away.
 const NEAR_PLANE = 0.5;
@@ -947,7 +979,18 @@ function frame(timeMs: number) {
   previousTimeMs = Math.max(previousTimeMs, timeMs);
   if (heldTick === null) advanceClock(clock, dt, () => {
     carInput = settings.movement === Movement.Car && gameState.kind === 'race' ? readCarInput() : NO_INPUT;
-    const { impact } = stepWorld(world, carInput);
+    const reading = world.race?.phase === 'running' ? world.race : null;
+    const { impact, race: raceEvent } = stepWorld(world, carInput);
+    if (reading) {
+      if (reading !== recordedRace) recorder.reset();
+      recordedRace = reading;
+      recorder.record(carInput);
+    }
+    if (raceEvent?.kind === 'finish' && (import.meta.env.DEV || urlParams.replay)) {
+      const finished = world.race!;
+      const car = { ...world.car };
+      setTimeout(() => checkReplay(finished, car));
+    }
     if (impact) crashDebris(impact);
     driftParticles();
     const next = afterTick(gameState, world.race, world.tick);

@@ -17,6 +17,7 @@ export interface UrlParams {
   tick: number | null; // the world is stepped to this tick with no input and then held
   shot: boolean; // mark the canvas when a frame has been drawn
   drive: boolean; // the held tick's stepping holds full throttle instead of no input
+  replay: boolean; // at the finish, replay the recorded inputs headless and log both finish ticks (always in dev builds)
   hud: 'test' | null; // fill the text layer with a test card
   cellWidth: number | null; // CSS px, as the dev menu's cell width
   race: boolean; // race=0: the race state drives freely from the middle junction instead of on the city seed's route
@@ -135,6 +136,7 @@ export function parseUrlParams(search: string): UrlParams {
     tick: tickNumber,
     shot: query.has('shot') || tick !== null,
     drive: query.get('drive') === '1',
+    replay: query.get('replay') === '1',
     hud,
     cellWidth,
     race: race !== '0',

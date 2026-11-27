@@ -1,4 +1,4 @@
-# ASCII Racer: the finished game
+# Driftle: the finished game
 
 What the game is when it is done. The roadmap in `README.md` is the order it gets built in; `CLAUDE.md` says how the code works and how the loop works. Where this file is silent, pick the simplest thing that fits, and write it under "Decisions made along the way" at the bottom.
 
@@ -8,12 +8,14 @@ A daily timed race through a generated city, the same route for everyone, one tr
 
 Desktop browsers with a keyboard. No accounts. The client is a static site.
 
+The game is called **driftle**. That is the name a player sees everywhere: the menu title, the page title, the share text, the social preview, the README's heading. "ASCII Racer" is only the working name of the repository and the code.
+
 ## Main menu
 
 Drawn in the glyph grid with the HUD's text layer, over a slow camera flight through today's city. Up/down and Enter, or the mouse.
 
 ```
-ascii racer
+driftle
 
 daily
 unlimited
@@ -147,3 +149,8 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 - Step 17: a day whose city can't hold a route falls to attempt 1, 2... (up to 20, then an error); none of days 0 to 999 needs it.
 - Step 17: days before 2026-01-01 UTC have negative numbers and work the same.
 - Step 17: the game starts in today's city (read once from the clock), so the menu flies through it; after an unlimited race the menu keeps flying through the last loaded city instead of reloading today's.
+- Step 17: a run's input log holds one input per tick from go (the first tick whose input is read) to the tick the finish is crossed in, so its length is the race time; the countdown is not in it.
+- Step 17: inputs are logged as the keyboard makes them (throttle, brake, drift on or off, steer left, none or right: 24 combinations, all possible with the keys, so all accepted); a log can't hold anything analogue.
+- Step 17: a run longer than the timer's 9:59.983 (35 999 ticks) is not valid; a packed log is then at most 36 003 bytes, 48 004 characters as base64url text.
+- Step 17: the server's replay accepts a run only if the finish is crossed on the log's last tick: a log that ends before the finish, or goes on after it, is rejected.
+- Step 17: a log has exactly one valid encoding (shortest lengths, no split runs, no padding); any other form is rejected, not repaired.

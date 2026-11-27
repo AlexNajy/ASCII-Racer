@@ -195,8 +195,12 @@ export interface DrivenRace {
   inputs: CarInput[]; // one per tick from the world's tick at the call, countdown included
 }
 
-// Drives the world's race until the finish or until `maxTicks` ticks have passed.
-export function driveRace(world: World, maxTicks: number): DrivenRace {
+// Steering with keys: full lock or none each tick, the difference carried over, so it adds up to the driver's.
+const KEY_STEER_THRESHOLD = 0.5;
+
+// Drives the world's race until the finish or until `maxTicks` ticks have passed. With `keys` the steering is tapped
+// as on a keyboard, so every input is one the keyboard can make.
+export function driveRace(world: World, maxTicks: number, keys = false): DrivenRace {
   const { race } = world;
   if (!race) throw new Error('no race to drive');
   const state = createDriver();
@@ -204,8 +208,15 @@ export function driveRace(world: World, maxTicks: number): DrivenRace {
   const events: RaceEvent[] = [];
   let impacts = 0;
   let distance = 0;
+  let steerLeft = 0;
   while (race.phase !== 'finished' && inputs.length < maxTicks) {
-    const input = driverInput(world, state);
+    let input = driverInput(world, state);
+    if (keys) {
+      steerLeft += input.steer;
+      const steer = steerLeft >= KEY_STEER_THRESHOLD ? 1 : steerLeft <= -KEY_STEER_THRESHOLD ? -1 : 0;
+      steerLeft -= steer;
+      input = { ...input, steer };
+    }
     inputs.push(input);
     const { x, z } = world.car;
     const result = stepWorld(world, input);
