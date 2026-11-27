@@ -13,6 +13,37 @@ export const AWNING: readonly Vec3[] = [[0.75, 0.15, 0.15], [0.15, 0.5, 0.35], [
 export const CAR_PAINT: readonly Vec3[] = [[0.7, 0.12, 0.12], [0.15, 0.3, 0.65], [0.75, 0.75, 0.78], [0.2, 0.2, 0.22], [0.75, 0.6, 0.15], [0.15, 0.5, 0.45]];
 export const ROOF_GREY: Vec3 = [0.3, 0.3, 0.32];
 
+// The player's paint, picked in the garage. The id is what is stored and sent, so it never changes. Brightness
+// (0.299 r + 0.587 g + 0.114 b) stays between 0.35 and 0.55, so every colour gives similar glyphs. `skirt` is the
+// dark band along the bottom.
+export interface CarColor {
+  id: string;
+  body: Vec3;
+  skirt: Vec3;
+}
+
+const SKIRT_SHADE = 0.25;
+const paint = (id: string, body: Vec3, skirt: Vec3 = [body[0] * SKIRT_SHADE, body[1] * SKIRT_SHADE, body[2] * SKIRT_SHADE]): CarColor => ({
+  id,
+  body,
+  skirt,
+});
+
+export const CAR_COLORS: readonly CarColor[] = [
+  paint('ember', [0.85, 0.15, 0.1], [0.2, 0.05, 0.04]),
+  paint('tangerine', [0.9, 0.32, 0.03]),
+  paint('gold', [0.62, 0.56, 0.06]),
+  paint('lime', [0.38, 0.64, 0.09]),
+  paint('jade', [0.15, 0.62, 0.18]),
+  paint('teal', [0.06, 0.6, 0.52]),
+  paint('sky', [0.2, 0.62, 0.95]),
+  paint('cobalt', [0.3, 0.38, 1]),
+  paint('violet', [0.55, 0.25, 0.95]),
+  paint('magenta', [0.85, 0.15, 0.85]),
+  paint('rose', [0.92, 0.34, 0.58]),
+  paint('silver', [0.5, 0.52, 0.57]),
+];
+
 // Saturated, so neon shows colour even at the dim end of its ramp. Neighbourhoods get a run of this list,
 // so a street stays in one colour family.
 export const NEON: readonly Vec3[] = [
@@ -28,4 +59,9 @@ export const NEON: readonly Vec3[] = [
 export function neonFamily(neighbourhood: number): Vec3[] {
   const start = Math.floor(neighbourhood * NEON.length);
   return [0, 1, 2].map((i) => NEON[(start + i) % NEON.length]);
+}
+
+// The colour with this id, the first one for an unknown id.
+export function carColor(id: string): CarColor {
+  return CAR_COLORS.find((color) => color.id === id) ?? CAR_COLORS[0];
 }

@@ -7,6 +7,7 @@ import type { SkySettings } from '../render/sky.ts';
 // CSS px.
 export const CELL_WIDTH_MIN = 4;
 export const CELL_WIDTH_MAX = 16;
+export const DEFAULT_CELL_WIDTH = 6;
 
 export const RenderMode = {
   Glyphs: 0,
@@ -52,7 +53,7 @@ export interface DevSettings {
   coverageDimming: number; // how much a partly covered cell dims by the share covered, 0 to 1
 }
 
-type NumberSetting =
+export type NumberSetting =
   | 'fovDegrees'
   | 'cellWidth'
   | 'viewDistance'
@@ -73,6 +74,9 @@ type NumberSetting =
 
 export interface DevMenu {
   setInfo(text: string): void;
+  isOpen(): boolean;
+  // Shows a setting changed from outside the dev menu.
+  refresh(key: NumberSetting): void;
 }
 
 export function createDevMenu(
@@ -136,7 +140,7 @@ export function createDevMenu(
     max: number,
     step: number,
     onInput: (value: number) => void,
-  ) {
+  ): (value: number) => void {
     const row = document.createElement('label');
     const text = document.createElement('span');
     const input = document.createElement('input');
@@ -152,7 +156,13 @@ export function createDevMenu(
     });
     row.append(text, input);
     parent.append(row);
+    return (shown) => {
+      input.value = String(shown);
+      text.textContent = `${label}: ${shown}`;
+    };
   }
+
+  const refreshers: Partial<Record<NumberSetting, (value: number) => void>> = {};
 
   function settingSlider(
     parent: HTMLElement,
@@ -162,7 +172,7 @@ export function createDevMenu(
     max: number,
     step: number,
   ) {
-    slider(parent, label, settings[key], min, max, step, (value) => {
+    refreshers[key] = slider(parent, label, settings[key], min, max, step, (value) => {
       settings[key] = value;
       onChange(key);
     });
@@ -309,13 +319,7 @@ export function createDevMenu(
   }
 
   dropdown(viewPage, 'Render mode', 'renderMode', RenderMode);
-  const movementSelect = dropdown(viewPage, 'Movement', 'movement', Movement);
-  window.addEventListener('keydown', (event) => {
-    if (event.code !== 'KeyC') return;
-    settings.movement = settings.movement === Movement.FlyCamera ? Movement.Car : Movement.FlyCamera;
-    movementSelect.value = String(settings.movement);
-    onChange('movement');
-  });
+  dropdown(viewPage, 'Movement', 'movement', Movement);
 
   const noclipRow = document.createElement('label');
   noclipRow.className = 'checkbox';
@@ -368,5 +372,7 @@ export function createDevMenu(
     setInfo(text) {
       if (!panel.hidden) info.textContent = text;
     },
+    isOpen: () => !panel.hidden,
+    refresh: (key) => refreshers[key]?.(settings[key]),
   };
 }

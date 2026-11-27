@@ -20,14 +20,21 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
 
 ## Controls
 
-- Click: capture the mouse to look around (`Esc` releases it)
+- Menu and finish screen: `Up` / `Down` or `W` / `S` to choose (wraps round), `Enter` to pick; or point at an entry and click
+- Settings: `Up` / `Down` or `W` / `S` to choose, `Left` / `Right` or `A` / `D` to change volume and glyph size, `Enter` to switch mute and fullscreen or to type a nickname (`Enter` saves, `Esc` cancels); clicks work too (on the volume bar, on the glyph size's `<` `>`); saved in the browser. Its key list is `src/app/keys.ts`, the same as this list
+- Garage: `Up` / `Down` or `W` / `S` to choose shape or colour, `Left` / `Right` or `A` / `D` to change it (wraps round), or click its `<` `>`; the car turns on a lit spot and shows each change at once; saved in the browser and used in every race
+- Unlimited: a new random city and route each time; after the finish, `again` (same route), `next` (new city and route) or `menu`
+- `Esc`: back to the menu (and releases the mouse)
+- `W` / `S` or arrow keys: throttle / brake, `A` / `D`: steer, `Space`: drift
+- Click (outside the menu and the finish screen): capture the mouse to look around
+- `H`: headlights on and off
 - `F`: toggle fullscreen
-- `C`: switch between the fly camera and driving the car
-- `W` / `S`: fly forward / back along the view direction
-- `A` / `D`: fly left / right
-- `Space` / `Shift`: fly up / down
-- `Q` (hold): fly 5× faster
-- `E` (hold): fly 10× faster
+- Fly camera (switched on in the dev menu, View page, Movement):
+  - `W` / `S`: fly forward / back along the view direction
+  - `A` / `D`: fly left / right
+  - `Space` / `Shift`: fly up / down
+  - `Q` (hold): fly 5× faster
+  - `E` (hold): fly 10× faster
 - `` ` `` (backtick): toggle the dev menu, which frees the mouse while open (camera position, FOV, cell size, view distance, fog start, samples per cell, render mode, movement; city and building sliders on their own pages)
 
 ## Roadmap
@@ -147,13 +154,13 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Test driver: a simple waypoint follower that finishes any route headless, used by the tests to prove routes can be driven and to tune `ROUTE_LENGTH`
   - [x] Pinned car: a fast sideways slide onto the pavement can leave a street-light pole inside the car's outline against the building, holding it for half a minute or more; the car must never end up wedged
   - [x] Wall seams: where two building rectangles touch along a flat wall, the seam acts like a corner and turns a sideways slide into speed along the wall; a flat wall made of several colliders must behave like one
-- [ ] **16. Menu and unlimited**
-  - [ ] Game states: menu, pre-race, race, results, with the dev fly camera kept behind the dev menu
-  - [ ] Main menu on the text layer over a camera flight through the city
-  - [ ] Unlimited: random city and route, finish screen with again, next and menu
-  - [ ] Settings: nickname, volume, glyph size, fullscreen, key list, saved in the browser
-  - [ ] Garage: body shapes on the same collision box, colour list, turning preview, saved in the browser
-  - [ ] Loading line while a city builds
+- [x] **16. Menu and unlimited**
+  - [x] Game states: menu, pre-race, race, results, with the dev fly camera kept behind the dev menu
+  - [x] Main menu on the text layer over a camera flight through the city
+  - [x] Unlimited: random city and route, finish screen with again, next and menu
+  - [x] Settings: nickname, volume, glyph size, fullscreen, key list, saved in the browser
+  - [x] Garage: body shapes on the same collision box, colour list, turning preview, saved in the browser
+  - [x] Loading line while a city builds
 - [ ] **17. Daily**: the main mode
   - [ ] Day number from the UTC date, city seed and route from the day number
   - [ ] Input recording: one input per tick packed into a compact log, and a headless replay that gives the same finish tick

@@ -47,7 +47,7 @@ export interface TickResult {
   race: RaceEvent | null;
 }
 
-const START_HEADING = 0;
+export const START_HEADING = 0;
 
 // The middle junction. Avenues are wider than streets, so it is not always at the origin.
 export function startJunction(city: City): Junction {

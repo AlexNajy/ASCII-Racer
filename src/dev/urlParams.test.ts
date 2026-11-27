@@ -5,7 +5,7 @@ import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null, car: null });
+    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', entry: null, edit: null, shape: null, color: null });
   });
 
   it('reads drive=1 and nothing else as driving', () => {
@@ -20,6 +20,50 @@ describe('parseUrlParams', () => {
     expect(parseUrlParams('?race=0').race).toBe(false);
     expect(() => parseUrlParams('?race=')).toThrow();
     expect(() => parseUrlParams('?race=no')).toThrow();
+  });
+
+  it('starts on the state given, the menu by default', () => {
+    expect(parseUrlParams('').state).toBe('menu');
+    expect(parseUrlParams('?state=menu').state).toBe('menu');
+    expect(parseUrlParams('?state=prerace').state).toBe('preRace');
+    expect(parseUrlParams('?state=race').state).toBe('race');
+    expect(parseUrlParams('?state=results').state).toBe('results');
+    expect(parseUrlParams('?state=loading').state).toBe('loading');
+    expect(() => parseUrlParams('?state=')).toThrow();
+    expect(() => parseUrlParams('?state=preRace')).toThrow();
+    expect(() => parseUrlParams('?state=toString')).toThrow();
+  });
+
+  it('selects a menu entry by its place in the list', () => {
+    expect(parseUrlParams('?entry=0').entry).toBe(0);
+    expect(parseUrlParams('?entry=5').entry).toBe(5);
+    for (const bad of ['', '6', '-1', '1.5', 'garage']) expect(() => parseUrlParams(`?entry=${bad}`)).toThrow();
+  });
+
+  it('selects a finish screen option with state=results', () => {
+    expect(parseUrlParams('?state=results&entry=2').entry).toBe(2);
+    expect(() => parseUrlParams('?state=results&entry=3')).toThrow();
+  });
+
+  it('starts on the settings with a row selected and a nickname being typed', () => {
+    expect(parseUrlParams('?state=settings').state).toBe('settings');
+    expect(parseUrlParams('?state=settings&entry=4').entry).toBe(4);
+    expect(() => parseUrlParams('?state=settings&entry=5')).toThrow();
+    expect(parseUrlParams('?state=settings&edit=Speedy%207').edit).toBe('Speedy 7');
+    expect(parseUrlParams('?state=settings&edit=').edit).toBe('');
+    expect(parseUrlParams('?state=settings').edit).toBeNull();
+    for (const bad of ['?edit=abc', '?state=menu&edit=abc', '?state=settings&edit=abcdefghijklm', '?state=settings&edit=a_b']) {
+      expect(() => parseUrlParams(bad)).toThrow();
+    }
+  });
+
+  it('starts in the garage with a row selected, and picks the car', () => {
+    expect(parseUrlParams('?state=garage').state).toBe('garage');
+    expect(parseUrlParams('?state=garage&entry=1').entry).toBe(1);
+    expect(() => parseUrlParams('?state=garage&entry=2')).toThrow();
+    const car = parseUrlParams('?shape=pickup&color=teal');
+    expect([car.shape, car.color]).toEqual(['pickup', 'teal']);
+    for (const bad of ['?shape=', '?shape=Van', '?shape=truck', '?color=', '?color=red', '?color=Teal']) expect(() => parseUrlParams(bad)).toThrow();
   });
 
   it('accepts whole gate numbers from 0', () => {

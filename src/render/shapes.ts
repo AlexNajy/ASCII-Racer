@@ -110,6 +110,18 @@ function triangle(a: Vec3, b: Vec3, c: Vec3, outside: Vec3, color: Vec3, emissio
   return vertices;
 }
 
+// A flat convex polygon, corners in order, as a fan of triangles from the first corner.
+export function polygon(corners: readonly Vec3[], normal: Vec3, color: Vec3, emission = 0): number[] {
+  if (skipVertices) return [];
+  const vertices: number[] = [];
+  for (let i = 1; i + 1 < corners.length; i++) {
+    for (const point of [corners[0], corners[i], corners[i + 1]]) {
+      vertices.push(...point, ...color, ...normal, emission, NO_ID, MATERIAL.default, ...NO_FACADE);
+    }
+  }
+  return vertices;
+}
+
 // A roof over a rectangle rising to a ridge `inset` shorter than its long side at each end; half its short side makes
 // a pyramid. Four sloped faces.
 export function hipRoof(x0: number, z0: number, x1: number, z1: number, bottom: number, height: number, inset: number, color: Vec3, emission = 0): number[] {
@@ -300,7 +312,8 @@ export function disc(
 }
 
 // A flat regular polygon lying on the ground and facing up (ponds), as a fan of triangles from the centre.
-export function flatDisc(centre: Vec3, radius: number, sides: number, color: Vec3, emission = 0): number[] {
+// With `rimColor` the colour fades from `color` in the middle to it at the edge.
+export function flatDisc(centre: Vec3, radius: number, sides: number, color: Vec3, emission = 0, rimColor = color): number[] {
   if (skipVertices) return [];
   const rim = (corner: number): Vec3 => {
     const angle = (2 * Math.PI * corner) / sides;
@@ -308,8 +321,36 @@ export function flatDisc(centre: Vec3, radius: number, sides: number, color: Vec
   };
   const vertices: number[] = [];
   for (let corner = 0; corner < sides; corner++) {
-    for (const point of [centre, rim(corner), rim(corner + 1)]) {
-      vertices.push(...point, ...color, 0, 1, 0, emission, NO_ID, MATERIAL.default, ...NO_FACADE);
+    for (const [point, shade] of [[centre, color], [rim(corner), rimColor], [rim(corner + 1), rimColor]]) {
+      vertices.push(...point, ...shade, 0, 1, 0, emission, NO_ID, MATERIAL.default, ...NO_FACADE);
+    }
+  }
+  return vertices;
+}
+
+// A flat ring on the ground facing up, between `inner` and `outer` radius, fading from `innerColor` to `outerColor`.
+export function flatRing(
+  centre: Vec3,
+  inner: number,
+  outer: number,
+  sides: number,
+  innerColor: Vec3,
+  outerColor: Vec3,
+  emission = 0,
+): number[] {
+  if (skipVertices) return [];
+  const at = (corner: number, radius: number): Vec3 => {
+    const angle = (2 * Math.PI * corner) / sides;
+    return along(centre, [[1, 0, 0], Math.cos(angle) * radius], [[0, 0, 1], -Math.sin(angle) * radius]);
+  };
+  const vertices: number[] = [];
+  for (let corner = 0; corner < sides; corner++) {
+    const a: [Vec3, Vec3] = [at(corner, inner), innerColor];
+    const b: [Vec3, Vec3] = [at(corner, outer), outerColor];
+    const c: [Vec3, Vec3] = [at(corner + 1, outer), outerColor];
+    const d: [Vec3, Vec3] = [at(corner + 1, inner), innerColor];
+    for (const [point, shade] of [a, b, c, a, c, d]) {
+      vertices.push(...point, ...shade, 0, 1, 0, emission, NO_ID, MATERIAL.default, ...NO_FACADE);
     }
   }
   return vertices;

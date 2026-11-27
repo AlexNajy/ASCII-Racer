@@ -164,3 +164,64 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Reviewer passed it: 32 000 random cut walls bit-identical to one rectangle (the old code differed in 5444, by up to 42 m); about 80 000 slides into the real joints of seeds 7 and 42 each identical to the merged box; no phantom walls across alleys or at set-back steps; no traps. About 10% slower in constant wall contact (135 000 ticks/s).
 - Known and left: a wedged car can rest 1 mm to 5 cm inside a collider (the 4-pass limit), same before this change; the many-pieces test doesn't assert that its slides hit.
 - Step 15 is complete: `npm run shots` gives 23 pictures, the lead looked at the race ones.
+
+## 2026-11-25: step 15 merged, step 16 game states
+
+- Step 15 merged as PR #18 and deployed. Branch `menu` for step 16.
+- Game states: `src/app/gameState.ts` (menu, preRace, race, results as plain data with pure transitions; a `RaceMode` with only `cityRoute` so far), `src/app/flow.ts` (what entering a state does to the world), `src/hud/screens.ts` (placeholder screens on the text layer). The game opens on the menu; Enter goes menu, pre-race, race; results come 5 s after the finish; Esc goes to the menu. Nothing in the simulation knows about it.
+- Keys gone: `C` (the fly camera is only the dev menu's Movement dropdown) and `R` (restart returns with unlimited's "again").
+- URL parameter `state=menu|prerace|race|results`; `scripts/shots.mjs` passes `state=race`, the 23 old shots are byte-identical, new shots `state-menu`, `state-prerace`, `state-results`. 242 tests.
+- Reviewer passed it and walked it in headless Chrome with the real clock: menu, pre-race, countdown, driving, Esc, a second clean race, a real finish, the results coming up by themselves, back to the menu; no console errors.
+- To check by hand in a real browser (headless can't): with the mouse captured, Chrome probably uses the first Esc to free the pointer without sending the key to the page, so leaving a race may take two presses.
+- For the real menu: the placeholder text has no background and is faint over a bright scene; Enter does nothing on a city without a route and the menu should say why; Enter and Esc also act while the dev menu is open.
+
+## 2026-11-25: step 16, main menu and camera flight
+
+- `src/app/mainMenu.ts` (the six entries in one table; only `unlimited` works and opens the placeholder race flow, the rest are dimmed until built), `src/hud/menuScreen.ts` (title `ASCII RACER` in the block font, the list in a solid panel, `>` `<` in yellow round the selection), `src/app/pointer.ts` (mouse position to grid cell), `src/render/menuFlight.ts` (a closed loop of roads two junctions out from the middle, 12 m up, 8 m/s, a pure function of the tick). Arrows or W/S move the selection and wrap, Enter or a click opens, hover selects; the pointer is never captured in the menu. The car and its headlights are hidden there.
+- URL parameter `entry=0..5`; shots `state-menu` (new picture), `menu-flight-2`, `menu-flight-3`, `menu-garage`; the other 25 byte-identical. 273 tests.
+- Reviewer passed it (walk-through at pixel ratio 1 and 2, flight geometry checked against poles and kerbs) with four low findings, all fixed by a second builder and checked by the lead: a selection change no longer re-enters the state (it wrote the car and cleared the text layer on every hover); one click handler decides between menu and pointer lock; flow keys are ignored while the dev menu is open; the selection markers stay yellow on a dimmed entry.
+- Look, left as is: the flight is mostly one composition (a street between window walls); weakest at corners facing dim mid-rises (seed 1 ticks 2200, 8750), best past the park and open junctions (6700, 4480). A higher or panning camera would add variety. The list is normal cell size, small next to the title.
+- Until step 17 the menu flies through the current city seed, not the day's.
+
+## 2026-11-25: step 16, unlimited (built, not reviewed, not ticked)
+
+- Built: `RaceMode` is `unlimited`. Choosing it in the menu picks a random seed (1 to 1 000 000, `Math.random` only in `randomCitySeed` in `src/app/flow.ts`), skips seeds whose route throws `RouteError` (10 tries), loads that city (`loadCity()` in `main.ts`, the one function the loading line can wrap) and goes straight to the countdown, no pre-race screen. `src/hud/finishScreen.ts`: the time in big block digits and `again` (same route), `next` (new city and route), `menu`, with keys and mouse as in the main menu; `menuScreen.ts` generalised to a list screen for both.
+- Builder's numbers, not confirmed: only `state-results` changed among the shots, the other 28 byte-identical; nothing random under the shot URL parameters; a new city freezes the page for about 0.5 s in headless Chrome; its walk-through covered unlimited twice (different seeds), a finish, `again`, and `next` from a fresh load, without console errors, but never a second finish after `again`.
+- State: committed on `menu` because the owner said stop; the review had died (the Mac went to sleep mid-review, in spite of `caffeinate -i`, probably the lid). The lead ran `npm run check` (291 tests, passes) and looked at `state-results`: the time reads well, the options panel sits over the car. The sub-step stays unticked: the next `/go` starts by sending this commit to the reviewer (stale state after a new city, GL buffers freed on repeated `next`, the pre-check city being the city loaded, keys held across transitions, mouse at pixel ratio 2, shots against a `HEAD~1` baseline).
+
+## 2026-11-25: session stopped by the owner
+
+- Done this session: step 15 finished and merged (PR #18, deployed): test driver reviewed, the car's collision shape made a capsule resolved in short steps (pinned car), flat walls of several colliders behave like one (wall seams). Step 16 on branch `menu`: game states and the main menu with its camera flight reviewed and ticked; unlimited committed but unreviewed.
+- Open for the owner: whether Pages should keep publishing on every merge (still unanswered; the live site has step 15 and still starts straight in a race); a slide can park the car in a slot barely longer than itself, getting out is a multi-point shuffle of 8 s or more (a quicker way out would be a new driving rule, not built); the menu flight is mostly one composition; the menu list is normal cell size; the finish screen's options sit over the car.
+- To try by hand in a real browser, since nothing has been: Esc with the mouse captured (probably two presses to leave a race), and everything else.
+- Next: review the unlimited commit, tick it, then "Settings", "Garage", "Loading line", and step 16's pull request.
+
+## 2026-11-26: step 16, unlimited reviewed
+
+- Reviewer passed commit `14f25a0` as it stands, with a real-clock walk-through: unlimited into new cities (a dozen different seeds, the new city's route on the gates and minimap), a real finish, the results by themselves, `again` back at the start with the gates reset while W was held, `next` into another city, Esc in the countdown, the mouse at pixel ratio 1 and 2; no console errors. The route checked before loading is exactly the route raced. Memory flat over 10 more cities (85.2 to 85.8 MB), every GL object of the old city deleted. `Math.random` only in `randomCitySeed`. Only `state-results` differs from the shots before. A new city blocks for about 0.5 s.
+- Left: sparks or debris thrown just before `again` or `next` fly on for under a second; the finish screen's options sit on the car (moving the list up under the time would group it, the owner's call).
+- The Mac sleeping: `caffeinate` now runs with `-ims`.
+
+## 2026-11-26: step 16, settings
+
+- `src/app/settings.ts` (nickname, volume 0 to 10, mute, cell width; parsed field by field with fallbacks, one `localStorage` key `ascii-racer-settings`, safe when storage throws; a new field is a row in `FIELDS`), `src/app/settingsMenu.ts` (what keys and clicks do), `src/app/keys.ts` (the one key table), `src/hud/settingsScreen.ts`. A `settings` game state opened from the menu (menu entries can now open a screen as well as a race mode), Esc back. The nickname is typed in place; volume and mute are only stored until sound exists; glyph size applies live and is one value with the dev menu's slider; fullscreen is not stored.
+- URL parameters `state=settings`, `edit=TEXT`; shots `settings`, `settings-edit`. Shots neither read nor write stored settings. The four menu shots changed only where the `settings` label went from dimmed to enabled. 330 tests at review, more after the fixes.
+- Reviewer passed it (hostile stored data, awkward typing, every row by keys and mouse at pixel ratio 1 and 2, after glyph size changes and a window resize, reload, no console errors) with three low findings, fixed by a second builder and checked by the lead: a stored glyph size of 16 in a small window drew no menu at all (now a compact last style for the menu, finish and settings screens: they draw down to 352×352, 240×268 and 560×352 px at size 16); the key list lacked the mouse; Alt combinations leaked while typing a nickname.
+- To check by hand in a real browser: Esc in fullscreen (the browser probably takes the first press), dead keys and IME input in the nickname field.
+
+## 2026-11-26: step 16, garage
+
+- `render/models/car.ts`: five shapes (`coupe`, today's car vertex for vertex; `hatchback`, `pickup`, `van`, `wedge`), all inside the collision box on the same wheel spots; `palettes.ts`: twelve named colours (`ember`, the old red, first). Stored as string ids `carShape` and `carColor` in the settings. A `garage` game state from the menu: rows shape and colour, Left/Right or the `<` `>` arrows cycle, saved at once. The preview is its own dark scene (`render/garage.ts`): the car turns once per 16 s on a glowing floor, own light, headlights off; `world.car` is never touched. Drawing only: nothing under `src/game/` changed.
+- URL parameters `state=garage`, `shape=`, `color=`; shots `garage`, `garage-hatchback`, `garage-pickup`, `garage-van`, `garage-wedge`, `race-pickup`, `race-hatchback`. Old shots unchanged except the four menu ones (the `garage` label enabled). 365 tests.
+- Review: `fix`. From behind in the city the hatchback was a low box with a roof floating above it (a full-width hatch of unlit glass renders as empty cells in moonlight; fine in the garage's light, so only chase pictures showed it). Everything else passed (every vertex in the box, normals right, the menu pixel-identical after a visit to the garage, mouse at pixel ratio 2).
+- Second builder, checked by the lead in the pictures: cabins of hatchback, pickup and wedge are painted with windows set in; the pickup's bed rails were higher than the cab's body, now lower, so the bed shows from behind; the wedge's wing posts are painted; the lit spot is a bright disc fading through a ring in its own `garageFloor` glyph set (it was faint dots); eight colours moved apart (sky/cobalt, jade/teal, magenta/rose, gold/tangerine).
+- Still weak: the coupe's glass cabin shows a dark gap from the shaded side (kept byte-identical to the old car); magenta and violet are now the closest pair; gold is a bit olive at night; the floor reads as a patterned disc more than a soft glow; tail lights vanish on the red car from behind, as before.
+
+## 2026-11-26: step 16, loading line; step 16 done
+
+- A `loading` game state (`loading(mode)`, `loaded(state, route)`), `hud/loadingScreen.ts` (`building city...` on a solid block). The menu's unlimited and the finish screen's `next` go through it: one frame with the line on an empty scene, then the city and route build in a task, then the countdown. At startup the renderer, atlas and text grid come first, the line is presented, then the world is built (`main.ts` now has a top-level `await`). Enter and Esc are ignored while loading. The frame timer restarts after a build, so the countdown is a full 3 s (the first frame after a build used to run 6 ticks at once).
+- URL parameter `state=loading`, shot `loading`; the 38 older shots byte-identical. 371 tests. Nothing under `src/game/` changed.
+- Reviewer passed it on the built site: the line is painted before the build blocks (screencast at 4x CPU throttle), menu after 0.56 s on first load (1.8 s throttled), 59.9 ticks/s in menu and race, a 1 s stall mid-race runs 13 ticks in 1.1 s, the countdown after a load takes 2.993 s. Top-level `await` survives the production build.
+- Lead's own small fix from the review: a build that throws goes back to the menu instead of being retried every frame.
+- Left: a click on the loading line captures the mouse (the race does anyway); an Esc pressed during the blocking build arrives afterwards and leaves the countdown for the menu; a startup error leaves the loading line up (it used to leave a black screen), the error is in the console.
+- Step 16 is complete; `npm run shots` gives 39 pictures.
