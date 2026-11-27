@@ -183,6 +183,13 @@ describe('give-up question', () => {
     }
   });
 
+  it('can be shown on every grid at least as wide as the question, the smallest the game draws included', () => {
+    expect(giveUpShown(22, 12)).toBe(true);
+    expect(giveUpShown('give up?'.length, 1)).toBe(true);
+    expect(giveUpShown('give up?'.length - 1, 30)).toBe(false);
+    expect(giveUpShown(80, 0)).toBe(false);
+  });
+
   it('stays clear of the countdown banner, and takes the short form on a narrow grid', () => {
     const grid = new TextGrid(...SHOT_GRID);
     draw(grid, true, 10);
@@ -192,25 +199,29 @@ describe('give-up question', () => {
     expect(text(narrow)).toContain(GIVE_UP_SHORT_TEXT);
   });
 
-  it('is drawn whenever it is asked on any grid that can hold its smallest form, and leaves no trace', () => {
+  it('is drawn whenever it is asked on any grid that can show the question, and leaves no trace', () => {
     const city = generateCity({ ...DEFAULT_CITY_SETTINGS });
     const layout = minimapLayout(city);
     const car = { x: 0, z: 0, heading: 0 };
-    const drawWithMap = (grid: TextGrid, minimap: Minimap, giveUp: boolean) =>
+    const drawWithMap = (grid: TextGrid, minimap: Minimap, giveUp: boolean): boolean =>
       drawHud(grid, { speed: 5, topSpeed: 32, minimap: { minimap, car }, race: { race: createRace(route, 0), tick: 30, guidance: null, giveUp } });
     const cells = (grid: TextGrid) => Array.from({ length: grid.columns * grid.rows }, (_, i) => grid.get(i % grid.columns, Math.floor(i / grid.columns))!).map((cell) => [cell.code || 32, cell.background]);
     const sizes: [number, number][] = [];
-    for (let columns = 1; columns <= 130; columns += 3) for (let rows = 1; rows <= 70; rows += 3) sizes.push([columns, rows]);
-    sizes.push([17, 5], [18, 1], [40, 14], [GIVE_UP_MIN_TEXT.length + 4, 5]);
+    for (let columns = 1; columns <= 80; columns++) for (let rows = 1; rows <= 30; rows++) sizes.push([columns, rows]);
+    for (let columns = 81; columns <= 130; columns += 3) for (let rows = 31; rows <= 70; rows += 3) sizes.push([columns, rows]);
+    // 640 x 400 at glyph size 16, the default glyph size at 1280 x 720 and 1920 x 1080, and the shots' grid
+    sizes.push([40, 14], [213, 68], [320, 102], SHOT_GRID);
     for (const [columns, rows] of sizes) {
       const label = `${columns} x ${rows}`;
       const grid = new TextGrid(columns, rows);
       const minimap: Minimap = { layout, drawn: null, route: null, overlay: new Map() };
-      drawWithMap(grid, minimap, false);
-      drawWithMap(grid, minimap, true);
+      expect(drawWithMap(grid, minimap, false), label).toBe(false);
+      const drawn = drawWithMap(grid, minimap, true);
       const shown = text(grid);
-      const asked = [GIVE_UP_TEXT, GIVE_UP_SHORT_TEXT, GIVE_UP_MIN_TEXT].some((form) => shown.includes(form));
+      const forms = [GIVE_UP_TEXT, GIVE_UP_SHORT_TEXT, GIVE_UP_MIN_TEXT, GIVE_UP_MIN_TEXT.slice(0, columns)];
+      const asked = shown.includes('give up?') && forms.some((form) => shown.includes(form));
       expect(asked, label).toBe(giveUpShown(columns, rows));
+      expect(drawn, label).toBe(asked);
       grid.dirty = false;
       drawWithMap(grid, minimap, true);
       expect(grid.dirty, label).toBe(false);

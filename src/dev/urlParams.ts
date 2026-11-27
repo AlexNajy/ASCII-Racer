@@ -31,6 +31,7 @@ export interface UrlParams {
   edit: string | null; // with state=settings: the nickname being typed, as if typed so far
   shape: CarShape | null; // the car's body shape instead of the stored one
   color: string | null; // the car's colour (a CAR_COLORS id) instead of the stored one
+  dailyStorage: boolean; // whether this load may read and write the daily's try in storage (dailyStorageAllowed)
 }
 
 // The game states, plus the daily's race (the race state of the daily mode).
@@ -47,6 +48,18 @@ const URL_STATES: Record<string, UrlState> = {
   loading: 'loading',
 };
 const DAILY_STATES: readonly UrlState[] = ['preRace', 'dailyRace', 'dailyResults'];
+
+// Parameters that change what a race does or which clock it reads (shot and tick pin the clock), or that show a
+// daily screen without its stored try. With any of them present the daily's try lives in memory only, so nothing
+// practised or made up on such a load is ever kept.
+export const DAILY_STORAGE_BLOCKERS = ['gate', 'car', 'tick', 'shot', 'drive', 'dnf', 'giveup', 'next'] as const;
+const DAILY_URL_STATES = Object.keys(URL_STATES).filter((name) => DAILY_STATES.includes(URL_STATES[name]));
+
+export function dailyStorageAllowed(search: string): boolean {
+  const query = new URLSearchParams(search);
+  const state = query.get('state');
+  return !DAILY_STORAGE_BLOCKERS.some((name) => query.has(name)) && !DAILY_URL_STATES.includes(state ?? '');
+}
 export const MAX_URL_NEXT = 2 * 86_400; // s; a day, or two when the clock is behind a stored try
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
@@ -185,5 +198,6 @@ export function parseUrlParams(search: string): UrlParams {
     edit,
     shape: carShape,
     color,
+    dailyStorage: dailyStorageAllowed(search),
   };
 }

@@ -417,23 +417,23 @@ citySettings.seed = urlParams.seed ?? dailyRace(urlParams.day ?? dayNumber(now()
 // never write, so every load gives the same picture.
 const storage = () => window.localStorage;
 let playerSettings: PlayerSettings = urlParams.shot ? { ...DEFAULT_PLAYER_SETTINGS } : loadSettings(storage);
-// The daily's try, in memory and, where it can be, in storage; shots neither read nor write it. A try that was
-// started before this page loaded never finished.
+// The daily's try, in memory and, where it can be, in storage; a load with a parameter that changes races, their
+// clock or shows a daily screen (urlParams.dailyStorage) neither reads nor writes it. A try that was started before
+// this page loaded never finished.
 let dailyRecord: DailyRecord | null = null;
 // The stored try may have changed in another tab, or be gone; the one that says more wins.
 function knownDaily(): DailyRecord | null {
   const today = dayNumber(now());
-  const stored = urlParams.shot ? null : loadDailyRecord(storage);
+  const stored = urlParams.dailyStorage ? loadDailyRecord(storage) : null;
   return newerRecord(readableRecord(dailyRecord, today), readableRecord(stored, today));
 }
 // Read again just before writing; a record that says less than the known one is refused, and memory follows it.
 function storeDaily(record: DailyRecord) {
   const kept = mergeForStore(knownDaily(), record, dayNumber(now()));
   dailyRecord = kept;
-  if (!urlParams.shot && kept === record) saveDailyRecord(storage, kept);
+  if (urlParams.dailyStorage && kept === record) saveDailyRecord(storage, kept);
 }
 function latestDaily() {
-  if (urlParams.shot) return;
   const latest = settleRecord(knownDaily());
   if (latest && latest !== dailyRecord) storeDaily(latest);
 }
@@ -894,7 +894,7 @@ function enter(state: GameState): GameState {
     latestDaily();
     return startDaily(state, dailyRecord, today, dailyCityBuilt);
   }
-  if (!opensDaily(state, today)) return pressEnter(state, canAskGiveUp());
+  if (!opensDaily(state, today)) return pressEnter(state, giveUpOnScreen);
   latestDaily();
   return dailyEntry(today, dailyRecord, dailyCityBuilt);
 }
@@ -973,10 +973,13 @@ trackMouse(canvas, (event) => {
 trackKeyPress('Enter', () => {
   if (!devMenu.isOpen()) changeState(enter(gameState));
 });
-// The give-up question is only asked where it can be seen.
+// The give-up question is only asked where it can be seen: the text layer shows only in the glyph modes.
 function canAskGiveUp(): boolean {
-  return settings.movement === Movement.Car && urlParams.hud !== 'test' && giveUpShown(hud.columns, hud.rows);
+  const textShown = settings.renderMode === RenderMode.Glyphs || settings.renderMode === RenderMode.CrtGlyphs;
+  return settings.movement === Movement.Car && textShown && urlParams.hud !== 'test' && giveUpShown(hud.columns, hud.rows);
 }
+// Set by the last frame drawn: Enter gives up only once the question has been on screen.
+let giveUpOnScreen = false;
 trackKeyPress('Escape', () => {
   if (!devMenu.isOpen()) changeState(pressEscape(gameState, canAskGiveUp()));
 });
@@ -1128,6 +1131,7 @@ function frame(timeMs: number) {
   } else {
     fovBoost = updateChaseCamera(camera, chase, drawnCar, world.carSettings, chaseSettings, world.colliders, dt);
   }
+  giveUpOnScreen = false;
   if (urlParams.hud !== 'test') {
     if (settings.movement !== Movement.Car) {
       hud.clear();
@@ -1146,7 +1150,7 @@ function frame(timeMs: number) {
     } else if (gameState.kind === 'settings') {
       drawSettingsScreen(hud, { screen: gameState, settings: shownPlayerSettings(), fullscreen: isFullscreen() });
     } else {
-      drawHud(hud, {
+      const questionDrawn = drawHud(hud, {
         speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ),
         topSpeed: world.carSettings.topSpeed,
         minimap: { minimap, car: drawnCar },
@@ -1159,6 +1163,7 @@ function frame(timeMs: number) {
             }
           : undefined,
       });
+      giveUpOnScreen = questionDrawn && canAskGiveUp();
     }
   }
   if (gameState.kind === 'loading' && !holdLoading && !loadPending) {

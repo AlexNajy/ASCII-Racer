@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { RenderMode } from './menu.ts';
-import { MAX_URL_TICK, parseUrlParams } from './urlParams.ts';
+import { DAILY_STORAGE_BLOCKERS, dailyStorageAllowed, MAX_URL_TICK, parseUrlParams } from './urlParams.ts';
 import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, day: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, replay: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', dnf: false, next: null, giveUp: false, entry: null, edit: null, shape: null, color: null });
+    expect(parseUrlParams('')).toEqual({ seed: null, day: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, replay: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', dnf: false, next: null, giveUp: false, entry: null, edit: null, shape: null, color: null, dailyStorage: true });
   });
 
   it('reads replay=1 and nothing else as replaying', () => {
@@ -57,6 +57,52 @@ describe('parseUrlParams', () => {
       expect(params.day).toBe(3);
       expect(parseUrlParams(`${query}&shot`).state).not.toBe('menu');
       expect(parseUrlParams(`${query}&tick=5`).state).not.toBe('menu');
+    }
+  });
+
+  it("keeps the daily's try in memory only under anything that changes a race, its clock, or shows a daily state", () => {
+    for (const query of [
+      '?state=daily&day=3',
+      '?state=dailyrace&day=3',
+      '?state=dailyresults&day=3&dnf=1',
+      '?state=dailyrace&day=3&gate=10',
+      '?state=race&gate=3',
+      '?car=10,20,1',
+      '?tick=0',
+      '?shot',
+      '?drive=1',
+      '?drive=0',
+      '?state=dailyrace&day=3&giveup=1&shot',
+      '?state=daily&day=3&next=10&shot',
+      '?cell=8&gate=0',
+    ]) {
+      expect(dailyStorageAllowed(query), query).toBe(false);
+    }
+    for (const name of DAILY_STORAGE_BLOCKERS) expect(dailyStorageAllowed(`?${name}=1`), name).toBe(false);
+    expect(parseUrlParams('?state=dailyrace&day=3&gate=10').dailyStorage).toBe(false);
+  });
+
+  it('uses storage on a plain load and under parameters that only change the look or the starting city', () => {
+    for (const query of [
+      '',
+      '?cell=8',
+      '?mode=brightness',
+      '?shape=van&color=ember',
+      '?entry=2',
+      '?seed=5',
+      '?day=12',
+      '?replay=1',
+      '?state=menu',
+      '?state=race',
+      '?state=settings&edit=abc',
+      '?state=garage&entry=1',
+      '?state=loading',
+      '?race=0',
+      '?camera=0,1,2,0,0',
+      '?hud=test',
+    ]) {
+      expect(dailyStorageAllowed(query), query).toBe(true);
+      expect(parseUrlParams(query).dailyStorage, query).toBe(true);
     }
   });
 

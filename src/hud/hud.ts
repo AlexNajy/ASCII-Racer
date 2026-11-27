@@ -129,9 +129,13 @@ interface Question {
   over: boolean; // drawn over the other elements, which are hidden while it is asked
 }
 
-// Whether the give-up question can be drawn on a grid this size: its smallest form fits on one row.
+// The part of the question that must be seen for it to be asked.
+const GIVE_UP_WORDS = 'give up?';
+
+// Whether the give-up question can be drawn on a grid this size: on one row, its smallest form clipped to the grid
+// as long as the question itself shows.
 export function giveUpShown(columns: number, rows: number): boolean {
-  return columns >= GIVE_UP_MIN_TEXT.length && rows >= 1;
+  return columns >= GIVE_UP_WORDS.length && rows >= 1;
 }
 
 // Where the question goes: the first place free of everything else, from under the banner up to the top; on a
@@ -150,8 +154,9 @@ function questionPlace(grid: TextGrid, taken: Rect[]): Question | null {
     }
   }
   if (!giveUpShown(grid.columns, grid.rows)) return null;
-  const rect = { left: Math.floor((grid.columns - GIVE_UP_MIN_TEXT.length) / 2), top: 0, width: GIVE_UP_MIN_TEXT.length, height: 1 };
-  return { rect, line: GIVE_UP_MIN_TEXT, over: true };
+  const line = GIVE_UP_MIN_TEXT.slice(0, grid.columns);
+  const rect = { left: Math.floor((grid.columns - line.length) / 2), top: 0, width: line.length, height: 1 };
+  return { rect, line, over: true };
 }
 
 // The same place every call. In a free place it is written blank and see-through while nothing is asked; over the
@@ -174,7 +179,8 @@ function blankExcept(grid: TextGrid, rect: Rect, kept: Rect): void {
   }
 }
 
-export function drawHud(grid: TextGrid, { speed, topSpeed, minimap, race }: HudValues): void {
+// True when the give-up question is on the grid after this call.
+export function drawHud(grid: TextGrid, { speed, topSpeed, minimap, race }: HudValues): boolean {
   const left = grid.columns - MARGIN - PANEL_WIDTH;
   const top = grid.rows - MARGIN - PANEL_HEIGHT;
   const elements: Element[] = [];
@@ -198,6 +204,7 @@ export function drawHud(grid: TextGrid, { speed, topSpeed, minimap, race }: HudV
     else element.draw();
   }
   if (question) drawQuestion(grid, question, asked, elements.map(({ rect }) => rect));
+  return question !== null && asked;
 }
 
 function drawSpeedometer(grid: TextGrid, left: number, top: number, speed: number, topSpeed: number): void {
