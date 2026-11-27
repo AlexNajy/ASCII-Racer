@@ -52,7 +52,8 @@ export function unlimitedRoute(pickSeed: () => number, routeFor: (seed: number) 
 }
 
 // The menu stands the car on the middle junction with no race; the pre-race screen stands it on the route's start
-// with no race yet; the race starts its route (countdown from this tick).
+// with no race yet; the race starts its route (countdown from this tick). Loading drops the old race, whose gates mean
+// nothing in the next city.
 export function enterState(world: World, next: GameState, previous: GameState): void {
   switch (next.kind) {
     case 'menu': {
@@ -67,6 +68,9 @@ export function enterState(world: World, next: GameState, previous: GameState): 
       standCar(world, x, z, heading);
       return;
     }
+    case 'loading':
+      clearRace(world);
+      return;
     case 'race':
       if (next.route && previous.kind !== 'race') startRace(world, next.route);
       return;

@@ -20,8 +20,8 @@ const EYE = 1.2;
 // headlights) is in the fly camera's pictures too, so every shot from before races existed has it.
 // gate: the race's next gate, so a later gate shows lit; the number of gates finishes the race at the held tick.
 // car: 'x,z,quarterTurns' puts the car there once the race has started (quarter turns left of north).
-// state: the game state the shot starts in ('menu', 'prerace', 'race', 'results', 'settings', 'garage'); 'race' when
-// not given.
+// state: the game state the shot starts in ('menu', 'prerace', 'race', 'results', 'settings', 'garage', 'loading',
+// which holds the loading line); 'race' when not given.
 // entry: the menu entry selected (0 is the first), with state 'results' the finish screen's option, 'settings' and
 // 'garage' the row.
 // edit: with state 'settings', the nickname being typed.
@@ -80,6 +80,7 @@ const SHOTS = [
   { name: 'race-pickup', camera: null, mode: 'glyphs', tick: 420, drive: true, shape: 'pickup', color: 'teal' },
   // From behind, standing in the countdown: the hatch must read as part of the car.
   { name: 'race-hatchback', camera: null, mode: 'glyphs', tick: 120, shape: 'hatchback', color: 'sky' },
+  { name: 'loading', camera: null, mode: 'glyphs', tick: 300, state: 'loading' },
 ];
 
 const args = process.argv.slice(2);

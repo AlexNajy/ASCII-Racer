@@ -154,13 +154,13 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Test driver: a simple waypoint follower that finishes any route headless, used by the tests to prove routes can be driven and to tune `ROUTE_LENGTH`
   - [x] Pinned car: a fast sideways slide onto the pavement can leave a street-light pole inside the car's outline against the building, holding it for half a minute or more; the car must never end up wedged
   - [x] Wall seams: where two building rectangles touch along a flat wall, the seam acts like a corner and turns a sideways slide into speed along the wall; a flat wall made of several colliders must behave like one
-- [ ] **16. Menu and unlimited**
+- [x] **16. Menu and unlimited**
   - [x] Game states: menu, pre-race, race, results, with the dev fly camera kept behind the dev menu
   - [x] Main menu on the text layer over a camera flight through the city
   - [x] Unlimited: random city and route, finish screen with again, next and menu
   - [x] Settings: nickname, volume, glyph size, fullscreen, key list, saved in the browser
   - [x] Garage: body shapes on the same collision box, colour list, turning preview, saved in the browser
-  - [ ] Loading line while a city builds
+  - [x] Loading line while a city builds
 - [ ] **17. Daily**: the main mode
   - [ ] Day number from the UTC date, city seed and route from the day number
   - [ ] Input recording: one input per tick packed into a compact log, and a headless replay that gives the same finish tick

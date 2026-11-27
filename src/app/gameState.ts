@@ -22,7 +22,8 @@ export type GameState =
   | { kind: 'race'; mode: RaceMode; route: Route | null } // null: free driving, only from the URL parameter race=0
   | { kind: 'results'; mode: RaceMode; route: Route; ticks: number; selected: number } // index into RESULTS_OPTIONS
   | ({ kind: 'settings' } & SettingsScreen)
-  | { kind: 'garage'; selected: number }; // index into GARAGE_ROWS
+  | { kind: 'garage'; selected: number } // index into GARAGE_ROWS
+  | { kind: 'loading'; mode: RaceMode }; // a new city and route being made for a race of this mode
 
 export type GameStateKind = GameState['kind'];
 
@@ -40,6 +41,16 @@ export function preRace(mode: RaceMode, route: Route): GameState {
 
 export function race(mode: RaceMode, route: Route | null): GameState {
   return { kind: 'race', mode, route };
+}
+
+export function loading(mode: RaceMode): GameState {
+  return { kind: 'loading', mode };
+}
+
+// Once the city is built: its race, or the menu when no city with a route was found.
+export function loaded(state: GameState, route: Route | null): GameState {
+  if (state.kind !== 'loading') return state;
+  return route ? race(state.mode, route) : MENU;
 }
 
 function optionCount(state: GameState): number {
@@ -73,36 +84,33 @@ export function selectEntry(state: GameState, index: number): GameState {
   return { ...state, selected: index };
 }
 
-// Enter. A new race needs a new city and route, so `newRoute` is passed in (null when none could be made); it is
-// only called when one is needed. The menu stays put without one; `next` goes back to the menu.
-export function pressEnter(state: GameState, newRoute: () => Route | null): GameState {
+// Enter. A new race needs a new city and route, so the menu's race entries and `next` go to the loading state.
+export function pressEnter(state: GameState): GameState {
   switch (state.kind) {
     case 'menu': {
       const opens = MENU_ENTRIES[state.selected]?.opens;
       if (!opens) return state;
-      if (isMenuScreen(opens)) return SCREEN_STATES[opens];
-      const route = newRoute();
-      return route ? race(opens, route) : state;
+      return isMenuScreen(opens) ? SCREEN_STATES[opens] : loading(opens);
     }
     case 'preRace':
       return race(state.mode, state.route);
     case 'race':
     case 'garage': // Left and Right change the car, Enter nothing
     case 'settings': // its keys are settingsKey's
+    case 'loading':
       return state;
     case 'results': {
       const option = RESULTS_OPTIONS[state.selected];
       if (option === 'again') return race(state.mode, state.route);
-      if (option === 'menu') return MENU;
-      const route = newRoute();
-      return route ? race(state.mode, route) : MENU;
+      return option === 'menu' ? MENU : loading(state.mode);
     }
   }
 }
 
 // Back to the menu, from the garage and the settings with their entry selected again; a nickname being typed is only
-// dropped.
+// dropped. Ignored while a city loads.
 export function pressEscape(state: GameState): GameState {
+  if (state.kind === 'loading') return state;
   if (state.kind === 'garage') return { kind: 'menu', selected: screenEntry('garage') };
   if (state.kind === 'settings') return state.editing ? { ...state, editing: null } : { kind: 'menu', selected: screenEntry('settings') };
   return state.kind === 'menu' ? state : MENU;

@@ -7,6 +7,8 @@ import {
   afterTick,
   FIRST_OPTION,
   GARAGE,
+  loaded,
+  loading,
   MENU,
   moveSelection,
   preRace,
@@ -29,38 +31,49 @@ const RACE = race('unlimited', route);
 const results = (selected: number): GameState => ({ kind: 'results', mode: 'unlimited', route, ticks: 100, selected });
 const RESULTS = results(FIRST_OPTION);
 const option = (name: (typeof RESULTS_OPTIONS)[number]) => RESULTS_OPTIONS.indexOf(name);
-const never = () => {
-  throw new Error('asked');
-};
+const LOADING = loading('unlimited');
 
 describe('game state', () => {
-  it('goes from unlimited on the menu straight to the race on a new route', () => {
-    let asked = 0;
-    const next = pressEnter(MENU, () => {
-      asked++;
-      return route;
-    });
-    expect(asked).toBe(1);
-    expect(next).toEqual({ kind: 'race', mode: 'unlimited', route });
+  it('goes from unlimited on the menu through loading to the race on the new route', () => {
+    const next = pressEnter(MENU);
+    expect(next).toEqual({ kind: 'loading', mode: 'unlimited' });
+    expect(next).toEqual(loading('unlimited'));
+    expect(loaded(next, route)).toEqual({ kind: 'race', mode: 'unlimited', route });
   });
 
   it('goes from the pre-race screen to its race', () => {
-    expect(pressEnter(PRE_RACE, never)).toEqual(RACE);
+    expect(pressEnter(PRE_RACE)).toEqual(RACE);
   });
 
-  it('stays on the menu when no new route could be made', () => {
-    expect(pressEnter(MENU, () => null)).toBe(MENU);
+  it('goes to the menu when no new route could be made', () => {
+    expect(loaded(LOADING, null)).toEqual(MENU);
   });
 
   it('ignores Enter while racing', () => {
-    expect(pressEnter(RACE, never)).toBe(RACE);
+    expect(pressEnter(RACE)).toBe(RACE);
   });
 
-  it('asks for a new route only on the menu and for next', () => {
+  it("loads a new city only for the menu's unlimited and for next", () => {
     for (const state of [PRE_RACE, RACE, results(option('again')), results(option('menu'))]) {
-      expect(() => pressEnter(state, never)).not.toThrow();
+      expect(pressEnter(state).kind).not.toBe('loading');
     }
-    expect(() => pressEnter(results(option('next')), never)).toThrow('asked');
+    expect(pressEnter(results(option('next')))).toEqual(LOADING);
+  });
+
+  it('ignores Enter, Escape, the selection and the ticks while loading, however often', () => {
+    let state = LOADING;
+    for (let i = 0; i < 5; i++) {
+      state = pressEscape(pressEnter(state));
+      state = selectEntry(moveSelection(state, 1), 0);
+    }
+    expect(state).toBe(LOADING);
+    const current = createRace(route, 0);
+    current.phase = 'finished';
+    expect(afterTick(LOADING, current, current.finishTick + RESULTS_AFTER_TICKS)).toBe(LOADING);
+  });
+
+  it('starts a race only from the loading state', () => {
+    for (const state of [MENU, PRE_RACE, RACE, RESULTS, SETTINGS, GARAGE]) expect(loaded(state, other)).toBe(state);
   });
 
   it('offers again, next and menu after the finish, again first', () => {
@@ -69,18 +82,19 @@ describe('game state', () => {
   });
 
   it('races the same route again on again', () => {
-    const next = pressEnter(results(option('again')), never);
+    const next = pressEnter(results(option('again')));
     expect(next).toEqual(RACE);
     if (next.kind === 'race') expect(next.route).toBe(route);
   });
 
   it('races a new route on next, or goes to the menu when none could be made', () => {
-    expect(pressEnter(results(option('next')), () => other)).toEqual(race('unlimited', other));
-    expect(pressEnter(results(option('next')), () => null)).toEqual(MENU);
+    const next = pressEnter(results(option('next')));
+    expect(loaded(next, other)).toEqual(race('unlimited', other));
+    expect(loaded(next, null)).toEqual(MENU);
   });
 
   it('goes to the menu on menu', () => {
-    expect(pressEnter(results(option('menu')), never)).toEqual(MENU);
+    expect(pressEnter(results(option('menu')))).toEqual(MENU);
   });
 
   it('moves and points at the finish screen options, wrapping round', () => {
@@ -95,6 +109,7 @@ describe('game state', () => {
   it('goes back to the menu on Escape from every other state', () => {
     for (const state of [PRE_RACE, RACE, RESULTS]) expect(pressEscape(state)).toEqual(MENU);
     expect(pressEscape(MENU)).toBe(MENU);
+    expect(pressEscape(LOADING)).toBe(LOADING);
   });
 
   it('shows the results RESULTS_AFTER_TICKS after the finish, with the race time', () => {
@@ -139,12 +154,11 @@ describe('game state', () => {
     expect(selectEntry(RACE, 0)).toBe(RACE);
   });
 
-  it('does nothing on Enter over an entry not built yet, without asking for a route', () => {
-    const ask = never;
+  it('does nothing on Enter over an entry not built yet', () => {
     for (let i = 0; i < MENU_ENTRIES.length; i++) {
       if (entryEnabled(i)) continue;
       const state: GameState = { kind: 'menu', selected: i };
-      expect(pressEnter(state, ask)).toBe(state);
+      expect(pressEnter(state)).toBe(state);
     }
   });
 
@@ -154,14 +168,14 @@ describe('game state', () => {
     expect(pressEscape(elsewhere)).toBe(elsewhere);
   });
 
-  it('opens the settings from their entry without asking for a route, and goes back to it on Escape', () => {
+  it('opens the settings from their entry without loading, and goes back to it on Escape', () => {
     const entry = MENU_ENTRIES.findIndex((e) => e.label === 'settings');
     expect(screenEntry('settings')).toBe(entry);
-    const opened = pressEnter({ kind: 'menu', selected: entry }, never);
+    const opened = pressEnter({ kind: 'menu', selected: entry });
     expect(opened).toEqual({ kind: 'settings', selected: 0, editing: null });
     expect(opened).toBe(SETTINGS);
     expect(pressEscape(opened)).toEqual({ kind: 'menu', selected: entry });
-    expect(pressEnter(opened, never)).toBe(opened);
+    expect(pressEnter(opened)).toBe(opened);
     expect(afterTick(opened, null, 1000)).toBe(opened);
   });
 
@@ -185,14 +199,14 @@ describe('game state', () => {
     expect(selectEntry(typing, 2)).toBe(typing);
   });
 
-  it('opens the garage from its entry without asking for a route, and goes back to it on Escape', () => {
+  it('opens the garage from its entry without loading, and goes back to it on Escape', () => {
     const entry = MENU_ENTRIES.findIndex((e) => e.label === 'garage');
     expect(screenEntry('garage')).toBe(entry);
-    const opened = pressEnter({ kind: 'menu', selected: entry }, never);
+    const opened = pressEnter({ kind: 'menu', selected: entry });
     expect(opened).toEqual({ kind: 'garage', selected: 0 });
     expect(opened).toBe(GARAGE);
     expect(pressEscape(opened)).toEqual({ kind: 'menu', selected: entry });
-    expect(pressEnter(opened, never)).toBe(opened);
+    expect(pressEnter(opened)).toBe(opened);
     expect(afterTick(opened, null, 1000)).toBe(opened);
   });
 

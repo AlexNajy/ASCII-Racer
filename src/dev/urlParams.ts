@@ -21,14 +21,14 @@ export interface UrlParams {
   race: boolean; // race=0: the race state drives freely from the middle junction instead of on the city seed's route
   gate: number | null; // the race's next gate once it starts, to show a later gate lit; the gate count finishes it
   car: { x: number; z: number; quarterTurns: number } | null; // the car's place after the race starts, heading in quarter turns left of north
-  state: GameStateKind; // the screen the game starts on, the menu without the parameter
+  state: GameStateKind; // the screen the game starts on, the menu without the parameter; loading is held, never built
   entry: number | null; // the menu entry (with state=results the finish screen's option, state=settings or garage the row) selected at the start, 0 first
   edit: string | null; // with state=settings: the nickname being typed, as if typed so far
   shape: CarShape | null; // the car's body shape instead of the stored one
   color: string | null; // the car's colour (a CAR_COLORS id) instead of the stored one
 }
 
-const URL_STATES: Record<string, GameStateKind> = { menu: 'menu', prerace: 'preRace', race: 'race', results: 'results', settings: 'settings', garage: 'garage' };
+const URL_STATES: Record<string, GameStateKind> = { menu: 'menu', prerace: 'preRace', race: 'race', results: 'results', settings: 'settings', garage: 'garage', loading: 'loading' };
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
 

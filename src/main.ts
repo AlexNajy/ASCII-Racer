@@ -29,6 +29,8 @@ import {
   MENU,
   moveSelection,
   preRace,
+  loaded,
+  loading,
   pressEnter,
   pressEscape,
   race as raceState,
@@ -66,6 +68,7 @@ import { routeGuidance } from './hud/guidance.ts';
 import { createMinimap } from './hud/minimap.ts';
 import { drawFinishScreen, finishLayout } from './hud/finishScreen.ts';
 import { drawGarageScreen, garageLayout, garageRowAt } from './hud/garageScreen.ts';
+import { drawLoadingScreen } from './hud/loadingScreen.ts';
 import { drawMenuScreen, menuEntryAt, menuLayout } from './hud/menuScreen.ts';
 import { drawPreRaceScreen } from './hud/screens.ts';
 import { drawSettingsScreen, settingsLayout, settingsRowAt } from './hud/settingsScreen.ts';
@@ -388,99 +391,6 @@ let playerSettings: PlayerSettings = urlParams.shot ? { ...DEFAULT_PLAYER_SETTIN
 if (urlParams.shape) playerSettings = { ...playerSettings, carShape: urlParams.shape };
 if (urlParams.color) playerSettings = { ...playerSettings, carColor: urlParams.color };
 
-const world = createWorld(citySettings, carSettings);
-// The game starts on the menu. state=race (and results) starts an unlimited race on the city seed's route at tick 0,
-// as shots do; race=0 drives freely instead.
-let gameState: GameState = MENU;
-if (urlParams.state === 'race' || urlParams.state === 'results') {
-  const route = urlParams.race ? cityRoute(world) : null;
-  gameState = raceState('unlimited', route);
-  if (route) startRace(world, route);
-} else if (urlParams.state === 'preRace') {
-  const route = cityRoute(world);
-  if (!route) throw new Error('URL parameter state: the city has no route');
-  gameState = preRace('unlimited', route);
-  enterState(world, gameState, MENU);
-} else if (urlParams.state === 'settings') {
-  const editing = urlParams.edit === null ? null : { text: urlParams.edit, tooShort: false };
-  gameState = { kind: 'settings', selected: urlParams.entry ?? 0, editing };
-} else if (urlParams.state === 'garage') {
-  gameState = selectEntry(GARAGE, urlParams.entry ?? 0);
-} else if (urlParams.entry !== null) {
-  gameState = selectEntry(gameState, urlParams.entry);
-}
-// gate=N with N the number of gates finishes the race once the held tick is reached, at that time.
-const finishAtStart = urlParams.gate !== null && world.race !== null && urlParams.gate === world.race.route.gates.length;
-if (urlParams.gate !== null && world.race && !finishAtStart) {
-  if (urlParams.gate > world.race.route.gates.length) throw new Error(`URL parameter gate: the route has ${world.race.route.gates.length} gates`);
-  world.race.nextGate = urlParams.gate;
-}
-if (urlParams.car) {
-  const { x, z, quarterTurns } = urlParams.car;
-  world.car = createCar(x, z, (quarterTurns * Math.PI) / 2);
-  world.previousCar = { ...world.car };
-}
-// A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
-const heldTick = urlParams.tick;
-const heldInput = urlParams.drive && gameState.kind === 'race' ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
-for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, heldInput);
-if (finishAtStart && world.race) {
-  world.race.nextGate = world.race.route.gates.length;
-  world.race.phase = 'finished';
-  world.race.finishTick = Math.max(world.tick, goTick(world.race));
-}
-if (urlParams.state === 'results') {
-  if (world.race?.phase !== 'finished') throw new Error('URL parameter state: results needs a finished race (gate=<gate count>)');
-  gameState = selectEntry(
-    { kind: 'results', mode: 'unlimited', route: world.race.route, ticks: raceTicks(world.race, world.tick), selected: FIRST_OPTION },
-    urlParams.entry ?? FIRST_OPTION,
-  );
-}
-let cityMeshes = buildCityMeshes(world);
-// The race's gates, rebuilt whenever its route changes; none in free driving.
-let gateMesh: Mesh | null = null;
-let gateRoute: Route | null = null;
-function updateGateMesh() {
-  const route = world.race?.route ?? (gameState.kind === 'preRace' ? gameState.route : null);
-  if (route === gateRoute) return;
-  if (gateMesh) deleteMesh(gateMesh);
-  gateMesh = route ? uploadMesh(routeGateVertices(route.gates)) : null;
-  gateRoute = route;
-}
-let signals = createSignalTexture(gl, world.city.junctions.length);
-let minimap = createMinimap(world.city);
-let flight = flightPath(world.roadGraph);
-
-// Builds the city of the current settings: the world's data, meshes, signals, minimap and flight. Blocks the main
-// thread for a moment. The car and the race are left as they were; the caller changes the game state next.
-function loadCity() {
-  cityMeshes.forEach(deleteMesh);
-  regenerateWorldCity(world);
-  cityMeshes = buildCityMeshes(world);
-  gl!.deleteTexture(signals.texture);
-  signals = createSignalTexture(gl!, world.city.junctions.length);
-  // The new map may be smaller than the old one; the HUD draws itself again next frame.
-  if (urlParams.hud !== 'test') hud.clear();
-  minimap = createMinimap(world.city);
-  flight = flightPath(world.roadGraph);
-}
-
-// The dev menu's regenerate: the old route and the car's place mean nothing in the new city.
-function regenerateCity() {
-  loadCity();
-  setGameState(MENU);
-}
-
-// Unlimited's next race: a random city that holds a route, built; null when none was found. The seed goes into the
-// settings the dev menu edits, so its info line shows the city.
-function newUnlimitedRoute(): Route | null {
-  const route = unlimitedRoute(randomCitySeed, (seed) => seedRoute(citySettings, seed));
-  if (!route) return null;
-  citySettings.seed = route.seed;
-  loadCity();
-  return route;
-}
-
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
 const sceneTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scene');
 const normalTextureLocation = gl.getUniformLocation(asciiProgram, 'u_normals');
@@ -592,6 +502,218 @@ function resize() {
 buildCells();
 resize();
 window.addEventListener('resize', resize);
+
+const background: Vec3 = [0, 0, 0];
+
+// Resolves the scene's samples into cells, then draws the glyphs (and the text layer) to the screen.
+function asciiPasses(view: Mat4, tick: number, crtImage: ColorTarget | null) {
+  gl!.bindFramebuffer(gl!.FRAMEBUFFER, cells.framebuffer);
+  gl!.viewport(0, 0, cells.width, cells.height);
+  gl!.disable(gl!.DEPTH_TEST);
+  gl!.useProgram(resolveProgram);
+  gl!.activeTexture(gl!.TEXTURE0);
+  gl!.bindTexture(gl!.TEXTURE_2D, scene.colorTexture);
+  gl!.uniform1i(resolveSceneLocation, 0);
+  gl!.activeTexture(gl!.TEXTURE2);
+  gl!.bindTexture(gl!.TEXTURE_2D, scene.normalTexture);
+  gl!.uniform1i(resolveNormalsLocation, 2);
+  gl!.activeTexture(gl!.TEXTURE4);
+  gl!.bindTexture(gl!.TEXTURE_2D, scene.scatterTexture);
+  gl!.uniform1i(resolveScatterLocation, 4);
+  gl!.uniform1i(resolveSupersampleLocation, settings.supersample);
+  gl!.uniform1f(resolveCoverageDimmingLocation, settings.coverageDimming);
+  gl!.bindVertexArray(fullscreenVao);
+  gl!.drawArrays(gl!.TRIANGLES, 0, 3);
+
+  gl!.bindFramebuffer(gl!.FRAMEBUFFER, crtImage ? crtImage.framebuffer : null);
+  gl!.viewport(0, 0, canvas.width, canvas.height);
+  gl!.disable(gl!.DEPTH_TEST);
+
+  gl!.useProgram(asciiProgram);
+  gl!.activeTexture(gl!.TEXTURE0);
+  gl!.bindTexture(gl!.TEXTURE_2D, cells.colorTexture);
+  gl!.uniform1i(sceneTextureLocation, 0);
+  gl!.uniform2i(cellSizeLocation, cellWidth, cellHeight);
+  gl!.activeTexture(gl!.TEXTURE1);
+  gl!.bindTexture(gl!.TEXTURE_2D, glyphAtlas);
+  gl!.uniform1i(glyphsLocation, 1);
+  gl!.activeTexture(gl!.TEXTURE2);
+  gl!.bindTexture(gl!.TEXTURE_2D, cells.normalTexture);
+  gl!.uniform1i(normalTextureLocation, 2);
+  gl!.activeTexture(gl!.TEXTURE4);
+  gl!.bindTexture(gl!.TEXTURE_2D, cells.scatterTexture);
+  gl!.uniform1i(scatterTextureLocation, 4);
+  gl!.uniform1i(scatterMaterialsLocation, SCATTER_MATERIALS);
+  gl!.uniform1i(rampLengthLocation, RAMP_LENGTH);
+  gl!.uniform1i(edgeMaterialsLocation, EDGE_MATERIALS);
+  gl!.uniform1i(animatedMaterialsLocation, ANIMATED_MATERIALS);
+  gl!.uniform1i(strokeMaterialsLocation, STROKE_MATERIALS);
+  gl!.uniform1i(strokeRowLocation, STROKE_ROW);
+  gl!.activeTexture(gl!.TEXTURE5);
+  uploadHud(gl!, hudTexture, hud);
+  gl!.uniform1i(hudLocation, 5);
+  gl!.uniform1i(textRowLocation, TEXT_ROW);
+  gl!.uniform1i(atlasColumnsLocation, ATLAS_COLUMNS);
+  const animationTicks = Math.round(settings.animationSeconds * TICKS_PER_SECOND);
+  gl!.uniform1f(animationPhaseLocation, (tick % animationTicks) / animationTicks);
+  gl!.uniform1f(animationLevelsLocation, settings.animationLevels);
+  gl!.uniform1f(waveScaleLocation, settings.waveScale);
+  gl!.uniform1i(tickLocation, tick);
+  gl!.uniform1f(splashChanceLocation, settings.splashChance);
+  gl!.uniform1i(splashTicksLocation, Math.max(1, Math.round(settings.splashSeconds * TICKS_PER_SECOND)));
+  gl!.uniform3fv(backgroundLocation, background);
+  gl!.uniform1f(glyphShadeLocation, settings.glyphShade);
+  gl!.uniformMatrix3fv(asciiViewRotationLocation, false, [view[0], view[1], view[2], view[4], view[5], view[6], view[8], view[9], view[10]]);
+  gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);
+  gl!.bindVertexArray(fullscreenVao);
+  gl!.drawArrays(gl!.TRIANGLES, 0, 3);
+  if (!crtImage) return;
+
+  gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
+  gl!.useProgram(crtProgram);
+  gl!.activeTexture(gl!.TEXTURE0);
+  gl!.bindTexture(gl!.TEXTURE_2D, crtImage.texture);
+  gl!.uniform1i(crtImageLocation, 0);
+  gl!.drawArrays(gl!.TRIANGLES, 0, 3);
+}
+
+// The loading line on an empty scene, before the city exists.
+function drawLoadingFrame() {
+  if (urlParams.hud !== 'test') drawLoadingScreen(hud);
+  const crtImage = updateGlyphImage(settings.renderMode === RenderMode.CrtGlyphs);
+  const glyphs = settings.renderMode !== RenderMode.FullResolution && settings.renderMode !== RenderMode.Normals;
+  const target = glyphs ? scene : { framebuffer: null, width: canvas.width, height: canvas.height };
+  gl!.bindFramebuffer(gl!.FRAMEBUFFER, target.framebuffer);
+  gl!.viewport(0, 0, target.width, target.height);
+  gl!.clearColor(0, 0, 0, 0);
+  gl!.clear(gl!.COLOR_BUFFER_BIT | gl!.DEPTH_BUFFER_BIT);
+  if (glyphs) asciiPasses(identity(), 0, crtImage);
+}
+
+// A frame is only shown once the task that drew it has ended, so the city is built in a task of its own after it.
+await new Promise<void>((resolve) =>
+  requestAnimationFrame(() => {
+    drawLoadingFrame();
+    setTimeout(resolve);
+  }),
+);
+
+const world = createWorld(citySettings, carSettings);
+// The game starts on the menu. state=race (and results) starts an unlimited race on the city seed's route at tick 0,
+// as shots do; race=0 drives freely instead.
+let gameState: GameState = MENU;
+if (urlParams.state === 'race' || urlParams.state === 'results') {
+  const route = urlParams.race ? cityRoute(world) : null;
+  gameState = raceState('unlimited', route);
+  if (route) startRace(world, route);
+} else if (urlParams.state === 'preRace') {
+  const route = cityRoute(world);
+  if (!route) throw new Error('URL parameter state: the city has no route');
+  gameState = preRace('unlimited', route);
+  enterState(world, gameState, MENU);
+} else if (urlParams.state === 'settings') {
+  const editing = urlParams.edit === null ? null : { text: urlParams.edit, tooShort: false };
+  gameState = { kind: 'settings', selected: urlParams.entry ?? 0, editing };
+} else if (urlParams.state === 'garage') {
+  gameState = selectEntry(GARAGE, urlParams.entry ?? 0);
+} else if (urlParams.state === 'loading') {
+  gameState = loading('unlimited');
+} else if (urlParams.entry !== null) {
+  gameState = selectEntry(gameState, urlParams.entry);
+}
+// gate=N with N the number of gates finishes the race once the held tick is reached, at that time.
+const finishAtStart = urlParams.gate !== null && world.race !== null && urlParams.gate === world.race.route.gates.length;
+if (urlParams.gate !== null && world.race && !finishAtStart) {
+  if (urlParams.gate > world.race.route.gates.length) throw new Error(`URL parameter gate: the route has ${world.race.route.gates.length} gates`);
+  world.race.nextGate = urlParams.gate;
+}
+if (urlParams.car) {
+  const { x, z, quarterTurns } = urlParams.car;
+  world.car = createCar(x, z, (quarterTurns * Math.PI) / 2);
+  world.previousCar = { ...world.car };
+}
+// A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
+const heldTick = urlParams.tick;
+const heldInput = urlParams.drive && gameState.kind === 'race' ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
+for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, heldInput);
+if (finishAtStart && world.race) {
+  world.race.nextGate = world.race.route.gates.length;
+  world.race.phase = 'finished';
+  world.race.finishTick = Math.max(world.tick, goTick(world.race));
+}
+if (urlParams.state === 'results') {
+  if (world.race?.phase !== 'finished') throw new Error('URL parameter state: results needs a finished race (gate=<gate count>)');
+  gameState = selectEntry(
+    { kind: 'results', mode: 'unlimited', route: world.race.route, ticks: raceTicks(world.race, world.tick), selected: FIRST_OPTION },
+    urlParams.entry ?? FIRST_OPTION,
+  );
+}
+let cityMeshes = buildCityMeshes(world);
+// The race's gates, rebuilt whenever its route changes; none in free driving.
+let gateMesh: Mesh | null = null;
+let gateRoute: Route | null = null;
+function updateGateMesh() {
+  const route = world.race?.route ?? (gameState.kind === 'preRace' ? gameState.route : null);
+  if (route === gateRoute) return;
+  if (gateMesh) deleteMesh(gateMesh);
+  gateMesh = route ? uploadMesh(routeGateVertices(route.gates)) : null;
+  gateRoute = route;
+}
+let signals = createSignalTexture(gl, world.city.junctions.length);
+let minimap = createMinimap(world.city);
+let flight = flightPath(world.roadGraph);
+
+// Builds the city of the current settings: the world's data, meshes, signals, minimap and flight. Blocks the main
+// thread for a moment. The car and the race are left as they were; the caller changes the game state next.
+function loadCity() {
+  cityMeshes.forEach(deleteMesh);
+  regenerateWorldCity(world);
+  cityMeshes = buildCityMeshes(world);
+  gl!.deleteTexture(signals.texture);
+  signals = createSignalTexture(gl!, world.city.junctions.length);
+  // The new map may be smaller than the old one; the HUD draws itself again next frame.
+  if (urlParams.hud !== 'test') hud.clear();
+  minimap = createMinimap(world.city);
+  flight = flightPath(world.roadGraph);
+}
+
+// The dev menu's regenerate: the old route and the car's place mean nothing in the new city.
+function regenerateCity() {
+  loadCity();
+  setGameState(MENU);
+}
+
+// Unlimited's next race: a random city that holds a route, built; null when none was found. The seed goes into the
+// settings the dev menu edits, so its info line shows the city.
+function newUnlimitedRoute(): Route | null {
+  const route = unlimitedRoute(randomCitySeed, (seed) => seedRoute(citySettings, seed));
+  if (!route) return null;
+  citySettings.seed = route.seed;
+  loadCity();
+  return route;
+}
+
+// The loading state builds its city in a task after the frame showing the loading line; state=loading only holds it.
+const holdLoading = urlParams.state === 'loading';
+let loadPending = false;
+function finishLoading() {
+  loadPending = false;
+  if (gameState.kind !== 'loading') return;
+  try {
+    setGameState(loaded(gameState, newUnlimitedRoute()));
+  } catch (error) {
+    // A failed build must not be retried every frame.
+    setGameState(loaded(gameState, null));
+    throw error;
+  } finally {
+    // The countdown starts after the build, not during it.
+    previousTimeMs = performance.now();
+  }
+}
+
+// The loading line goes; the test card stays.
+hud.clear();
+if (urlParams.hud === 'test') drawTestCard(hud);
 
 const devMenu = createDevMenu(
   settings,
@@ -738,12 +860,12 @@ trackMouse(canvas, (event) => {
   if (entry !== null) {
     const selected = selectEntry(gameState, entry);
     changeState(selected);
-    changeState(pressEnter(selected, newUnlimitedRoute));
+    changeState(pressEnter(selected));
   }
   return false;
 });
 trackKeyPress('Enter', () => {
-  if (!devMenu.isOpen()) changeState(pressEnter(gameState, newUnlimitedRoute));
+  if (!devMenu.isOpen()) changeState(pressEnter(gameState));
 });
 trackKeyPress('Escape', () => {
   if (!devMenu.isOpen()) changeState(pressEscape(gameState));
@@ -811,15 +933,16 @@ let carInput = NO_INPUT;
 
 // Larger than needed up close, so the depth buffer keeps precision for curbs and markings far away.
 const NEAR_PLANE = 0.5;
-let previousTimeMs = 0;
+// Never moved back: the first frame after a long task can carry a time from before it.
+let previousTimeMs = performance.now();
 
 function frame(timeMs: number) {
   requestAnimationFrame(frame);
   // The previous frame was drawn completely, with the glyph atlas built before the loop started.
   if (urlParams.shot && framesDrawn > 0) canvas.dataset.ready = 'true';
   framesDrawn++;
-  const dt = heldTick === null ? capFrameSeconds((timeMs - previousTimeMs) / 1000) : 0;
-  previousTimeMs = timeMs;
+  const dt = heldTick === null ? capFrameSeconds(Math.max(0, timeMs - previousTimeMs) / 1000) : 0;
+  previousTimeMs = Math.max(previousTimeMs, timeMs);
   if (heldTick === null) advanceClock(clock, dt, () => {
     carInput = settings.movement === Movement.Car && gameState.kind === 'race' ? readCarInput() : NO_INPUT;
     const { impact } = stepWorld(world, carInput);
@@ -853,6 +976,8 @@ function frame(timeMs: number) {
   if (urlParams.hud !== 'test') {
     if (settings.movement !== Movement.Car) {
       hud.clear();
+    } else if (gameState.kind === 'loading') {
+      drawLoadingScreen(hud);
     } else if (gameState.kind === 'menu') {
       drawMenuScreen(hud, gameState.selected);
     } else if (gameState.kind === 'preRace') {
@@ -874,6 +999,10 @@ function frame(timeMs: number) {
       });
     }
   }
+  if (gameState.kind === 'loading' && !holdLoading && !loadPending) {
+    loadPending = true;
+    setTimeout(finishLoading);
+  }
   const [cameraX, cameraY, cameraZ] = camera.position;
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(
@@ -892,7 +1021,6 @@ function frame(timeMs: number) {
   gl!.bindFramebuffer(gl!.FRAMEBUFFER, target.framebuffer);
   gl!.viewport(0, 0, target.width, target.height);
   gl!.enable(gl!.DEPTH_TEST);
-  const background: Vec3 = [0, 0, 0];
   gl!.clearColor(background[0], background[1], background[2], 0);
   gl!.clear(gl!.COLOR_BUFFER_BIT | gl!.DEPTH_BUFFER_BIT);
 
@@ -907,7 +1035,7 @@ function frame(timeMs: number) {
   gl!.uniform3fv(lightDirectionLocation, inGarage ? GARAGE_LIGHT_DIRECTION : LIGHT_DIRECTION);
   gl!.uniform1f(ambientLocation, inGarage ? GARAGE_AMBIENT : settings.ambient);
   gl!.uniform1f(lightIntensityLocation, inGarage ? GARAGE_LIGHT_INTENSITY : settings.lightIntensity);
-  const carShown = gameState.kind !== 'menu' && gameState.kind !== 'settings' && !inGarage;
+  const carShown = gameState.kind !== 'menu' && gameState.kind !== 'settings' && !inGarage && gameState.kind !== 'loading';
   const light = headlight(drawnCar);
   const halfAngle = (settings.headlightAngle * Math.PI) / 360;
   gl!.uniform3fv(headlightPositionLocation, light.position);
@@ -938,6 +1066,8 @@ function frame(timeMs: number) {
   gl!.uniform1i(signalsTextureLocation, 3);
   const view = viewMatrix(camera);
 
+  // While a city loads the scene stays empty under the loading line.
+  const sceneShown = gameState.kind !== 'loading';
   // Stars first and without depth, so anything in the city covers them.
   gl!.useProgram(skyProgram);
   gl!.uniformMatrix4fv(skyViewRotationLocation, false, viewMatrix({ ...camera, position: [0, 0, 0] }));
@@ -947,7 +1077,7 @@ function frame(timeMs: number) {
   gl!.uniform1f(skyPointSizeLocation, samples);
   gl!.disable(gl!.DEPTH_TEST);
   gl!.bindVertexArray(starVao);
-  gl!.drawArrays(gl!.POINTS, 0, starCount);
+  if (sceneShown) gl!.drawArrays(gl!.POINTS, 0, starCount);
   gl!.enable(gl!.DEPTH_TEST);
   gl!.useProgram(program);
 
@@ -956,14 +1086,14 @@ function frame(timeMs: number) {
   if (inGarage) {
     draw(garageFloorMesh, gl!.TRIANGLES, view);
     draw(playerCar, gl!.TRIANGLES, view, rotationY(garageHeading(world.tick + clock.leftover / TICK_SECONDS)));
-  } else {
+  } else if (sceneShown) {
     for (const mesh of cityMeshes) draw(mesh, gl!.TRIANGLES, view);
     if (gateMesh) draw(gateMesh, gl!.TRIANGLES, view);
   }
   if (carShown) draw(playerCar, gl!.TRIANGLES, view, multiply(translation(drawnCar.x, 0, drawnCar.z), rotationY(drawnCar.heading)));
 
   const particleCount = particleVertices(particles);
-  if (particleCount > 0) {
+  if (particleCount > 0 && sceneShown) {
     gl!.useProgram(particleProgram);
     gl!.uniformMatrix4fv(particleViewLocation, false, view);
     gl!.uniformMatrix4fv(particleProjectionLocation, false, projection);
@@ -979,73 +1109,6 @@ function frame(timeMs: number) {
   }
   if (fullResolution) return;
 
-  gl!.bindFramebuffer(gl!.FRAMEBUFFER, cells.framebuffer);
-  gl!.viewport(0, 0, cells.width, cells.height);
-  gl!.disable(gl!.DEPTH_TEST);
-  gl!.useProgram(resolveProgram);
-  gl!.activeTexture(gl!.TEXTURE0);
-  gl!.bindTexture(gl!.TEXTURE_2D, scene.colorTexture);
-  gl!.uniform1i(resolveSceneLocation, 0);
-  gl!.activeTexture(gl!.TEXTURE2);
-  gl!.bindTexture(gl!.TEXTURE_2D, scene.normalTexture);
-  gl!.uniform1i(resolveNormalsLocation, 2);
-  gl!.activeTexture(gl!.TEXTURE4);
-  gl!.bindTexture(gl!.TEXTURE_2D, scene.scatterTexture);
-  gl!.uniform1i(resolveScatterLocation, 4);
-  gl!.uniform1i(resolveSupersampleLocation, settings.supersample);
-  gl!.uniform1f(resolveCoverageDimmingLocation, settings.coverageDimming);
-  gl!.bindVertexArray(fullscreenVao);
-  gl!.drawArrays(gl!.TRIANGLES, 0, 3);
-
-  gl!.bindFramebuffer(gl!.FRAMEBUFFER, crtImage ? crtImage.framebuffer : null);
-  gl!.viewport(0, 0, canvas.width, canvas.height);
-  gl!.disable(gl!.DEPTH_TEST);
-
-  gl!.useProgram(asciiProgram);
-  gl!.activeTexture(gl!.TEXTURE0);
-  gl!.bindTexture(gl!.TEXTURE_2D, cells.colorTexture);
-  gl!.uniform1i(sceneTextureLocation, 0);
-  gl!.uniform2i(cellSizeLocation, cellWidth, cellHeight);
-  gl!.activeTexture(gl!.TEXTURE1);
-  gl!.bindTexture(gl!.TEXTURE_2D, glyphAtlas);
-  gl!.uniform1i(glyphsLocation, 1);
-  gl!.activeTexture(gl!.TEXTURE2);
-  gl!.bindTexture(gl!.TEXTURE_2D, cells.normalTexture);
-  gl!.uniform1i(normalTextureLocation, 2);
-  gl!.activeTexture(gl!.TEXTURE4);
-  gl!.bindTexture(gl!.TEXTURE_2D, cells.scatterTexture);
-  gl!.uniform1i(scatterTextureLocation, 4);
-  gl!.uniform1i(scatterMaterialsLocation, SCATTER_MATERIALS);
-  gl!.uniform1i(rampLengthLocation, RAMP_LENGTH);
-  gl!.uniform1i(edgeMaterialsLocation, EDGE_MATERIALS);
-  gl!.uniform1i(animatedMaterialsLocation, ANIMATED_MATERIALS);
-  gl!.uniform1i(strokeMaterialsLocation, STROKE_MATERIALS);
-  gl!.uniform1i(strokeRowLocation, STROKE_ROW);
-  gl!.activeTexture(gl!.TEXTURE5);
-  uploadHud(gl!, hudTexture, hud);
-  gl!.uniform1i(hudLocation, 5);
-  gl!.uniform1i(textRowLocation, TEXT_ROW);
-  gl!.uniform1i(atlasColumnsLocation, ATLAS_COLUMNS);
-  const animationTicks = Math.round(settings.animationSeconds * TICKS_PER_SECOND);
-  gl!.uniform1f(animationPhaseLocation, (world.tick % animationTicks) / animationTicks);
-  gl!.uniform1f(animationLevelsLocation, settings.animationLevels);
-  gl!.uniform1f(waveScaleLocation, settings.waveScale);
-  gl!.uniform1i(tickLocation, world.tick);
-  gl!.uniform1f(splashChanceLocation, settings.splashChance);
-  gl!.uniform1i(splashTicksLocation, Math.max(1, Math.round(settings.splashSeconds * TICKS_PER_SECOND)));
-  gl!.uniform3fv(backgroundLocation, background);
-  gl!.uniform1f(glyphShadeLocation, settings.glyphShade);
-  gl!.uniformMatrix3fv(asciiViewRotationLocation, false, [view[0], view[1], view[2], view[4], view[5], view[6], view[8], view[9], view[10]]);
-  gl!.uniform1i(renderModeLocation, crtImage ? RenderMode.Glyphs : settings.renderMode);
-  gl!.bindVertexArray(fullscreenVao);
-  gl!.drawArrays(gl!.TRIANGLES, 0, 3);
-  if (!crtImage) return;
-
-  gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
-  gl!.useProgram(crtProgram);
-  gl!.activeTexture(gl!.TEXTURE0);
-  gl!.bindTexture(gl!.TEXTURE_2D, crtImage.texture);
-  gl!.uniform1i(crtImageLocation, 0);
-  gl!.drawArrays(gl!.TRIANGLES, 0, 3);
+  asciiPasses(view, world.tick, crtImage);
 }
 requestAnimationFrame(frame);

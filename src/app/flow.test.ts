@@ -6,7 +6,7 @@ import { goTick } from '../game/race.ts';
 import { RouteError } from '../game/route.ts';
 import { createWorld, START_HEADING, startJunction, stepWorld } from '../game/world.ts';
 import { cityRoute, enterState, randomCitySeed, seedRoute, UNLIMITED_SEEDS, UNLIMITED_TRIES, unlimitedRoute } from './flow.ts';
-import { FIRST_OPTION, MENU, preRace, race } from './gameState.ts';
+import { FIRST_OPTION, loaded, loading, MENU, preRace, race } from './gameState.ts';
 
 describe('game state flow', () => {
   const world = createWorld({ ...DEFAULT_CITY_SETTINGS }, { ...DEFAULT_CAR_SETTINGS }, false);
@@ -67,6 +67,18 @@ describe('game state flow', () => {
     expect(world.race?.nextGate).toBe(0);
     expect(world.race?.phase).toBe('countdown');
     expect([world.car.x, world.car.z, world.car.velocityX, world.car.velocityZ]).toEqual([route.pose.x, route.pose.z, 0, 0]);
+  });
+
+  it('drops the finished race while loading, then starts the new one from loading', () => {
+    enterState(world, RACE, MENU);
+    const results = { kind: 'results', mode: 'unlimited', route, ticks: 0, selected: FIRST_OPTION } as const;
+    enterState(world, loading('unlimited'), results);
+    expect(world.race).toBeNull();
+    const tick = world.tick;
+    enterState(world, loaded(loading('unlimited'), route), loading('unlimited'));
+    expect(world.race?.route).toBe(route);
+    expect(world.race?.startTick).toBe(tick);
+    expect([world.car.x, world.car.z, world.car.heading]).toEqual([route.pose.x, route.pose.z, route.pose.heading]);
   });
 
   it('drives freely in a race state without a route', () => {

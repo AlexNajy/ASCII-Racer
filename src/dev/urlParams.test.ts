@@ -28,6 +28,7 @@ describe('parseUrlParams', () => {
     expect(parseUrlParams('?state=prerace').state).toBe('preRace');
     expect(parseUrlParams('?state=race').state).toBe('race');
     expect(parseUrlParams('?state=results').state).toBe('results');
+    expect(parseUrlParams('?state=loading').state).toBe('loading');
     expect(() => parseUrlParams('?state=')).toThrow();
     expect(() => parseUrlParams('?state=preRace')).toThrow();
     expect(() => parseUrlParams('?state=toString')).toThrow();
