@@ -21,10 +21,12 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
 ## Controls
 
 - Menu and finish screen: `Up` / `Down` or `W` / `S` to choose (wraps round), `Enter` to pick; or point at an entry and click
+- Settings: `Up` / `Down` or `W` / `S` to choose, `Left` / `Right` or `A` / `D` to change volume and glyph size, `Enter` to switch mute and fullscreen or to type a nickname (`Enter` saves, `Esc` cancels); clicks work too (on the volume bar, on the glyph size's `<` `>`); saved in the browser. Its key list is `src/app/keys.ts`, the same as this list
 - Unlimited: a new random city and route each time; after the finish, `again` (same route), `next` (new city and route) or `menu`
 - `Esc`: back to the menu (and releases the mouse)
 - `W` / `S` or arrow keys: throttle / brake, `A` / `D`: steer, `Space`: drift
 - Click (outside the menu and the finish screen): capture the mouse to look around
+- `H`: headlights on and off
 - `F`: toggle fullscreen
 - Fly camera (switched on in the dev menu, View page, Movement):
   - `W` / `S`: fly forward / back along the view direction
@@ -155,7 +157,7 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Game states: menu, pre-race, race, results, with the dev fly camera kept behind the dev menu
   - [x] Main menu on the text layer over a camera flight through the city
   - [x] Unlimited: random city and route, finish screen with again, next and menu
-  - [ ] Settings: nickname, volume, glyph size, fullscreen, key list, saved in the browser
+  - [x] Settings: nickname, volume, glyph size, fullscreen, key list, saved in the browser
   - [ ] Garage: body shapes on the same collision box, colour list, turning preview, saved in the browser
   - [ ] Loading line while a city builds
 - [ ] **17. Daily**: the main mode

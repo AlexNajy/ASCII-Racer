@@ -13,11 +13,13 @@ import {
   pressEscape,
   race,
   RESULTS_AFTER_TICKS,
+  SETTINGS,
   RESULTS_OPTIONS,
   selectEntry,
   type GameState,
 } from './gameState.ts';
-import { entryEnabled, FIRST_ENTRY, MENU_ENTRIES } from './mainMenu.ts';
+import { entryEnabled, FIRST_ENTRY, MENU_ENTRIES, screenEntry } from './mainMenu.ts';
+import { SETTINGS_ROWS } from './settingsMenu.ts';
 
 const route = generateRoute(roadGraph(generateCity({ ...DEFAULT_CITY_SETTINGS })), 1);
 const other = generateRoute(roadGraph(generateCity({ ...DEFAULT_CITY_SETTINGS, seed: 2 })), 2);
@@ -113,11 +115,11 @@ describe('game state', () => {
     expect(afterTick(RACE, null, late)).toBe(RACE);
   });
 
-  it('starts the menu on unlimited, the only entry built so far', () => {
+  it('starts the menu on unlimited, the first entry built so far', () => {
     expect(MENU_ENTRIES.map((entry) => entry.label)).toEqual(['daily', 'unlimited', 'join lobby', 'create lobby', 'garage', 'settings']);
     expect(FIRST_ENTRY).toBe(1);
     expect(MENU).toEqual({ kind: 'menu', selected: 1 });
-    expect(MENU_ENTRIES.map((_, i) => entryEnabled(i))).toEqual([false, true, false, false, false, false]);
+    expect(MENU_ENTRIES.map((_, i) => entryEnabled(i))).toEqual([false, true, false, false, false, true]);
   });
 
   it('moves the selection up and down, wrapping round at both ends', () => {
@@ -149,5 +151,36 @@ describe('game state', () => {
     expect(pressEscape(RACE)).toEqual({ kind: 'menu', selected: FIRST_ENTRY });
     const elsewhere: GameState = { kind: 'menu', selected: 4 };
     expect(pressEscape(elsewhere)).toBe(elsewhere);
+  });
+
+  it('opens the settings from their entry without asking for a route, and goes back to it on Escape', () => {
+    const entry = MENU_ENTRIES.findIndex((e) => e.label === 'settings');
+    expect(screenEntry('settings')).toBe(entry);
+    const opened = pressEnter({ kind: 'menu', selected: entry }, never);
+    expect(opened).toEqual({ kind: 'settings', selected: 0, editing: null });
+    expect(opened).toBe(SETTINGS);
+    expect(pressEscape(opened)).toEqual({ kind: 'menu', selected: entry });
+    expect(pressEnter(opened, never)).toBe(opened);
+    expect(afterTick(opened, null, 1000)).toBe(opened);
+  });
+
+  it('drops a nickname being typed on Escape before leaving the settings', () => {
+    const typing: GameState = { kind: 'settings', selected: 0, editing: { text: 'abc', tooShort: false } };
+    expect(pressEscape(typing)).toEqual({ kind: 'settings', selected: 0, editing: null });
+  });
+
+  it('moves and points at the settings rows, wrapping round, but not while typing', () => {
+    const at = (selected: number): GameState => ({ kind: 'settings', selected, editing: null });
+    const last = SETTINGS_ROWS.length - 1;
+    expect(moveSelection(at(0), 1)).toEqual(at(1));
+    expect(moveSelection(at(0), -1)).toEqual(at(last));
+    expect(moveSelection(at(last), 1)).toEqual(at(0));
+    expect(selectEntry(at(0), 3)).toEqual(at(3));
+    const same = at(2);
+    expect(selectEntry(same, 2)).toBe(same);
+    expect(selectEntry(same, SETTINGS_ROWS.length)).toBe(same);
+    const typing: GameState = { kind: 'settings', selected: 0, editing: { text: 'w', tooShort: false } };
+    expect(moveSelection(typing, 1)).toBe(typing);
+    expect(selectEntry(typing, 2)).toBe(typing);
   });
 });

@@ -35,7 +35,17 @@ import {
   type GameState,
 } from './app/gameState.ts';
 import { pointerCell } from './app/pointer.ts';
-import { takeMouseMovement, trackFullscreenKey, trackKeyboard, trackKeyPress, trackMouse } from './game/input.ts';
+import { DEFAULT_PLAYER_SETTINGS, loadSettings, saveSettings, serialiseSettings, type PlayerSettings } from './app/settings.ts';
+import { modifiedKeyOutcome, settingsClick, settingsKey, settingsKeyFromEvent, type SettingsChange } from './app/settingsMenu.ts';
+import {
+  isFullscreen,
+  takeMouseMovement,
+  toggleFullscreen,
+  trackFullscreenKey,
+  trackKeyboard,
+  trackKeyPress,
+  trackMouse,
+} from './game/input.ts';
 import {
   createColorTarget,
   createRenderTarget,
@@ -55,6 +65,7 @@ import { createMinimap } from './hud/minimap.ts';
 import { drawFinishScreen, finishLayout } from './hud/finishScreen.ts';
 import { drawMenuScreen, menuEntryAt, menuLayout } from './hud/menuScreen.ts';
 import { drawPreRaceScreen } from './hud/screens.ts';
+import { drawSettingsScreen, settingsLayout, settingsRowAt } from './hud/settingsScreen.ts';
 import { drawTestCard } from './hud/testCard.ts';
 import { printableRows, TextGrid } from './hud/textGrid.ts';
 import { ANIMATED_MATERIALS, EDGE_MATERIALS, SCATTER_MATERIALS, STROKE_MATERIALS, STROKE_ROW, SCATTER_SETTINGS, scatterParams, GLYPH_RAMPS, MATERIAL, RAMP_LENGTH, type Material } from './render/materials.ts';
@@ -345,6 +356,10 @@ const chaseSettings: ChaseCameraSettings = { ...DEFAULT_CHASE_CAMERA_SETTINGS };
 
 const urlParams = parseUrlParams(window.location.search);
 if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
+// Even reaching localStorage can throw; loadSettings and saveSettings catch it. Shots run with the defaults and
+// never write, so every load gives the same picture.
+const storage = () => window.localStorage;
+let playerSettings: PlayerSettings = urlParams.shot ? { ...DEFAULT_PLAYER_SETTINGS } : loadSettings(storage);
 
 const world = createWorld(citySettings, carSettings);
 // The game starts on the menu. state=race (and results) starts an unlimited race on the city seed's route at tick 0,
@@ -359,6 +374,9 @@ if (urlParams.state === 'race' || urlParams.state === 'results') {
   if (!route) throw new Error('URL parameter state: the city has no route');
   gameState = preRace('unlimited', route);
   enterState(world, gameState, MENU);
+} else if (urlParams.state === 'settings') {
+  const editing = urlParams.edit === null ? null : { text: urlParams.edit, tooShort: false };
+  gameState = { kind: 'settings', selected: urlParams.entry ?? 0, editing };
 } else if (urlParams.entry !== null) {
   gameState = selectEntry(gameState, urlParams.entry);
 }
@@ -485,7 +503,7 @@ function updateGlyphImage(on: boolean): ColorTarget | null {
 
 const settings: DevSettings = {
   fovDegrees: 60,
-  cellWidth: urlParams.cellWidth ?? 6,
+  cellWidth: urlParams.cellWidth ?? playerSettings.cellWidth,
   viewDistance: 1000,
   fogStart: 150,
   renderMode: urlParams.renderMode ?? RenderMode.Glyphs,
@@ -556,6 +574,7 @@ const devMenu = createDevMenu(
   (setting) => {
     if (setting === 'cellWidth') buildCells();
     if (setting === 'cellWidth' || setting === 'supersample') resize();
+    if (setting === 'cellWidth') storePlayerSettings(shownPlayerSettings());
   },
   regenerateCity,
   uploadStars,
@@ -614,9 +633,10 @@ function setGameState(next: GameState) {
   if (hasList(next) && document.pointerLockElement) document.exitPointerLock();
   if (urlParams.hud !== 'test') hud.clear();
 }
-// The menu and the finish screen are lists chosen from with the keys and the mouse, which is never captured there.
+// The menu, the finish screen and the settings are lists chosen from with the keys and the mouse, which is never
+// captured there.
 function hasList(state: GameState): boolean {
-  return state.kind === 'menu' || state.kind === 'results';
+  return state.kind === 'menu' || state.kind === 'results' || state.kind === 'settings';
 }
 // Only on screen in the car movement; the fly camera hides the text layer.
 function listShown(): boolean {
@@ -635,10 +655,8 @@ trackKeyPress('ArrowUp', () => moveMenuSelection(-1));
 trackKeyPress('KeyW', () => moveMenuSelection(-1));
 trackKeyPress('ArrowDown', () => moveMenuSelection(1));
 trackKeyPress('KeyS', () => moveMenuSelection(1));
-function menuEntryUnder(event: MouseEvent): number | null {
-  const layout =
-    gameState.kind === 'results' ? finishLayout(hud.columns, hud.rows, gameState.ticks) : menuLayout(hud.columns, hud.rows);
-  const cell = pointerCell(event.offsetX, event.offsetY, {
+function cellUnder(event: MouseEvent) {
+  return pointerCell(event.offsetX, event.offsetY, {
     pixelRatio: dpr,
     cellWidth,
     cellHeight,
@@ -646,17 +664,32 @@ function menuEntryUnder(event: MouseEvent): number | null {
     columns: hud.columns,
     rows: hud.rows,
   });
+}
+function menuEntryUnder(event: MouseEvent): number | null {
+  const layout =
+    gameState.kind === 'results' ? finishLayout(hud.columns, hud.rows, gameState.ticks) : menuLayout(hud.columns, hud.rows);
+  const cell = cellUnder(event);
   return layout && cell ? menuEntryAt(layout, cell.column, cell.row) : null;
+}
+function settingUnder(event: MouseEvent) {
+  const layout = settingsLayout(hud.columns, hud.rows);
+  const cell = cellUnder(event);
+  return layout && cell ? settingsRowAt(layout, cell.column, cell.row) : null;
 }
 canvas.addEventListener('mousemove', (event) => {
   if (!listShown()) return;
-  const entry = menuEntryUnder(event);
+  const entry = gameState.kind === 'settings' ? (settingUnder(event)?.index ?? null) : menuEntryUnder(event);
   if (entry !== null) changeState(selectEntry(gameState, entry));
 });
-// The one click path: in the menu and the finish screen a click picks an entry and never captures the pointer;
-// elsewhere it captures it.
+// The one click path: in the menu, the finish screen and the settings a click picks an entry and never captures the
+// pointer; elsewhere it captures it.
 trackMouse(canvas, (event) => {
   if (!listShown()) return !hasList(gameState);
+  if (gameState.kind === 'settings') {
+    const setting = settingUnder(event);
+    if (setting) applySettingsChange(settingsClick(gameState, shownPlayerSettings(), setting.index, setting.offset));
+    return false;
+  }
   const entry = menuEntryUnder(event);
   if (entry !== null) {
     const selected = selectEntry(gameState, entry);
@@ -671,6 +704,49 @@ trackKeyPress('Enter', () => {
 trackKeyPress('Escape', () => {
   if (!devMenu.isOpen()) changeState(pressEscape(gameState));
 });
+
+// The player's settings with the cell width the renderer uses: the dev menu's, which the URL parameter cell= may
+// have set instead of the stored one.
+function shownPlayerSettings(): PlayerSettings {
+  return { ...playerSettings, cellWidth: settings.cellWidth };
+}
+// Saved as they change, except a cell width from cell=, which stays the URL's.
+function storePlayerSettings(next: PlayerSettings) {
+  const stored = urlParams.cellWidth === null ? next : { ...next, cellWidth: playerSettings.cellWidth };
+  if (serialiseSettings(stored) === serialiseSettings(playerSettings)) return;
+  playerSettings = stored;
+  if (!urlParams.shot) saveSettings(storage, playerSettings);
+}
+function applySettingsChange({ screen, settings: next, toggleFullscreen: fullscreen, leave }: SettingsChange) {
+  if (gameState.kind !== 'settings') return;
+  if (fullscreen) toggleFullscreen(document.body);
+  if (next.cellWidth !== settings.cellWidth) {
+    settings.cellWidth = next.cellWidth;
+    buildCells();
+    resize();
+    devMenu.refresh('cellWidth');
+  }
+  storePlayerSettings(next);
+  changeState(leave ? pressEscape(gameState) : { ...gameState, ...screen });
+}
+// Ahead of every other key handler: on the settings screen its keys act only here, and while the nickname is typed
+// no other key does anything (Cmd and Ctrl combinations still reach the browser).
+window.addEventListener(
+  'keydown',
+  (event) => {
+    if (gameState.kind !== 'settings' || !listShown() || devMenu.isOpen()) return;
+    const editing = gameState.editing !== null;
+    const outcome = modifiedKeyOutcome(editing, event);
+    if (outcome === 'browser') return;
+    const key = outcome === 'read' ? settingsKeyFromEvent(event.code, event.key, editing) : null;
+    if (!editing && !key) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!key || (event.repeat && (key === 'enter' || key === 'escape'))) return;
+    applySettingsChange(settingsKey(gameState, shownPlayerSettings(), key));
+  },
+  { capture: true },
+);
 let carInput = NO_INPUT;
 
 // Larger than needed up close, so the depth buffer keeps precision for curbs and markings far away.
@@ -700,7 +776,7 @@ function frame(timeMs: number) {
   if (settings.movement === Movement.FlyCamera) {
     updateFlyCamera(camera, dt);
     if (!settings.noclip) pushOutOfColliders(camera.position, CAMERA_RADIUS, world.colliders);
-  } else if (gameState.kind === 'menu') {
+  } else if (gameState.kind === 'menu' || gameState.kind === 'settings') {
     takeMouseMovement();
     const pose = flightPose(flight, world.tick + clock.leftover / TICK_SECONDS);
     camera.position = pose.position;
@@ -718,6 +794,8 @@ function frame(timeMs: number) {
       drawPreRaceScreen(hud, { minimap, car: drawnCar, route: gameState.route });
     } else if (gameState.kind === 'results') {
       drawFinishScreen(hud, gameState.ticks, gameState.selected);
+    } else if (gameState.kind === 'settings') {
+      drawSettingsScreen(hud, { screen: gameState, settings: shownPlayerSettings(), fullscreen: isFullscreen() });
     } else {
       drawHud(hud, {
         speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ),
@@ -760,7 +838,7 @@ function frame(timeMs: number) {
   gl!.uniform1f(ambientLocation, settings.ambient);
   gl!.uniform1f(lightIntensityLocation, settings.lightIntensity);
   // The menu's flight passes over the car parked on the middle junction; it and its headlights stay out of the way.
-  const carShown = gameState.kind !== 'menu';
+  const carShown = gameState.kind !== 'menu' && gameState.kind !== 'settings';
   const light = headlight(drawnCar);
   const halfAngle = (settings.headlightAngle * Math.PI) / 360;
   gl!.uniform3fv(headlightPositionLocation, light.position);

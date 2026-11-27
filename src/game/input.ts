@@ -27,11 +27,19 @@ export function trackMouse(element: HTMLElement, onClick: (event: MouseEvent) =>
   });
 }
 
+// Does nothing where the page can't go fullscreen.
+export function toggleFullscreen(element: HTMLElement): void {
+  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  else if (document.fullscreenEnabled) element.requestFullscreen?.().catch(() => {});
+}
+
+export function isFullscreen(): boolean {
+  return document.fullscreenElement != null;
+}
+
 export function trackFullscreenKey(element: HTMLElement): void {
   window.addEventListener('keydown', (event) => {
-    if (event.code !== 'KeyF') return;
-    if (document.fullscreenElement) document.exitFullscreen();
-    else element.requestFullscreen().catch(() => {});
+    if (event.code === 'KeyF') toggleFullscreen(element);
   });
 }
 

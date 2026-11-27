@@ -20,8 +20,9 @@ const EYE = 1.2;
 // headlights) is in the fly camera's pictures too, so every shot from before races existed has it.
 // gate: the race's next gate, so a later gate shows lit; the number of gates finishes the race at the held tick.
 // car: 'x,z,quarterTurns' puts the car there once the race has started (quarter turns left of north).
-// state: the game state the shot starts in ('menu', 'prerace', 'race', 'results'); 'race' when not given.
-// entry: the menu entry selected (0 is the first), with state 'results' the finish screen's option.
+// state: the game state the shot starts in ('menu', 'prerace', 'race', 'results', 'settings'); 'race' when not given.
+// entry: the menu entry selected (0 is the first), with state 'results' the finish screen's option, 'settings' the row.
+// edit: with state 'settings', the nickname being typed.
 // Positions are for the default seed's city (seed 1); with another seed the same spots show something else.
 const SHOTS = [
   { name: 'chase-junction', camera: null, mode: 'glyphs', tick: 300, race: false },
@@ -64,6 +65,8 @@ const SHOTS = [
   { name: 'menu-garage', camera: null, mode: 'glyphs', tick: 5400, state: 'menu', entry: 4 },
   { name: 'state-prerace', camera: null, mode: 'glyphs', tick: 300, state: 'prerace' },
   { name: 'state-results', camera: null, mode: 'glyphs', tick: 600, gate: 10, state: 'results' },
+  { name: 'settings', camera: null, mode: 'glyphs', tick: 5400, state: 'settings' },
+  { name: 'settings-edit', camera: null, mode: 'glyphs', tick: 5400, state: 'settings', edit: 'Speedy 7' },
 ];
 
 const args = process.argv.slice(2);
@@ -126,6 +129,7 @@ try {
     if (shot.cell) query.set('cell', String(shot.cell));
     if (shot.car) query.set('car', shot.car);
     if (shot.entry !== undefined) query.set('entry', String(shot.entry));
+    if (shot.edit !== undefined) query.set('edit', shot.edit);
     try {
       await page.goto(`${base}?${query}`);
       await Promise.race([page.waitForSelector('canvas[data-ready="true"]', { timeout: READY_TIMEOUT_MS }), firstError]);

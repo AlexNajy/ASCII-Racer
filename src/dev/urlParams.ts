@@ -1,6 +1,8 @@
 import { CELL_WIDTH_MAX, CELL_WIDTH_MIN, RenderMode } from './menu.ts';
 import { RESULTS_OPTIONS, type GameStateKind } from '../app/gameState.ts';
 import { MENU_ENTRIES } from '../app/mainMenu.ts';
+import { NICKNAME_MAX, nicknameCharacter } from '../app/settings.ts';
+import { SETTINGS_ROWS } from '../app/settingsMenu.ts';
 import type { Camera } from '../render/camera.ts';
 
 // Read once at startup, for repeatable pictures (`npm run shots`). With none of them present nothing changes.
@@ -17,10 +19,11 @@ export interface UrlParams {
   gate: number | null; // the race's next gate once it starts, to show a later gate lit; the gate count finishes it
   car: { x: number; z: number; quarterTurns: number } | null; // the car's place after the race starts, heading in quarter turns left of north
   state: GameStateKind; // the screen the game starts on, the menu without the parameter
-  entry: number | null; // the menu entry (or with state=results the finish screen's option) selected at the start, 0 first
+  entry: number | null; // the menu entry (with state=results the finish screen's option, state=settings the row) selected at the start, 0 first
+  edit: string | null; // with state=settings: the nickname being typed, as if typed so far
 }
 
-const URL_STATES: Record<string, GameStateKind> = { menu: 'menu', prerace: 'preRace', race: 'race', results: 'results' };
+const URL_STATES: Record<string, GameStateKind> = { menu: 'menu', prerace: 'preRace', race: 'race', results: 'results', settings: 'settings' };
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
 
@@ -43,6 +46,7 @@ export function parseUrlParams(search: string): UrlParams {
   const car = query.get('car');
   const state = query.get('state');
   const entry = query.get('entry');
+  const edit = query.get('edit');
 
   let renderMode: RenderMode | null = null;
   if (mode !== null) {
@@ -95,9 +99,13 @@ export function parseUrlParams(search: string): UrlParams {
   }
 
   const entryNumber = entry === null ? null : number('entry', entry);
-  const entries = state === 'results' ? RESULTS_OPTIONS.length : MENU_ENTRIES.length;
+  const entries = state === 'results' ? RESULTS_OPTIONS.length : state === 'settings' ? SETTINGS_ROWS.length : MENU_ENTRIES.length;
   if (entryNumber !== null && (!Number.isInteger(entryNumber) || entryNumber < 0 || entryNumber >= entries)) {
     throw new Error(`URL parameter entry: expected a whole number, 0 to ${entries - 1}`);
+  }
+
+  if (edit !== null && (state !== 'settings' || edit.length > NICKNAME_MAX || ![...edit].every(nicknameCharacter))) {
+    throw new Error(`URL parameter edit: needs state=settings and up to ${NICKNAME_MAX} letters, digits or spaces`);
   }
 
   return {
@@ -114,5 +122,6 @@ export function parseUrlParams(search: string): UrlParams {
     car: carPose,
     state: state === null ? 'menu' : URL_STATES[state],
     entry: entryNumber,
+    edit,
   };
 }
