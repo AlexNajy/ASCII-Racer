@@ -18,6 +18,9 @@ npm run preview   # serve the production build locally
 npm test          # run the tests once
 npm run check     # type check, tests and build
 npm run shots     # pictures from fixed camera spots into shots/ (needs Google Chrome)
+npm run db:start  # local Supabase database (needs Docker)
+npm run db:test   # reset it to the migrations and run the database tests
+npm run db:stop   # stop it
 ```
 
 ## Controls

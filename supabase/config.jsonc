@@ -1,0 +1,53 @@
+{
+  "$schema": "https://supabase.com/schemas/config/v1.json",
+  // Local stack only; the hosted project's settings are made on its dashboard. Ports 544xx so it
+  // runs beside another local Supabase project on the default 543xx.
+  // Reference: https://supabase.com/docs/guides/local-development/cli/config
+  "project_id": "driftle",
+
+  "api": {
+    "enabled": true,
+    "port": 54421,
+    "schemas": ["public"],
+    "extra_search_path": ["public", "extensions"],
+    "max_rows": 1000,
+    // Tables are reachable only through the grants in the migrations.
+    "auto_expose_new_tables": false
+  },
+
+  "db": {
+    "port": 54422,
+    "shadow_port": 54420,
+    "major_version": 17,
+    "pooler": { "enabled": false },
+    "migrations": { "enabled": true },
+    "seed": { "enabled": false }
+  },
+
+  "realtime": { "enabled": false },
+  "studio": { "enabled": false },
+  "local_smtp": { "enabled": false },
+  "storage": { "enabled": false },
+  "analytics": { "enabled": false },
+
+  "auth": {
+    "enabled": true,
+    "site_url": "http://127.0.0.1:5173",
+    "jwt_expiry": 3600,
+    "enable_refresh_token_rotation": true,
+    "refresh_token_reuse_interval": 10,
+    // Anonymous sign-ins count as sign-ups, so sign-ups stay allowed.
+    "enable_signup": true,
+    "enable_anonymous_sign_ins": true,
+    "enable_manual_linking": false,
+    "rate_limit": { "anonymous_users": 30 },
+    "email": { "enabled": false },
+    "sms": { "enabled": false }
+  },
+
+  "edge_runtime": {
+    "enabled": true,
+    "policy": "per_worker",
+    "deno_version": 2
+  }
+}
