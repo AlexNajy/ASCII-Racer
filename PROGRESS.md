@@ -242,3 +242,8 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Reviewer passed it as a parser and determinism review: 250 000 fuzzed inputs and 33.6 million exhaustive short byte strings, no exception, no log with two encodings, worst decode 0.55 ms; car numbers finite in 3000 random replays; on the built site live and replay agree for held-W, random keys, a 32 s messy drive with wall hits, and under 6x CPU throttle. 423 tests, 39 shots byte-identical.
 - For the daily flow: read `recorder.overflowed` (a race past 9:59.983 can't be sent); force the default car settings in a daily (the dev menu can edit them); the Edge Function must wrap its input in `new Uint8Array(...)`.
 - Lead's own small fix: removed the fault name `zeroRun`, which nothing could produce.
+
+## 2026-11-27: step 17, name
+
+- `src/app/gameName.ts`: `GAME_NAME = 'driftle'`. The menu title draws `DRIFTLE` (block letters `D` and `L` added), the one-line fallback `driftle`, the page title is `driftle`, the README's heading is `# driftle` with the working name under it. Not changed: repository and Pages address, package name, the storage key.
+- A small change, checked by the lead instead of a reviewer: the diff read line by line, 423 tests, only the four menu shots differ, the title reads at a glance in `state-menu`.

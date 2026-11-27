@@ -1,4 +1,6 @@
-# ASCII Racer
+# driftle
+
+The repository's working name is ASCII Racer.
 
 A daily 3D racing game set in a city at night, running in the browser and drawn entirely in ASCII characters. The scene is rendered in 3D on the GPU with WebGL2, then a shader pass turns every frame into a grid of text glyphs. Darkness is empty space; headlights, street lamps and neon light up the city in characters.
 
@@ -164,7 +166,7 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
 - [ ] **17. Daily**: the main mode
   - [x] Day number from the UTC date, city seed and route from the day number
   - [x] Input recording: one input per tick packed into a compact log, and a headless replay that gives the same finish tick
-  - [ ] Name: the game is called driftle wherever a player sees it (menu title, page title, README heading; one constant for the share text and the release step to use)
+  - [x] Name: the game is called driftle wherever a player sees it (menu title, page title, README heading; one constant for the share text and the release step to use)
   - [ ] Simulation version constant, bumped by any change to simulation or generation (a test fails when the reference run changes without it)
   - [ ] Daily flow without a backend: pre-race screen, one try kept in the browser, results with time, countdown to the next day
   - [ ] Supabase project files: migrations for attempts and runs with row level security, anonymous sign-ins, local config

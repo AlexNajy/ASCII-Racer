@@ -1,3 +1,4 @@
+import { GAME_NAME } from '../app/gameName.ts';
 import { entryEnabled, MENU_ENTRIES } from '../app/mainMenu.ts';
 import { blockRows } from './blockFont.ts';
 import { FRAME_COLOR } from './raceHud.ts';
@@ -18,7 +19,7 @@ export interface ListScreen {
   entries: readonly ListEntry[];
 }
 
-const TITLE = 'ASCII RACER';
+const TITLE = GAME_NAME.toUpperCase();
 const TITLE_COLOR = 0xffd070;
 export const ENTRY_COLOR = 0xd0d0d0;
 export const SELECTED_COLOR = 0xffd070;
@@ -42,7 +43,7 @@ function innerWidth(entries: readonly ListEntry[], padding: number): number {
 
 const MENU_SCREEN: ListScreen = {
   title: TITLE,
-  smallTitle: TITLE.toLowerCase(),
+  smallTitle: GAME_NAME,
   titleColor: TITLE_COLOR,
   entries: MENU_ENTRIES.map(({ label }, i) => ({ label, enabled: entryEnabled(i) })),
 };
