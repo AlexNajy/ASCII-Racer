@@ -6,6 +6,7 @@ import { TICKS_PER_SECOND } from './clock.ts';
 import { driveRace, type DrivenRace } from './driver.ts';
 import { COUNTDOWN_TICKS } from './race.ts';
 import { runReference } from './referenceRun.ts';
+import { DRIVEN_RACE_HASH } from './referenceValues.ts';
 import { ROUTE_LENGTHS, type RouteLengthName } from './route.ts';
 import { createRaceWorld, stepWorld, type World } from './world.ts';
 
@@ -87,9 +88,6 @@ describe('test driver', { timeout: 30000 }, () => {
     expect(replayed.car).toEqual(driven.car);
   });
 
-  // Update on purpose only: the first complete race on record, which a server checking runs must agree with.
-  const DRIVEN_RACE_HASH = 3683511602;
-
   it('matches the stored hash of the driven race in city 1 on route 1', () => {
     const { hash } = runReference(raceWorld(1), recordedRace().result.inputs);
     expect(
@@ -98,8 +96,8 @@ describe('test driver', { timeout: 30000 }, () => {
         `Driven race hash for city 1, route 1 changed (${hash}, stored ${DRIVEN_RACE_HASH}).`,
         'The simulation, city or route generation, or the test driver now gives a different race. That is only fine',
         'if it was meant: a recorded race no longer replays the same, so times recorded before it are void.',
-        'If it was meant, replace DRIVEN_RACE_HASH in src/game/driver.test.ts with the new hash',
-        '(and bump the simulation version once it exists). If not, find what changed.',
+        'If it was meant, replace DRIVEN_RACE_HASH in src/game/referenceValues.ts with the new hash',
+        '(and bump SIMULATION_VERSION, see version.test.ts). If not, find what changed.',
       ].join('\n'),
     ).toBe(DRIVEN_RACE_HASH);
   });

@@ -11,26 +11,60 @@ import { CAR_COLORS } from '../render/models/palettes.ts';
 // Read once at startup, for repeatable pictures (`npm run shots`). With none of them present nothing changes.
 export interface UrlParams {
   seed: number | null;
+  day: number | null; // start in this day's daily city instead of today's; seed= wins
   renderMode: RenderMode | null;
   camera: Camera | null; // a fly camera pose, which switches to the fly camera
   tick: number | null; // the world is stepped to this tick with no input and then held
   shot: boolean; // mark the canvas when a frame has been drawn
   drive: boolean; // the held tick's stepping holds full throttle instead of no input
+  replay: boolean; // at the finish, replay the recorded inputs headless and log both finish ticks (always in dev builds)
   hud: 'test' | null; // fill the text layer with a test card
   cellWidth: number | null; // CSS px, as the dev menu's cell width
   race: boolean; // race=0: the race state drives freely from the middle junction instead of on the city seed's route
   gate: number | null; // the race's next gate once it starts, to show a later gate lit; the gate count finishes it
   car: { x: number; z: number; quarterTurns: number } | null; // the car's place after the race starts, heading in quarter turns left of north
-  state: GameStateKind; // the screen the game starts on, the menu without the parameter; loading is held, never built
+  state: UrlState; // the screen the game starts on, the menu without the parameter; loading is held, never built; the daily states only under shot
+  dnf: boolean; // with state=dailyresults: the try did not finish (else gate=<gate count> finishes it)
+  next: number | null; // with a daily state: seconds to the next daily on the pinned clock
+  giveUp: boolean; // with state=dailyrace: Esc has asked whether to give up
+  board: number | null; // with state=dailyresults: a made-up board of this many finished runs, the player's among them when finished
   entry: number | null; // the menu entry (with state=results the finish screen's option, state=settings or garage the row) selected at the start, 0 first
   edit: string | null; // with state=settings: the nickname being typed, as if typed so far
   shape: CarShape | null; // the car's body shape instead of the stored one
   color: string | null; // the car's colour (a CAR_COLORS id) instead of the stored one
+  dailyStorage: boolean; // whether this load may read and write the daily's try in storage (dailyStorageAllowed)
 }
 
-const URL_STATES: Record<string, GameStateKind> = { menu: 'menu', prerace: 'preRace', race: 'race', results: 'results', settings: 'settings', garage: 'garage', loading: 'loading' };
+// The game states, plus the daily's race (the race state of the daily mode).
+export type UrlState = GameStateKind | 'dailyRace';
+const URL_STATES: Record<string, UrlState> = {
+  menu: 'menu',
+  daily: 'preRace',
+  dailyrace: 'dailyRace',
+  dailyresults: 'dailyResults',
+  race: 'race',
+  results: 'results',
+  settings: 'settings',
+  garage: 'garage',
+  loading: 'loading',
+};
+const DAILY_STATES: readonly UrlState[] = ['preRace', 'dailyRace', 'dailyResults'];
+
+// Parameters that change what a race does or which clock it reads (shot and tick pin the clock), or that show a
+// daily screen without its stored try. With any of them present the daily's try lives in memory only, so nothing
+// practised or made up on such a load is ever kept.
+export const DAILY_STORAGE_BLOCKERS = ['gate', 'car', 'tick', 'shot', 'drive', 'dnf', 'giveup', 'next', 'board'] as const;
+const DAILY_URL_STATES = Object.keys(URL_STATES).filter((name) => DAILY_STATES.includes(URL_STATES[name]));
+
+export function dailyStorageAllowed(search: string): boolean {
+  const query = new URLSearchParams(search);
+  const state = query.get('state');
+  return !DAILY_STORAGE_BLOCKERS.some((name) => query.has(name)) && !DAILY_URL_STATES.includes(state ?? '');
+}
+export const MAX_URL_NEXT = 2 * 86_400; // s; a day, or two when the clock is behind a stored try
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
+export const MAX_URL_BOARD = 100_000;
 
 function number(name: string, value: string): number {
   const parsed = Number(value);
@@ -41,6 +75,7 @@ function number(name: string, value: string): number {
 export function parseUrlParams(search: string): UrlParams {
   const query = new URLSearchParams(search);
   const seed = query.get('seed');
+  const day = query.get('day');
   const mode = query.get('mode');
   const camera = query.get('camera');
   const tick = query.get('tick');
@@ -54,6 +89,10 @@ export function parseUrlParams(search: string): UrlParams {
   const edit = query.get('edit');
   const shape = query.get('shape');
   const color = query.get('color');
+  const dnf = query.get('dnf');
+  const next = query.get('next');
+  const giveUp = query.get('giveup');
+  const board = query.get('board');
 
   let renderMode: RenderMode | null = null;
   if (mode !== null) {
@@ -79,6 +118,9 @@ export function parseUrlParams(search: string): UrlParams {
   if (seedNumber !== null && (!Number.isInteger(seedNumber) || seedNumber < 0)) {
     throw new Error('URL parameter seed: expected a whole number, 0 or more');
   }
+
+  const dayNumber = day === null ? null : number('day', day);
+  if (dayNumber !== null && !Number.isInteger(dayNumber)) throw new Error('URL parameter day: expected a whole number');
 
   if (hud !== null && hud !== 'test') throw new Error(`URL parameter hud: "${hud}" is not test`);
   const cellWidth = cell === null ? null : number('cell', cell);
@@ -107,7 +149,7 @@ export function parseUrlParams(search: string): UrlParams {
 
   const entryNumber = entry === null ? null : number('entry', entry);
   const entries =
-    state === 'results' ? RESULTS_OPTIONS.length : state === 'settings' ? SETTINGS_ROWS.length : state === 'garage' ? GARAGE_ROWS.length : MENU_ENTRIES.length;
+    state === 'results' ? RESULTS_OPTIONS.length : state === 'dailyresults' ? 2 : state === 'settings' ? SETTINGS_ROWS.length : state === 'garage' ? GARAGE_ROWS.length : MENU_ENTRIES.length;
   if (entryNumber !== null && (!Number.isInteger(entryNumber) || entryNumber < 0 || entryNumber >= entries)) {
     throw new Error(`URL parameter entry: expected a whole number, 0 to ${entries - 1}`);
   }
@@ -115,6 +157,25 @@ export function parseUrlParams(search: string): UrlParams {
   if (edit !== null && (state !== 'settings' || edit.length > NICKNAME_MAX || ![...edit].every(nicknameCharacter))) {
     throw new Error(`URL parameter edit: needs state=settings and up to ${NICKNAME_MAX} letters, digits or spaces`);
   }
+
+  const urlState = state === null ? 'menu' : URL_STATES[state];
+  const daily = DAILY_STATES.includes(urlState);
+  if (daily && (dayNumber === null || seedNumber !== null)) throw new Error(`URL parameter state: ${state} needs day= and no seed=`);
+  if (dnf !== null && (dnf !== '1' || urlState !== 'dailyResults')) throw new Error('URL parameter dnf: only dnf=1, with state=dailyresults');
+  const nextNumber = next === null ? null : number('next', next);
+  if (nextNumber !== null && (!daily || !Number.isInteger(nextNumber) || nextNumber < 0 || nextNumber > MAX_URL_NEXT)) {
+    throw new Error(`URL parameter next: needs a daily state and a whole number of seconds, 0 to ${MAX_URL_NEXT}`);
+  }
+  if (giveUp !== null && (giveUp !== '1' || urlState !== 'dailyRace')) throw new Error('URL parameter giveup: only giveup=1, with state=dailyrace');
+  const boardNumber = board === null ? null : number('board', board);
+  if (boardNumber !== null && (urlState !== 'dailyResults' || !Number.isInteger(boardNumber) || boardNumber < 0 || boardNumber > MAX_URL_BOARD)) {
+    throw new Error(`URL parameter board: needs state=dailyresults and a whole number of runs, 0 to ${MAX_URL_BOARD}`);
+  }
+
+  // The daily states are for pictures: on a normal load they would race a day's route or show a result without its
+  // stored try, so they are ignored there and the game opens on the menu.
+  const shot = query.has('shot') || tick !== null;
+  const ignored = daily && !shot;
 
   const carShape = shape === null ? null : (CAR_SHAPES.find((name) => name === shape) ?? null);
   if (shape !== null && !carShape) throw new Error(`URL parameter shape: "${shape}" is not one of ${CAR_SHAPES.join(', ')}`);
@@ -124,20 +185,27 @@ export function parseUrlParams(search: string): UrlParams {
 
   return {
     seed: seedNumber,
+    day: dayNumber,
     renderMode,
     camera: pose,
     tick: tickNumber,
-    shot: query.has('shot') || tick !== null,
+    shot,
     drive: query.get('drive') === '1',
+    replay: query.get('replay') === '1',
     hud,
     cellWidth,
     race: race !== '0',
     gate: gateNumber,
     car: carPose,
-    state: state === null ? 'menu' : URL_STATES[state],
+    state: ignored ? 'menu' : urlState,
+    dnf: !ignored && dnf === '1',
+    next: ignored ? null : nextNumber,
+    giveUp: !ignored && giveUp === '1',
+    board: ignored ? null : boardNumber,
     entry: entryNumber,
     edit,
     shape: carShape,
     color,
+    dailyStorage: dailyStorageAllowed(search),
   };
 }

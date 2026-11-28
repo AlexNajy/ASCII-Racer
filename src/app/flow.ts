@@ -1,4 +1,4 @@
-import { createCar } from '../game/car.ts';
+import { createCar, DEFAULT_CAR_SETTINGS, type CarSettings } from '../game/car.ts';
 import { generateCity, type CitySettings } from '../game/city.ts';
 import { roadGraph } from '../game/roadGraph.ts';
 import { generateRoute, RouteError, type Route } from '../game/route.ts';
@@ -51,9 +51,19 @@ export function unlimitedRoute(pickSeed: () => number, routeFor: (seed: number) 
   return null;
 }
 
+// The daily is driven with these whatever the dev menu holds, so its run replays the same on a server.
+export const DAILY_CAR_SETTINGS: Readonly<CarSettings> = Object.freeze({ ...DEFAULT_CAR_SETTINGS });
+
+// The car settings the world drives with in a state: the daily's own in every daily screen, else the dev menu's.
+export function carSettingsFor(state: GameState, devSettings: CarSettings): CarSettings {
+  const daily =
+    state.kind === 'preRace' || state.kind === 'dailyResults' || ((state.kind === 'race' || state.kind === 'loading') && state.mode === 'daily');
+  return daily ? DAILY_CAR_SETTINGS : devSettings;
+}
+
 // The menu stands the car on the middle junction with no race; the pre-race screen stands it on the route's start
 // with no race yet; the race starts its route (countdown from this tick). Loading drops the old race, whose gates mean
-// nothing in the next city.
+// nothing in the next city, and so does a daily that did not finish.
 export function enterState(world: World, next: GameState, previous: GameState): void {
   switch (next.kind) {
     case 'menu': {
@@ -73,6 +83,9 @@ export function enterState(world: World, next: GameState, previous: GameState): 
       return;
     case 'race':
       if (next.route && previous.kind !== 'race') startRace(world, next.route);
+      return;
+    case 'dailyResults':
+      if (next.ticks === null) clearRace(world);
       return;
     case 'results':
     case 'garage': // reached from the menu, the car stays where the menu stood it; the garage turns its own

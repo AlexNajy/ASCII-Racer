@@ -1,4 +1,4 @@
-# ASCII Racer: the finished game
+# Driftle: the finished game
 
 What the game is when it is done. The roadmap in `README.md` is the order it gets built in; `CLAUDE.md` says how the code works and how the loop works. Where this file is silent, pick the simplest thing that fits, and write it under "Decisions made along the way" at the bottom.
 
@@ -8,12 +8,14 @@ A daily timed race through a generated city, the same route for everyone, one tr
 
 Desktop browsers with a keyboard. No accounts. The client is a static site.
 
+The game is called **driftle**. That is the name a player sees everywhere: the menu title, the page title, the share text, the social preview, the README's heading. "ASCII Racer" is only the working name of the repository and the code.
+
 ## Main menu
 
 Drawn in the glyph grid with the HUD's text layer, over a slow camera flight through today's city. Up/down and Enter, or the mouse.
 
 ```
-ascii racer
+driftle
 
 daily
 unlimited
@@ -143,3 +145,52 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 - Step 16: the garage is its own small dark scene, not a spot in the city: the car turns slowly (one turn in 16 s) on a glowing floor disc under its own light, seen from a fixed camera a little above, headlights off; `GARAGE` at the top and the two rows (shape, colour) in a panel at the bottom, so the car stays clear in the middle. Left/Right or the `<` `>` arrows change a row, every change is saved at once and shows on the car straight away; Esc goes back to the menu with `garage` selected.
 - Step 16: while a city builds (first load, `unlimited`, `next`) the screen is black with one line, `building city...`, in the middle; no percentage (generation is one blocking call). `again` builds nothing and shows no loading line.
 - Step 16: Enter and Esc do nothing while the loading line is up; keys pressed while the city builds arrive once it is ready, where Enter does nothing in the countdown and Esc goes back to the menu. The countdown starts after the build, at its full 3 s.
+- Step 17: the daily's city seed is `1 + blockSeed(day ^ salt, attempt) % 1 000 000` (the same range as unlimited), so neighbouring days give unrelated cities; its route seed is the city seed, medium length, default city settings.
+- Step 17: a day whose city can't hold a route falls to attempt 1, 2... (up to 20, then an error); none of days 0 to 999 needs it.
+- Step 17: days before 2026-01-01 UTC have negative numbers and work the same.
+- Step 17: the game starts in today's city (read once from the clock), so the menu flies through it; after an unlimited race the menu keeps flying through the last loaded city instead of reloading today's.
+- Step 17: a run's input log holds one input per tick from go (the first tick whose input is read) to the tick the finish is crossed in, so its length is the race time; the countdown is not in it.
+- Step 17: inputs are logged as the keyboard makes them (throttle, brake, drift on or off, steer left, none or right: 24 combinations, all possible with the keys, so all accepted); a log can't hold anything analogue.
+- Step 17: a run longer than the timer's 9:59.983 (35 999 ticks) is not valid; a packed log is then at most 36 003 bytes, 48 004 characters as base64url text.
+- Step 17: the server's replay accepts a run only if the finish is crossed on the log's last tick: a log that ends before the finish, or goes on after it, is rejected.
+- Step 17: a log has exactly one valid encoding (shortest lengths, no split runs, no padding); any other form is rejected, not repaired.
+- Step 17: the simulation version counts changes to what a city seed, route seed and input log produce; it is a plain integer, and a test fingerprints the stored reference values (free-driving hashes with city digest, driven race, packed log and its format version, route digests, daily seeds and routes) against a table `version -> fingerprint` kept as history. A bump without changed values is refused, so every version has a distinct fingerprint.
+- Step 17: the daily entry is the menu's first; the menu opens on it while today's try is open, on `unlimited` once it is used. Esc or `menu` from an unlimited screen comes back to the menu with `unlimited` selected, from a daily screen with `daily`.
+- Step 17: the try is kept in `localStorage` (only the latest day's: day, status started / finished / did not finish, time, packed input log, simulation version) and written as started before the countdown's first tick; a started try found later (reload, closed tab, crash) did not finish. Without storage the daily still plays and the try lives in memory until the page closes; unreadable storage counts as no try.
+- Step 17: Esc in the daily race does not end the try: it shows `give up? this is your one try   enter: give up   esc: keep driving` while the race keeps running (no pause, which would let a player stop the clock to plan); only Enter gives up. With the mouse captured, Chrome uses the first Esc to release it and may not pass it to the game, so it can take one more Esc. After the finish Esc goes straight to the results.
+- Step 17: a daily race past the timer's 9:59.983 did not finish; the finish is stored at the finishing tick, so closing the tab during the finish banner keeps the time.
+- Step 17: the day a daily race belongs to is fixed when its pre-race screen opens; finishing after midnight UTC counts for that day, and the next day's daily is open after it.
+- Step 17: a stored try from a later day than the clock says (clock set back) stays the one shown, with its result and the countdown to the day after it; nothing is overwritten and no day gets a second try. A try from today stored with another simulation version still counts as used.
+- Step 17: the daily is driven with the default car settings and built from the default city settings whatever the dev menu holds.
+- Step 17: the pre-race screen shows `DAILY 330` and `ONE TRY` in big letters, a panel saying the try is used when the countdown starts and leaving counts as did not finish, the route's length and gate count, the keys, and the route on the minimap with a marker running it from start to finish at 240 m/s, waiting 1 s on the finish, looping; behind it the car on the start line from the chase camera.
+- Step 17: the daily results show the time (or `DID NOT FINISH`) in big letters, the day, `leaderboard unavailable` and `next daily in hh:mm:ss` (whole seconds rounded up), with one entry, `menu`; when the countdown reaches zero the line says `new daily ready` and the entry becomes `play`, which opens the new daily. A did-not-finish or reopened result has the menu's flight behind it, a fresh finish the car rolling on.
+- Step 17: a stored try more than 1 day (`MAX_DAYS_AHEAD`) ahead of the clock counts as no try, so the daily is open and the next start replaces it.
+- Step 17: a write to the stored try never replaces a further one: a finished run is never overwritten by a start, a give-up or a second finish from any tab (the first stored finish wins).
+- Step 17: Enter on the pre-race screen reads the stored try again; if another tab used today's try meanwhile, it goes to the results instead of the countdown. A tab still racing when another tab's finish is stored can drive on, but its results show the stored finish.
+- Step 17: a page loaded with a daily `state` or any of the URL parameters `gate`, `car`, `tick`, `shot`, `drive`, `dnf`, `giveup`, `next` keeps the daily's try in memory only, never reading or writing storage.
+- Step 17: the give-up question is drawn on every grid at least 8 columns wide (clipped on the top row if nothing else fits); narrower, or outside the glyph render modes, Esc doesn't ask. Enter gives up only after a frame has shown the question.
+- Step 17: a hidden tab stops the race and its clock (the browser stops drawing frames, and time is counted in ticks); accepted, nothing detects it.
+- Step 17: the database has three tables keyed by identity and day: `attempts` (the try is used), `runs` (a checked finish: ticks, nickname, simulation version) and `run_logs` (the inputs, apart so no browser can read and resend another player's). Only the service role writes; a signed-in browser reads its own attempts and the runs of days it has an attempt for; nobody else reads anything.
+- Step 17: the database checks what it stores (ticks 1 to 35 999, the nickname rule, a log of base64url text up to 48 004 characters); a test keeps those numbers equal to the game's.
+- Step 17: the local Supabase stack uses ports 544xx so it runs beside other local projects; sign-ups stay enabled because anonymous sign-ins count as sign-ups, email and phone sign-in are off.
+- Step 17: the server decides the day: an attempt can be started only for the server's today, or for yesterday in the first 5 minutes after 00:00 UTC (a pre-race screen opened just before midnight); a run can be sent on its day or the day after, so a late finish or a dropped connection still counts.
+- Step 17: a run is accepted only from the identity of a verified sign-in that has an attempt for that day, with the server's simulation version and a valid nickname (not corrected by the server); nothing in the request claims a time. A second send answers with the time already stored and changes nothing.
+- Step 17: the server does not tie a run to its attempt in time: after starting, an identity can send any finishing log until the end of the next day. Accepted, since a new identity costs nothing either; what the server guarantees is that every time on the board was really driven on that day's route.
+- Step 17: a run that doesn't finish on the server stores nothing and can be sent again; giving up or not finishing is recorded only in the browser.
+- Step 17: the functions check tokens with the auth server (no gateway check, so the browser's preflight passes) and answer JSON with a reason for every refusal.
+- Step 17: on a merge to `main` the backend deploys first (migrations, then the functions, then the auth settings the game needs: anonymous sign-ins on, email off, sign-ups on; then a check that creates nothing), and the site builds only if that succeeded, so the site is never newer than its server. Without all three secrets every backend step skips and the site deploys as before. A manual run on another branch does nothing.
+- Step 17: the site gets the project's address and publishable key (else the legacy anon key) at build time; both are public by design. Pull requests run a read-only dry run of the migration push against the hosted project.
+- Step 17: the browser signs in anonymously the first time the daily is opened (that is also when the backend library is loaded, never at startup), starts the attempt when the countdown starts and sends the run at the finish, all in the background: the game never waits for the network. Giving up or not finishing sends nothing.
+- Step 17: a finished run that was not sent (offline, tab closed) is sent the next time the daily is opened, while the server still takes it (its day or the day after). A failure that may pass (no network, a server error) is tried again after 2, 5, 10, 20 and 40 s while the daily is open; a refusal is final and kept with the try.
+- Step 17: the results show one status line of fixed width: `sending run...`, `run recorded`, `game updated: reload` (the server runs a newer simulation) or `leaderboard unavailable` (no backend, offline, did not finish, refused). Once stored, the time shown is the server's.
+- Step 17: a build without the backend's address, and any page loaded with a dev URL parameter that changes races, makes no request and loads no backend code.
+- Step 17: the results come from one database function, answered only to a signed-in player with an attempt for that day (nothing otherwise, not even the count): the number of finished runs, the player's time, rank and how many were slower, the ten fastest with nicknames, and a histogram. No identities or timestamps leave the database.
+- Step 17: rank is one more than the number of strictly faster runs, so equal times share a rank; the top list is ordered by time, then by who finished first. Runs of every simulation version of a day share one board.
+- Step 17: the histogram has 48 equal buckets from the fastest time to the 95th percentile (at least 48 ticks wide); slower runs are counted in the last bucket, so a few very slow runs don't flatten the curve.
+- Step 17: "faster than N%" counts the other players: runs strictly slower over all runs but the player's own, rounded down; not shown when the player is the only one.
+- Step 17: with a board, the results show the time, `daily #N`, `#114 of 300   faster than 62% of players`, the histogram and the top times side by side, the countdown and the entries; the player is pink everywhere (time, bar, `^ you`, row). A player alone gets `the first to finish today`; an empty day `no finished runs yet`. Without a board the screen is the plain one with its status line.
+- Step 17: the histogram's bars are glyph columns (`_`, `=`, `#` for a third, two thirds and a full cell), scaled to the tallest; under 1000 runs neighbouring buckets are drawn summed in pairs so a small day still reads as a curve. The axis says the fastest time and the cap with a `+` (it holds everything slower).
+- Step 17: the top list shows ten rows (five on small grids); a player outside it gets their own row under `...`, with the nickname from the settings. Without a run of their own (did not finish) the board has no marker, rank or percentile.
+- Step 17: the board is fetched when the results open, again when the run is stored, and every 60 s while the screen is open; a failed fetch keeps what is shown. Smaller windows drop the top list, then the histogram, then show rank and percentile as plain lines.
+- Step 17: a finished daily's results have the entries `share` (selected first) and `menu` (`play` once the next daily is ready); a did-not-finish has only `menu`. Picking `share` copies the text and stays on the screen; the entry reads `copied` (or `copy failed`) for 2 s.
+- Step 17: the shared text is `driftle #<day>`, the time, `faster than N% of players` (only with other players on the board), one line of 24 characters for the histogram (`.` empty, `:-=+#` by height, the player's bar in brackets) and the link, each on its own line; without a board only name, day, time and link. Plain ASCII, and none of the characters chat apps treat as formatting.

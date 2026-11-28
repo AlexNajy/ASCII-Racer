@@ -2,7 +2,7 @@ import './style.css';
 import { parseUrlParams } from './dev/urlParams.ts';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, capFrameSeconds, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
-import { blendCars, CAR_WIDTH, createCar, DEFAULT_CAR_SETTINGS, type CarSettings, type Impact } from './game/car.ts';
+import { blendCars, CAR_WIDTH, createCar, DEFAULT_CAR_SETTINGS, type Car, type CarSettings, type Impact } from './game/car.ts';
 import { NO_INPUT, readCarInput } from './game/carInput.ts';
 import { updateFlyCamera } from './game/flyCamera.ts';
 import {
@@ -18,22 +18,52 @@ import { FENCE_HEIGHT } from './game/fences.ts';
 import { lotPavements } from './game/lots.ts';
 import { POND_RADIUS } from './game/park.ts';
 import { signalPhase } from './game/signals.ts';
-import type { Route } from './game/route.ts';
-import { goTick, raceTicks } from './game/race.ts';
+import { generateRoute, type Route } from './game/route.ts';
+import { goTick, raceTicks, type Race } from './game/race.ts';
+import { decodeLogText, encodeLogText, InputRecorder } from './game/inputLog.ts';
+import { replayInWorld } from './game/replay.ts';
 import { createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorld, type CityData } from './game/world.ts';
-import { cityRoute, enterState, randomCitySeed, seedRoute, unlimitedRoute } from './app/flow.ts';
+import { DAILY_EPOCH, dailyCitySettings, dailyRace, dayNumber, MS_PER_DAY } from './game/daily.ts';
+import { carSettingsFor, cityRoute, enterState, randomCitySeed, seedRoute, unlimitedRoute } from './app/flow.ts';
+import { dailyEntry, recordOnChange, resultsOfRecord, startDaily } from './app/dailyFlow.ts';
+import { backendConfig, createDailyBackend, ResultsBoard, runNickname } from './app/dailyBackend.ts';
+import { sampleBoard } from './dev/sampleBoard.ts';
+import type { DailyResults } from './app/dailyResults.ts';
+import { copyText } from './app/clipboard.ts';
+import { shareLabel, shareText, type ShareFeedback } from './app/share.ts';
+import { browserBackend } from './app/dailyBackendBrowser.ts';
+import {
+  dailyTry,
+  finishedRecord,
+  loadDailyRecord,
+  mergeForStore,
+  millisecondsToDay,
+  newerRecord,
+  readableRecord,
+  saveDailyRecord,
+  settleRecord,
+  type DailyRecord,
+} from './app/dailyRecord.ts';
 import {
   afterTick,
+  dailyRacing,
+  dailyResults,
   FIRST_OPTION,
   GARAGE,
+  giveUp,
   MENU,
+  menuAt,
   moveSelection,
+  opensDaily,
   preRace,
   loaded,
   loading,
   pressEnter,
+  picksShare,
+  FIRST_DAILY_ENTRY,
   pressEscape,
   race as raceState,
+  raceFinished,
   selectEntry,
   type GameState,
 } from './app/gameState.ts';
@@ -63,14 +93,14 @@ import { viewMatrix, type Camera } from './render/camera.ts';
 import { flightPath, flightPose } from './render/menuFlight.ts';
 import { createGlyphAtlas } from './render/glyphs.ts';
 import { createHudTexture, uploadHud } from './hud/hudTexture.ts';
-import { drawHud } from './hud/hud.ts';
+import { drawHud, giveUpShown } from './hud/hud.ts';
 import { routeGuidance } from './hud/guidance.ts';
 import { createMinimap } from './hud/minimap.ts';
 import { drawFinishScreen, finishLayout } from './hud/finishScreen.ts';
 import { drawGarageScreen, garageLayout, garageRowAt } from './hud/garageScreen.ts';
 import { drawLoadingScreen } from './hud/loadingScreen.ts';
 import { drawMenuScreen, menuEntryAt, menuLayout } from './hud/menuScreen.ts';
-import { drawPreRaceScreen } from './hud/screens.ts';
+import { dailyResultsLayout, drawDailyResultsScreen, drawPreRaceScreen } from './hud/dailyScreens.ts';
 import { drawSettingsScreen, settingsLayout, settingsRowAt } from './hud/settingsScreen.ts';
 import { drawTestCard } from './hud/testCard.ts';
 import { printableRows, TextGrid } from './hud/textGrid.ts';
@@ -382,11 +412,66 @@ const carSettings: CarSettings = { ...DEFAULT_CAR_SETTINGS };
 const chaseSettings: ChaseCameraSettings = { ...DEFAULT_CHASE_CAMERA_SETTINGS };
 
 const urlParams = parseUrlParams(window.location.search);
-if (urlParams.seed !== null) citySettings.seed = urlParams.seed;
+// Shots pin the clock: next= seconds (SHOT_NEXT_SECONDS without it) before the day after day= (day 0 without it).
+const SHOT_NEXT_SECONDS = 5 * 3600 + 12 * 60 + 44;
+const pinnedNow = urlParams.shot ? DAILY_EPOCH + ((urlParams.day ?? 0) + 1) * MS_PER_DAY - (urlParams.next ?? SHOT_NEXT_SECONDS) * 1000 : null;
+// App flow: the daily's day and the countdown to the next one read the browser clock, never the simulation.
+function now(): number {
+  return pinnedNow ?? Date.now();
+}
+// The city is today's daily one, day= another day's, seed= any seed.
+citySettings.seed = urlParams.seed ?? dailyRace(urlParams.day ?? dayNumber(now())).seed;
 // Even reaching localStorage can throw; loadSettings and saveSettings catch it. Shots run with the defaults and
 // never write, so every load gives the same picture.
 const storage = () => window.localStorage;
 let playerSettings: PlayerSettings = urlParams.shot ? { ...DEFAULT_PLAYER_SETTINGS } : loadSettings(storage);
+// The daily's try, in memory and, where it can be, in storage; a load with a parameter that changes races, their
+// clock or shows a daily screen (urlParams.dailyStorage) neither reads nor writes it. A try that was started before
+// this page loaded never finished.
+let dailyRecord: DailyRecord | null = null;
+// The stored try may have changed in another tab, or be gone; the one that says more wins.
+function knownDaily(): DailyRecord | null {
+  const today = dayNumber(now());
+  const stored = urlParams.dailyStorage ? loadDailyRecord(storage) : null;
+  return newerRecord(readableRecord(dailyRecord, today), readableRecord(stored, today));
+}
+// Read again just before writing; a record that says less than the known one is refused, and memory follows it.
+function storeDaily(record: DailyRecord) {
+  const kept = mergeForStore(knownDaily(), record, dayNumber(now()));
+  dailyRecord = kept;
+  if (urlParams.dailyStorage && kept === record) saveDailyRecord(storage, kept);
+}
+function latestDaily() {
+  const latest = settleRecord(knownDaily());
+  if (latest && latest !== dailyRecord) storeDaily(latest);
+}
+latestDaily();
+// The daily's server, only in a build that has one and on a load that may store the try: nothing else signs in or
+// sends anything. supabase-js loads the first time the daily is opened.
+const backendSettings = backendConfig(import.meta.env, urlParams.dailyStorage);
+const backendBrowser = backendSettings && browserBackend(backendSettings);
+const dailyBackend = createDailyBackend(backendSettings, () => ({
+  ...backendBrowser!,
+  record: knownDaily,
+  write: (record) => {
+    storeDaily(record);
+    if (gameState.kind === 'dailyResults') changeState(resultsOfRecord(gameState, dailyRecord));
+    if (record.sent?.status === 'stored') resultsBoard?.stored(record.day);
+  },
+  nickname: () => playerSettings.nickname,
+  log: (message) => console.log(message),
+}));
+// The daily results' leaderboard, fetched while the results are open; a board that changes redraws the whole text
+// layer, as its layout may differ.
+const resultsBoard =
+  backendBrowser &&
+  new ResultsBoard({
+    fetch: (day) => backendBrowser.results(day),
+    timer: backendBrowser.timer,
+    changed: () => {
+      if (urlParams.hud !== 'test') hud.clear();
+    },
+  });
 // shape= and color= pick the car as the garage would (saved with the next change unless under shot).
 if (urlParams.shape) playerSettings = { ...playerSettings, carShape: urlParams.shape };
 if (urlParams.color) playerSettings = { ...playerSettings, carColor: urlParams.color };
@@ -599,18 +684,28 @@ await new Promise<void>((resolve) =>
 );
 
 const world = createWorld(citySettings, carSettings);
-// The game starts on the menu. state=race (and results) starts an unlimited race on the city seed's route at tick 0,
-// as shots do; race=0 drives freely instead.
-let gameState: GameState = MENU;
+// What the built city was made from, to tell whether the daily's city is the one loaded.
+let builtCity = JSON.stringify(citySettings);
+// The game starts on the menu, on the daily while today's try is open. state=race (and results) starts an unlimited
+// race on the city seed's route at tick 0, as shots do; race=0 drives freely instead. The daily states use day='s.
+let gameState: GameState = dailyTry(dailyRecord, dayNumber(now())).used ? menuAt('unlimited') : MENU;
 if (urlParams.state === 'race' || urlParams.state === 'results') {
   const route = urlParams.race ? cityRoute(world) : null;
   gameState = raceState('unlimited', route);
   if (route) startRace(world, route);
-} else if (urlParams.state === 'preRace') {
-  const route = cityRoute(world);
-  if (!route) throw new Error('URL parameter state: the city has no route');
-  gameState = preRace('unlimited', route);
-  enterState(world, gameState, MENU);
+} else if (urlParams.state === 'preRace' || urlParams.state === 'dailyRace' || urlParams.state === 'dailyResults') {
+  const day = urlParams.day!;
+  const { route } = dailyRace(day);
+  if (urlParams.state === 'preRace') {
+    gameState = preRace(day, route);
+    enterState(world, gameState, MENU);
+  } else if (urlParams.state === 'dailyResults' && urlParams.dnf) {
+    gameState = selectEntry(dailyResults(day, null), urlParams.entry ?? FIRST_DAILY_ENTRY);
+  } else {
+    gameState = { ...dailyRacing(day, route), givingUp: urlParams.giveUp };
+    startRace(world, route);
+  }
+  world.carSettings = carSettingsFor(gameState, carSettings);
 } else if (urlParams.state === 'settings') {
   const editing = urlParams.edit === null ? null : { text: urlParams.edit, tooShort: false };
   gameState = { kind: 'settings', selected: urlParams.entry ?? 0, editing };
@@ -627,11 +722,15 @@ if (urlParams.gate !== null && world.race && !finishAtStart) {
   if (urlParams.gate > world.race.route.gates.length) throw new Error(`URL parameter gate: the route has ${world.race.route.gates.length} gates`);
   world.race.nextGate = urlParams.gate;
 }
-if (urlParams.car) {
+function placeUrlCar(target: typeof world) {
+  if (!urlParams.car) return;
   const { x, z, quarterTurns } = urlParams.car;
-  world.car = createCar(x, z, (quarterTurns * Math.PI) / 2);
-  world.previousCar = { ...world.car };
+  target.car = createCar(x, z, (quarterTurns * Math.PI) / 2);
+  target.previousCar = { ...target.car };
 }
+placeUrlCar(world);
+// gate= and car= changed this race at its start; a replay of it does the same.
+const urlChangedRace = urlParams.gate !== null || urlParams.car ? world.race : null;
 // A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
 const heldTick = urlParams.tick;
 const heldInput = urlParams.drive && gameState.kind === 'race' ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
@@ -641,12 +740,13 @@ if (finishAtStart && world.race) {
   world.race.phase = 'finished';
   world.race.finishTick = Math.max(world.tick, goTick(world.race));
 }
-if (urlParams.state === 'results') {
+if (urlParams.state === 'results' || (urlParams.state === 'dailyResults' && !urlParams.dnf)) {
   if (world.race?.phase !== 'finished') throw new Error('URL parameter state: results needs a finished race (gate=<gate count>)');
-  gameState = selectEntry(
-    { kind: 'results', mode: 'unlimited', route: world.race.route, ticks: raceTicks(world.race, world.tick), selected: FIRST_OPTION },
-    urlParams.entry ?? FIRST_OPTION,
-  );
+  const ticks = raceTicks(world.race, world.tick);
+  gameState =
+    gameState.kind === 'race' && gameState.mode === 'daily'
+      ? selectEntry(dailyResults(gameState.day, ticks), urlParams.entry ?? FIRST_DAILY_ENTRY)
+      : selectEntry({ kind: 'results', mode: 'unlimited', route: world.race.route, ticks, selected: FIRST_OPTION }, urlParams.entry ?? FIRST_OPTION);
 }
 let cityMeshes = buildCityMeshes(world);
 // The race's gates, rebuilt whenever its route changes; none in free driving.
@@ -663,10 +763,13 @@ let signals = createSignalTexture(gl, world.city.junctions.length);
 let minimap = createMinimap(world.city);
 let flight = flightPath(world.roadGraph);
 
-// Builds the city of the current settings: the world's data, meshes, signals, minimap and flight. Blocks the main
-// thread for a moment. The car and the race are left as they were; the caller changes the game state next.
-function loadCity() {
+// Builds the city of `settings`: the world's data, meshes, signals, minimap and flight. Blocks the main thread for a
+// moment. The car and the race are left as they were; the caller changes the game state next. The daily's city is
+// built from its own settings, so the dev menu's city settings never reach it.
+function loadCity(settings: CitySettings) {
   cityMeshes.forEach(deleteMesh);
+  world.citySettings = settings;
+  builtCity = JSON.stringify(settings);
   regenerateWorldCity(world);
   cityMeshes = buildCityMeshes(world);
   gl!.deleteTexture(signals.texture);
@@ -679,7 +782,7 @@ function loadCity() {
 
 // The dev menu's regenerate: the old route and the car's place mean nothing in the new city.
 function regenerateCity() {
-  loadCity();
+  loadCity(citySettings);
   setGameState(MENU);
 }
 
@@ -689,8 +792,12 @@ function newUnlimitedRoute(): Route | null {
   const route = unlimitedRoute(randomCitySeed, (seed) => seedRoute(citySettings, seed));
   if (!route) return null;
   citySettings.seed = route.seed;
-  loadCity();
+  loadCity(citySettings);
   return route;
+}
+
+function dailyCityBuilt(seed: number): boolean {
+  return builtCity === JSON.stringify(dailyCitySettings(seed));
 }
 
 // The loading state builds its city in a task after the frame showing the loading line; state=loading only holds it.
@@ -700,7 +807,12 @@ function finishLoading() {
   loadPending = false;
   if (gameState.kind !== 'loading') return;
   try {
-    setGameState(loaded(gameState, newUnlimitedRoute()));
+    if (gameState.mode === 'daily') {
+      loadCity(dailyCitySettings(gameState.route.seed));
+      setGameState(loaded(gameState, gameState.route));
+    } else {
+      setGameState(loaded(gameState, newUnlimitedRoute()));
+    }
   } catch (error) {
     // A failed build must not be retried every frame.
     setGameState(loaded(gameState, null));
@@ -776,10 +888,21 @@ const clock = createClock();
 const chase = createChaseCamera();
 faceCarHeading();
 
-function setGameState(next: GameState) {
+function setGameState(entered: GameState) {
+  // The daily's try is written before its countdown's first tick; its results show what is stored for the day.
+  const written = recordOnChange(gameState, entered);
+  if (written) storeDaily(written);
+  const next = resultsOfRecord(entered, dailyRecord);
+  if (dailyBackend) {
+    if (written?.status === 'started') dailyBackend.startAttempt(written.day);
+    const daily = next.kind === 'preRace' || next.kind === 'dailyResults' || ((next.kind === 'loading' || next.kind === 'race') && next.mode === 'daily');
+    if ((next.kind === 'preRace' || next.kind === 'dailyResults') && next.kind !== gameState.kind) dailyBackend.open();
+    else if (!daily) dailyBackend.close();
+  }
+  world.carSettings = carSettingsFor(next, carSettings);
   enterState(world, next, gameState);
   // Every state but the results puts the car somewhere new.
-  if (next.kind !== 'results') faceCarHeading();
+  if (next.kind !== 'results' && next.kind !== 'dailyResults') faceCarHeading();
   gameState = next;
   if (hasList(next) && document.pointerLockElement) document.exitPointerLock();
   if (urlParams.hud !== 'test') hud.clear();
@@ -787,7 +910,11 @@ function setGameState(next: GameState) {
 // The menu, the finish screen, the garage and the settings are lists chosen from with the keys and the mouse, which
 // is never captured there.
 function hasList(state: GameState): boolean {
-  return state.kind === 'menu' || state.kind === 'results' || state.kind === 'settings' || state.kind === 'garage';
+  return state.kind === 'menu' || state.kind === 'results' || state.kind === 'settings' || state.kind === 'garage' || state.kind === 'dailyResults';
+}
+// The menu's flight, behind the menu, the settings and the daily results when no race is left to watch.
+function menuFlight(): boolean {
+  return gameState.kind === 'menu' || gameState.kind === 'settings' || (gameState.kind === 'dailyResults' && !world.race);
 }
 // Only on screen in the car movement; the fly camera hides the text layer.
 function listShown(): boolean {
@@ -795,9 +922,46 @@ function listShown(): boolean {
 }
 function changeState(next: GameState) {
   if (next === gameState) return;
-  // A new selection only redraws the two entry rows.
-  if (next.kind === gameState.kind && hasList(next)) gameState = next;
+  // A new selection only redraws the two entry rows; the daily's give-up question only its line.
+  if (next.kind === gameState.kind && (hasList(next) || next.kind === 'race')) gameState = next;
   else setGameState(next);
+}
+// Enter, which on the daily entry (and on the daily results once the next day has begun) reads the clock and the
+// stored try.
+function enter(state: GameState): GameState {
+  if (state.kind === 'dailyResults' && picksShare(state)) {
+    shareResults(state);
+    return state;
+  }
+  const today = dayNumber(now());
+  if (state.kind === 'preRace') {
+    latestDaily();
+    return startDaily(state, dailyRecord, today, dailyCityBuilt);
+  }
+  if (!opensDaily(state, today)) return pressEnter(state, giveUpOnScreen);
+  latestDaily();
+  return dailyEntry(today, dailyRecord, dailyCityBuilt);
+}
+// board= on a shot: a made-up day of that many runs, the player's among them when finished.
+let shotBoard: { ticks: number | null; board: DailyResults } | null = null;
+function boardOf(state: Extract<GameState, { kind: 'dailyResults' }>): DailyResults | null {
+  if (urlParams.board === null) return resultsBoard?.results(state.day) ?? null;
+  if (shotBoard?.ticks !== state.ticks) shotBoard = { ticks: state.ticks, board: sampleBoard(state.day, urlParams.board, state.ticks, runNickname(playerSettings.nickname)) };
+  return shotBoard.board;
+}
+// The share entry: the text goes to the clipboard from inside the key or click handler; the entry says how it went.
+let shareFeedback: ShareFeedback | null = null;
+function shareResults(state: Extract<GameState, { kind: 'dailyResults' }>) {
+  if (state.ticks === null) return;
+  const text = shareText({ day: state.day, ticks: state.ticks, results: boardOf(state) });
+  copyText(text).then((copied) => {
+    shareFeedback = { outcome: copied ? 'copied' : 'failed', at: performance.now() };
+  });
+}
+function dailyResultsShown(state: Extract<GameState, { kind: 'dailyResults' }>) {
+  const leaderboard = dailyBackend ? dailyBackend.status(dailyRecord, state.day) : 'unavailable';
+  const untilNext = millisecondsToDay(state.day + 1, now());
+  return { day: state.day, ticks: state.ticks, untilNext, leaderboard, board: boardOf(state), nickname: runNickname(playerSettings.nickname), shareLabel: shareLabel(shareFeedback, performance.now()) };
 }
 function moveMenuSelection(step: number) {
   if (listShown() && !devMenu.isOpen()) changeState(moveSelection(gameState, step));
@@ -818,7 +982,11 @@ function cellUnder(event: MouseEvent) {
 }
 function menuEntryUnder(event: MouseEvent): number | null {
   const layout =
-    gameState.kind === 'results' ? finishLayout(hud.columns, hud.rows, gameState.ticks) : menuLayout(hud.columns, hud.rows);
+    gameState.kind === 'results'
+      ? finishLayout(hud.columns, hud.rows, gameState.ticks)
+      : gameState.kind === 'dailyResults'
+        ? dailyResultsLayout(hud.columns, hud.rows, dailyResultsShown(gameState))
+        : menuLayout(hud.columns, hud.rows);
   const cell = cellUnder(event);
   return layout && cell ? menuEntryAt(layout, cell.column, cell.row) : null;
 }
@@ -860,15 +1028,22 @@ trackMouse(canvas, (event) => {
   if (entry !== null) {
     const selected = selectEntry(gameState, entry);
     changeState(selected);
-    changeState(pressEnter(selected));
+    changeState(enter(selected));
   }
   return false;
 });
 trackKeyPress('Enter', () => {
-  if (!devMenu.isOpen()) changeState(pressEnter(gameState));
+  if (!devMenu.isOpen()) changeState(enter(gameState));
 });
+// The give-up question is only asked where it can be seen: the text layer shows only in the glyph modes.
+function canAskGiveUp(): boolean {
+  const textShown = settings.renderMode === RenderMode.Glyphs || settings.renderMode === RenderMode.CrtGlyphs;
+  return settings.movement === Movement.Car && textShown && urlParams.hud !== 'test' && giveUpShown(hud.columns, hud.rows);
+}
+// Set by the last frame drawn: Enter gives up only once the question has been on screen.
+let giveUpOnScreen = false;
 trackKeyPress('Escape', () => {
-  if (!devMenu.isOpen()) changeState(pressEscape(gameState));
+  if (!devMenu.isOpen()) changeState(pressEscape(gameState, canAskGiveUp()));
 });
 // The garage's Left and Right change the selected row's choice.
 function cycleGarage(step: number) {
@@ -930,6 +1105,32 @@ window.addEventListener(
   { capture: true },
 );
 let carInput = NO_INPUT;
+// The inputs of the race being driven, one per tick it reads them.
+const recorder = new InputRecorder();
+let recordedRace: Race | null = null;
+
+// In dev builds and with replay=1: the finished race's log, packed and unpacked, replayed headless as a server would.
+function checkReplay(race: Race, car: Car) {
+  const decoded = decodeLogText(encodeLogText(recorder.log()));
+  if (!decoded.ok) {
+    console.log(`replay: the log was refused (${decoded.fault})`);
+    return;
+  }
+  const started = performance.now();
+  const replayWorld = createWorld({ ...world.citySettings }, { ...world.carSettings }, false);
+  startRace(replayWorld, generateRoute(replayWorld.roadGraph, race.route.seed, { length: race.route.target }));
+  if (race === urlChangedRace) {
+    if (urlParams.gate !== null) replayWorld.race!.nextGate = urlParams.gate;
+    placeUrlCar(replayWorld);
+  }
+  const result = replayInWorld(replayWorld, decoded.log);
+  const replayed = result.finished ? String(result.ticks) : `none (${result.reason})`;
+  const ms = Math.round(performance.now() - started);
+  const sameCar = JSON.stringify(replayWorld.car) === JSON.stringify(car);
+  console.log(
+    `replay: finish tick live ${raceTicks(race, world.tick)} vs replay ${replayed}, car ${sameCar ? 'same' : 'different'}, ${decoded.log.length} ticks, ${encodeLogText(decoded.log).length} characters, ${ms} ms`,
+  );
+}
 
 // Larger than needed up close, so the depth buffer keeps precision for curbs and markings far away.
 const NEAR_PLANE = 0.5;
@@ -945,7 +1146,27 @@ function frame(timeMs: number) {
   previousTimeMs = Math.max(previousTimeMs, timeMs);
   if (heldTick === null) advanceClock(clock, dt, () => {
     carInput = settings.movement === Movement.Car && gameState.kind === 'race' ? readCarInput() : NO_INPUT;
-    const { impact } = stepWorld(world, carInput);
+    const reading = world.race?.phase === 'running' ? world.race : null;
+    const { impact, race: raceEvent } = stepWorld(world, carInput);
+    if (reading) {
+      if (reading !== recordedRace) recorder.reset();
+      recordedRace = reading;
+      recorder.record(carInput);
+    }
+    // The daily's finish is written at the finishing tick, with its log; past the timer's cap it did not finish.
+    if (gameState.kind === 'race' && gameState.mode === 'daily' && gameState.finished === null) {
+      if (reading && recorder.overflowed) setGameState(giveUp(gameState));
+      else if (raceEvent?.kind === 'finish') {
+        storeDaily(finishedRecord(gameState.day, raceEvent.ticks, encodeLogText(recorder.log())));
+        gameState = raceFinished(gameState, raceEvent.ticks);
+        dailyBackend?.finished();
+      }
+    }
+    if (raceEvent?.kind === 'finish' && (import.meta.env.DEV || urlParams.replay)) {
+      const finished = world.race!;
+      const car = { ...world.car };
+      setTimeout(() => checkReplay(finished, car));
+    }
     if (impact) crashDebris(impact);
     driftParticles();
     const next = afterTick(gameState, world.race, world.tick);
@@ -964,15 +1185,18 @@ function frame(timeMs: number) {
     camera.position = [...GARAGE_CAMERA.position];
     camera.yaw = GARAGE_CAMERA.yaw;
     camera.pitch = GARAGE_CAMERA.pitch;
-  } else if (gameState.kind === 'menu' || gameState.kind === 'settings') {
+  } else if (menuFlight()) {
     takeMouseMovement();
     const pose = flightPose(flight, world.tick + clock.leftover / TICK_SECONDS);
     camera.position = pose.position;
     camera.yaw = pose.yaw;
     camera.pitch = pose.pitch;
   } else {
-    fovBoost = updateChaseCamera(camera, chase, drawnCar, carSettings, chaseSettings, world.colliders, dt);
+    fovBoost = updateChaseCamera(camera, chase, drawnCar, world.carSettings, chaseSettings, world.colliders, dt);
   }
+  giveUpOnScreen = false;
+  if (gameState.kind === 'dailyResults') resultsBoard?.show(gameState.day);
+  else resultsBoard?.hide();
   if (urlParams.hud !== 'test') {
     if (settings.movement !== Movement.Car) {
       hud.clear();
@@ -981,22 +1205,30 @@ function frame(timeMs: number) {
     } else if (gameState.kind === 'menu') {
       drawMenuScreen(hud, gameState.selected);
     } else if (gameState.kind === 'preRace') {
-      drawPreRaceScreen(hud, { minimap, car: drawnCar, route: gameState.route });
+      drawPreRaceScreen(hud, { day: gameState.day, route: gameState.route, minimap, tick: world.tick });
     } else if (gameState.kind === 'results') {
       drawFinishScreen(hud, gameState.ticks, gameState.selected);
+    } else if (gameState.kind === 'dailyResults') {
+      drawDailyResultsScreen(hud, dailyResultsShown(gameState), gameState.selected);
     } else if (gameState.kind === 'garage') {
       drawGarageScreen(hud, { selected: gameState.selected, settings: playerSettings });
     } else if (gameState.kind === 'settings') {
       drawSettingsScreen(hud, { screen: gameState, settings: shownPlayerSettings(), fullscreen: isFullscreen() });
     } else {
-      drawHud(hud, {
+      const questionDrawn = drawHud(hud, {
         speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ),
-        topSpeed: carSettings.topSpeed,
+        topSpeed: world.carSettings.topSpeed,
         minimap: { minimap, car: drawnCar },
         race: world.race
-          ? { race: world.race, tick: world.tick, guidance: routeGuidance(world.roadGraph, world.race, { ...drawnCar, heading: camera.yaw }) }
+          ? {
+              race: world.race,
+              tick: world.tick,
+              guidance: routeGuidance(world.roadGraph, world.race, { ...drawnCar, heading: camera.yaw }),
+              giveUp: gameState.kind === 'race' && gameState.mode === 'daily' ? gameState.givingUp : undefined,
+            }
           : undefined,
       });
+      giveUpOnScreen = questionDrawn && canAskGiveUp();
     }
   }
   if (gameState.kind === 'loading' && !holdLoading && !loadPending) {
@@ -1007,7 +1239,7 @@ function frame(timeMs: number) {
   const degrees = (radians: number) => Math.round((radians * 180) / Math.PI);
   devMenu.setInfo(
     `camera ${cameraX.toFixed(1)}, ${cameraY.toFixed(1)}, ${cameraZ.toFixed(1)}` +
-      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${citySettings.seed}  tick ${world.tick}` +
+      `  yaw ${degrees(camera.yaw)}°  pitch ${degrees(camera.pitch)}°  seed ${world.citySettings.seed}  tick ${world.tick}` +
       `\ncar ${car.x.toFixed(1)}, ${car.z.toFixed(1)}  heading ${degrees(car.heading)}°` +
       `  ${(Math.hypot(car.velocityX, car.velocityZ) * 3.6).toFixed(0)} km/h${car.drifting ? '  DRIFT' : ''}  traction ${car.traction.toFixed(2)}` +
       `\ninput throttle ${carInput.throttle}  brake ${carInput.brake}  steer ${carInput.steer}  drift ${carInput.drift}`,
@@ -1035,7 +1267,7 @@ function frame(timeMs: number) {
   gl!.uniform3fv(lightDirectionLocation, inGarage ? GARAGE_LIGHT_DIRECTION : LIGHT_DIRECTION);
   gl!.uniform1f(ambientLocation, inGarage ? GARAGE_AMBIENT : settings.ambient);
   gl!.uniform1f(lightIntensityLocation, inGarage ? GARAGE_LIGHT_INTENSITY : settings.lightIntensity);
-  const carShown = gameState.kind !== 'menu' && gameState.kind !== 'settings' && !inGarage && gameState.kind !== 'loading';
+  const carShown = !menuFlight() && !inGarage && gameState.kind !== 'loading';
   const light = headlight(drawnCar);
   const halfAngle = (settings.headlightAngle * Math.PI) / 360;
   gl!.uniform3fv(headlightPositionLocation, light.position);

@@ -1,4 +1,6 @@
-# ASCII Racer
+# driftle
+
+The repository's working name is ASCII Racer.
 
 A daily 3D racing game set in a city at night, running in the browser and drawn entirely in ASCII characters. The scene is rendered in 3D on the GPU with WebGL2, then a shader pass turns every frame into a grid of text glyphs. Darkness is empty space; headlights, street lamps and neon light up the city in characters.
 
@@ -16,6 +18,9 @@ npm run preview   # serve the production build locally
 npm test          # run the tests once
 npm run check     # type check, tests and build
 npm run shots     # pictures from fixed camera spots into shots/ (needs Google Chrome)
+npm run backend:start  # local Supabase stack: database, auth, Edge Functions (needs Docker)
+npm run backend:test   # start it if needed, reset the database, database and function tests end to end
+npm run backend:stop   # stop it
 ```
 
 ## Controls
@@ -23,8 +28,9 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
 - Menu and finish screen: `Up` / `Down` or `W` / `S` to choose (wraps round), `Enter` to pick; or point at an entry and click
 - Settings: `Up` / `Down` or `W` / `S` to choose, `Left` / `Right` or `A` / `D` to change volume and glyph size, `Enter` to switch mute and fullscreen or to type a nickname (`Enter` saves, `Esc` cancels); clicks work too (on the volume bar, on the glyph size's `<` `>`); saved in the browser. Its key list is `src/app/keys.ts`, the same as this list
 - Garage: `Up` / `Down` or `W` / `S` to choose shape or colour, `Left` / `Right` or `A` / `D` to change it (wraps round), or click its `<` `>`; the car turns on a lit spot and shows each change at once; saved in the browser and used in every race
+- Daily: one race a day, the same for everyone, one try; the pre-race screen shows the day and the route (`Enter` starts, `Esc` goes back without using the try); afterwards the daily entry shows the time (or did not finish), with the game's server your rank, how many you beat, the curve of everyone's times with your bar marked and the top times, and the countdown to the next one; `share` (Enter or a click) copies a short text with the day, your time, how many you beat and a one-line curve with your bar marked, `Up`/`Down` choose between it and the menu
 - Unlimited: a new random city and route each time; after the finish, `again` (same route), `next` (new city and route) or `menu`
-- `Esc`: back to the menu (and releases the mouse)
+- `Esc`: back to the menu (and releases the mouse); in the daily race it first asks, `Enter` gives up the try, `Esc` again keeps driving
 - `W` / `S` or arrow keys: throttle / brake, `A` / `D`: steer, `Space`: drift
 - Click (outside the menu and the finish screen): capture the mouse to look around
 - `H`: headlights on and off
@@ -161,17 +167,19 @@ npm run shots     # pictures from fixed camera spots into shots/ (needs Google C
   - [x] Settings: nickname, volume, glyph size, fullscreen, key list, saved in the browser
   - [x] Garage: body shapes on the same collision box, colour list, turning preview, saved in the browser
   - [x] Loading line while a city builds
-- [ ] **17. Daily**: the main mode
-  - [ ] Day number from the UTC date, city seed and route from the day number
-  - [ ] Input recording: one input per tick packed into a compact log, and a headless replay that gives the same finish tick
-  - [ ] Simulation version constant, bumped by any change to simulation or generation (a test fails when the reference run changes without it)
-  - [ ] Daily flow without a backend: pre-race screen, one try kept in the browser, results with time, countdown to the next day
-  - [ ] Supabase project files: migrations for attempts and runs with row level security, anonymous sign-ins, local config
-  - [ ] Edge Functions: start an attempt, check a run by replaying its inputs with the game's own simulation, tested with Deno
-  - [ ] Deploy action for migrations and functions, skipped when the secrets are missing
-  - [ ] Client: sign in, start attempt, send run, handle offline and errors
-  - [ ] Results: rank, percentile, top times, bell curve histogram in glyphs with the player marked
-  - [ ] Share text copied to the clipboard
+- [x] **17. Daily**: the main mode
+  - [x] Day number from the UTC date, city seed and route from the day number
+  - [x] Input recording: one input per tick packed into a compact log, and a headless replay that gives the same finish tick
+  - [x] Name: the game is called driftle wherever a player sees it (menu title, page title, README heading; one constant for the share text and the release step to use)
+  - [x] Simulation version constant, bumped by any change to simulation or generation (a test fails when the reference run changes without it)
+  - [x] Daily flow without a backend: pre-race screen, one try kept in the browser, results with time, countdown to the next day
+  - [x] Supabase project files: migrations for attempts and runs with row level security, anonymous sign-ins, local config
+  - [x] Edge Functions: start an attempt, check a run by replaying its inputs with the game's own simulation, tested with Deno
+  - [x] Deploy action for migrations and functions, skipped when the secrets are missing
+  - [x] Client: sign in, start attempt, send run, handle offline and errors
+  - [x] Results data: one database function giving a day's count, the player's rank, the top times and the histogram, only to a player whose try is used
+  - [x] Results screen: rank, percentile, top times, bell curve histogram in glyphs with the player marked
+  - [x] Share text copied to the clipboard
 - [ ] **18. Sound**: Web Audio API, no libraries, no sound files; reads the simulation state, never feeds back into it
   - [ ] Audio setup: audio context started on the first click or keypress, master volume and mute
   - [ ] Engine: a looped sound with pitch and volume from speed and throttle

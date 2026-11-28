@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { RenderMode } from './menu.ts';
-import { MAX_URL_TICK, parseUrlParams } from './urlParams.ts';
+import { DAILY_STORAGE_BLOCKERS, dailyStorageAllowed, MAX_URL_TICK, parseUrlParams } from './urlParams.ts';
 import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', entry: null, edit: null, shape: null, color: null });
+    expect(parseUrlParams('')).toEqual({ seed: null, day: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, replay: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', dnf: false, next: null, giveUp: false, board: null, entry: null, edit: null, shape: null, color: null, dailyStorage: true });
+  });
+
+  it('reads replay=1 and nothing else as replaying', () => {
+    expect(parseUrlParams('?replay=1').replay).toBe(true);
+    expect(parseUrlParams('?replay=0').replay).toBe(false);
   });
 
   it('reads drive=1 and nothing else as driving', () => {
@@ -25,13 +30,113 @@ describe('parseUrlParams', () => {
   it('starts on the state given, the menu by default', () => {
     expect(parseUrlParams('').state).toBe('menu');
     expect(parseUrlParams('?state=menu').state).toBe('menu');
-    expect(parseUrlParams('?state=prerace').state).toBe('preRace');
+    expect(parseUrlParams('?state=daily&day=3&shot').state).toBe('preRace');
+    expect(parseUrlParams('?state=dailyrace&day=3&tick=0').state).toBe('dailyRace');
+    expect(parseUrlParams('?state=dailyresults&day=3&dnf=1&shot').state).toBe('dailyResults');
+    expect(() => parseUrlParams('?state=prerace')).toThrow();
     expect(parseUrlParams('?state=race').state).toBe('race');
     expect(parseUrlParams('?state=results').state).toBe('results');
     expect(parseUrlParams('?state=loading').state).toBe('loading');
     expect(() => parseUrlParams('?state=')).toThrow();
     expect(() => parseUrlParams('?state=preRace')).toThrow();
     expect(() => parseUrlParams('?state=toString')).toThrow();
+  });
+
+  it('needs day= and no seed= for the daily states', () => {
+    for (const state of ['daily', 'dailyrace', 'dailyresults']) {
+      expect(parseUrlParams(`?state=${state}&day=-4&shot`).day).toBe(-4);
+      expect(() => parseUrlParams(`?state=${state}`)).toThrow();
+      expect(() => parseUrlParams(`?state=${state}&day=3&seed=1`)).toThrow();
+    }
+  });
+
+  it('ignores the daily states on a normal load, where they would race or show a day without its stored try', () => {
+    for (const query of ['?state=daily&day=3', '?state=dailyrace&day=3&giveup=1', '?state=dailyresults&day=3&dnf=1&next=10']) {
+      const params = parseUrlParams(query);
+      expect([params.state, params.dnf, params.giveUp, params.next, params.shot]).toEqual(['menu', false, false, null, false]);
+      expect(params.day).toBe(3);
+      expect(parseUrlParams(`${query}&shot`).state).not.toBe('menu');
+      expect(parseUrlParams(`${query}&tick=5`).state).not.toBe('menu');
+    }
+  });
+
+  it("keeps the daily's try in memory only under anything that changes a race, its clock, or shows a daily state", () => {
+    for (const query of [
+      '?state=daily&day=3',
+      '?state=dailyrace&day=3',
+      '?state=dailyresults&day=3&dnf=1',
+      '?state=dailyrace&day=3&gate=10',
+      '?state=race&gate=3',
+      '?car=10,20,1',
+      '?tick=0',
+      '?shot',
+      '?drive=1',
+      '?drive=0',
+      '?state=dailyrace&day=3&giveup=1&shot',
+      '?state=daily&day=3&next=10&shot',
+      '?cell=8&gate=0',
+      '?state=dailyresults&day=3&board=300&shot',
+    ]) {
+      expect(dailyStorageAllowed(query), query).toBe(false);
+    }
+    for (const name of DAILY_STORAGE_BLOCKERS) expect(dailyStorageAllowed(`?${name}=1`), name).toBe(false);
+    expect(parseUrlParams('?state=dailyrace&day=3&gate=10').dailyStorage).toBe(false);
+  });
+
+  it('uses storage on a plain load and under parameters that only change the look or the starting city', () => {
+    for (const query of [
+      '',
+      '?cell=8',
+      '?mode=brightness',
+      '?shape=van&color=ember',
+      '?entry=2',
+      '?seed=5',
+      '?day=12',
+      '?replay=1',
+      '?state=menu',
+      '?state=race',
+      '?state=settings&edit=abc',
+      '?state=garage&entry=1',
+      '?state=loading',
+      '?race=0',
+      '?camera=0,1,2,0,0',
+      '?hud=test',
+    ]) {
+      expect(dailyStorageAllowed(query), query).toBe(true);
+      expect(parseUrlParams(query).dailyStorage, query).toBe(true);
+    }
+  });
+
+  it('reads dnf=1, giveup=1 and a pinned countdown only with their daily states', () => {
+    expect(parseUrlParams('?state=dailyresults&day=3&dnf=1&shot').dnf).toBe(true);
+    expect(parseUrlParams('?state=dailyresults&day=3&shot').dnf).toBe(false);
+    expect(parseUrlParams('?state=dailyrace&day=3&giveup=1&shot').giveUp).toBe(true);
+    expect(parseUrlParams('?state=dailyresults&day=3&next=0&shot').next).toBe(0);
+    expect(parseUrlParams('?state=daily&day=3&next=172800&shot').next).toBe(172800);
+    for (const bad of [
+      '?dnf=1',
+      '?state=dailyrace&day=3&dnf=1',
+      '?state=dailyresults&day=3&dnf=0',
+      '?giveup=1',
+      '?state=daily&day=3&giveup=1',
+      '?state=dailyrace&day=3&giveup=yes',
+      '?next=10',
+      '?state=race&next=10',
+      '?state=daily&day=3&next=-1',
+      '?state=daily&day=3&next=1.5',
+      '?state=daily&day=3&next=172801',
+    ]) {
+      expect(() => parseUrlParams(bad)).toThrow();
+    }
+  });
+
+  it('reads a made-up board only with the daily results', () => {
+    expect(parseUrlParams('?state=dailyresults&day=3&board=300&shot').board).toBe(300);
+    expect(parseUrlParams('?state=dailyresults&day=3&board=0&dnf=1&shot').board).toBe(0);
+    expect(parseUrlParams('?state=dailyresults&day=3&board=300').board).toBeNull();
+    for (const bad of ['?board=3', '?state=race&board=3', '?state=dailyresults&day=3&board=-1', '?state=dailyresults&day=3&board=1.5', '?state=dailyresults&day=3&board=100001']) {
+      expect(() => parseUrlParams(bad), bad).toThrow();
+    }
   });
 
   it('selects a menu entry by its place in the list', () => {
@@ -120,6 +225,14 @@ describe('parseUrlParams', () => {
     expect(() => parseUrlParams('?tick=-1')).toThrow();
     expect(() => parseUrlParams('?tick=1.5')).toThrow();
     expect(() => parseUrlParams(`?tick=${MAX_URL_TICK + 1}`)).toThrow();
+  });
+
+  it('reads a day, negative ones too', () => {
+    expect(parseUrlParams('?day=5').day).toBe(5);
+    expect(parseUrlParams('?day=-3').day).toBe(-3);
+    expect(parseUrlParams('?day=5&seed=7')).toMatchObject({ day: 5, seed: 7 });
+    expect(() => parseUrlParams('?day=1.5')).toThrow();
+    expect(() => parseUrlParams('?day=x')).toThrow();
   });
 
   it('rejects bad seeds', () => {

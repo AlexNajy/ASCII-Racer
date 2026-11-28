@@ -1,3 +1,4 @@
+import { GAME_NAME } from '../app/gameName.ts';
 import { entryEnabled, MENU_ENTRIES } from '../app/mainMenu.ts';
 import { blockRows } from './blockFont.ts';
 import { FRAME_COLOR } from './raceHud.ts';
@@ -9,16 +10,23 @@ import type { TextGrid } from './textGrid.ts';
 export interface ListEntry {
   label: string;
   enabled: boolean; // dimmed when not
+  width?: number; // the label's room when longer than the label, so a changing label moves nothing
+}
+
+export interface ScreenLine {
+  text: string;
+  color: number;
 }
 
 export interface ListScreen {
   title: string; // drawn in the block font
   smallTitle: string; // the title as one line of text, for small grids
   titleColor: number;
+  lines?: readonly ScreenLine[]; // centred under the title on a solid block
   entries: readonly ListEntry[];
 }
 
-const TITLE = 'ASCII RACER';
+const TITLE = GAME_NAME.toUpperCase();
 const TITLE_COLOR = 0xffd070;
 export const ENTRY_COLOR = 0xd0d0d0;
 export const SELECTED_COLOR = 0xffd070;
@@ -30,19 +38,20 @@ export const MARGIN = 1; // cells kept free at the grid's edges
 export const MARKER_LEFT = '>';
 export const MARKER_RIGHT = '<';
 export const ENTRY_PADDING = 3; // cells between the frame and a marker
+export const LINE_PADDING = 2; // solid cells each side of the longest line
 
 function labelWidth(entries: readonly ListEntry[]): number {
-  return Math.max(...entries.map((entry) => entry.label.length));
+  return Math.max(...entries.map((entry) => Math.max(entry.label.length, entry.width ?? 0)));
 }
 
 // A marker and a space each side of the label.
-function innerWidth(entries: readonly ListEntry[], padding: number): number {
+export function innerWidth(entries: readonly ListEntry[], padding: number): number {
   return 2 * padding + 2 * 2 + labelWidth(entries);
 }
 
 const MENU_SCREEN: ListScreen = {
   title: TITLE,
-  smallTitle: TITLE.toLowerCase(),
+  smallTitle: GAME_NAME,
   titleColor: TITLE_COLOR,
   entries: MENU_ENTRIES.map(({ label }, i) => ({ label, enabled: entryEnabled(i) })),
 };
@@ -81,6 +90,11 @@ export interface MenuLayout {
   listHeight: number;
   padding: number; // cells between the frame and a marker
   entryRows: number[]; // grid row of each entry
+  linesLeft: number; // the lines' solid block, none when the screen has no lines
+  linesTop: number;
+  linesWidth: number;
+  lineRows: number[]; // grid row of each line
+  linesHeight: number; // the block's rows, its backing included
 }
 
 // The title's rows with its backing; scale 0 is the one-line form.
@@ -107,12 +121,21 @@ export function listScreenLayout(screen: ListScreen, columns: number, rows: numb
     const blankRows = compact ? 0 : 1;
     const listHeight = 2 + 2 * blankRows + (screen.entries.length - 1) * entrySpacing + 1;
     const gap = compact ? COMPACT_TITLE_GAP : TITLE_GAP;
-    const height = title.length + gap + listHeight;
-    if (Math.max(titleWidth, listWidth) + 2 * MARGIN > columns || height + 2 * MARGIN > rows) continue;
+    const lines = screen.lines ?? [];
+    const linesWidth = lines.length === 0 ? 0 : Math.max(...lines.map(({ text }) => text.length)) + 2 * LINE_PADDING;
+    const linesHeight = lines.length === 0 ? 0 : lines.length + 2 * blankRows;
+    const height = title.length + gap + (linesHeight > 0 ? linesHeight + gap : 0) + listHeight;
+    if (Math.max(titleWidth, listWidth, linesWidth) + 2 * MARGIN > columns || height + 2 * MARGIN > rows) continue;
     const free = rows - 2 * MARGIN - height;
     const titleTop = MARGIN + Math.floor(free * ABOVE_TITLE);
-    const listTop = titleTop + title.length + gap + Math.floor(free * BETWEEN);
+    const linesTop = titleTop + title.length + gap;
+    const listTop = linesTop + (linesHeight > 0 ? linesHeight + gap : 0) + Math.floor(free * BETWEEN);
     return {
+      linesLeft: Math.floor((columns - linesWidth) / 2),
+      linesTop,
+      linesWidth,
+      lineRows: lines.map((_, i) => linesTop + blankRows + i),
+      linesHeight,
       title,
       titleLeft: Math.floor((columns - titleWidth) / 2),
       titleTop,
@@ -132,7 +155,7 @@ export function menuLayout(columns: number, rows: number): MenuLayout | null {
 }
 
 // The entry whose row inside the list's frame holds the cell, or null.
-export function menuEntryAt(layout: MenuLayout, column: number, row: number): number | null {
+export function menuEntryAt(layout: Pick<MenuLayout, 'listLeft' | 'listWidth' | 'entryRows'>, column: number, row: number): number | null {
   if (column <= layout.listLeft || column >= layout.listLeft + layout.listWidth - 1) return null;
   const index = layout.entryRows.indexOf(row);
   return index < 0 ? null : index;
@@ -158,12 +181,21 @@ function drawEntry(
   grid.write(left + padding + 2 + label.length, row, pad, { color, background: true });
 }
 
-export function drawListScreen(grid: TextGrid, screen: ListScreen, selected: number): void {
-  const layout = listScreenLayout(screen, grid.columns, grid.rows);
-  if (!layout) return;
-  const { title, titleLeft, titleTop, listLeft, listTop, listWidth, listHeight, padding, entryRows } = layout;
+// The lines' solid block: every row of it once, each line centred.
+export function drawLines(grid: TextGrid, layout: MenuLayout, lines: readonly ScreenLine[] | undefined): void {
+  const { linesLeft, linesTop, linesWidth, lineRows, linesHeight } = layout;
+  for (let y = 0; y < linesHeight; y++) {
+    const line = lines?.[lineRows.indexOf(linesTop + y)];
+    const left = line ? Math.floor((linesWidth - line.text.length) / 2) : linesWidth;
+    const text = line ? ' '.repeat(left) + line.text.padEnd(linesWidth - left, ' ') : ' '.repeat(linesWidth);
+    grid.write(linesLeft, linesTop + y, text, { color: line?.color ?? FRAME_COLOR, background: true });
+  }
+}
+
+// The framed list of entries, the selected one between markers.
+export function drawEntryList(grid: TextGrid, layout: MenuLayout, entries: readonly ListEntry[], selected: number): void {
+  const { listLeft, listTop, listWidth, listHeight, padding, entryRows } = layout;
   const inner = listWidth - 2;
-  title.forEach((row, y) => grid.write(titleLeft, titleTop + y, row, { color: screen.titleColor, background: true }));
   // Not grid.box: that would write the entry rows twice, and the grid would come out dirty every call.
   const edge = `+${'-'.repeat(inner)}+`;
   for (let y = 0; y < listHeight; y++) {
@@ -175,9 +207,18 @@ export function drawListScreen(grid: TextGrid, screen: ListScreen, selected: num
     const index = entryRows.indexOf(row);
     grid.put(listLeft, row, '|', FRAME_COLOR, true);
     if (index < 0) grid.write(listLeft + 1, row, ' '.repeat(inner), { color: FRAME_COLOR, background: true });
-    else drawEntry(grid, listLeft + 1, row, screen.entries, index, index === selected, padding);
+    else drawEntry(grid, listLeft + 1, row, entries, index, index === selected, padding);
     grid.put(listLeft + listWidth - 1, row, '|', FRAME_COLOR, true);
   }
+}
+
+export function drawListScreen(grid: TextGrid, screen: ListScreen, selected: number): void {
+  const layout = listScreenLayout(screen, grid.columns, grid.rows);
+  if (!layout) return;
+  const { title, titleLeft, titleTop } = layout;
+  title.forEach((row, y) => grid.write(titleLeft, titleTop + y, row, { color: screen.titleColor, background: true }));
+  drawLines(grid, layout, screen.lines);
+  drawEntryList(grid, layout, screen.entries, selected);
 }
 
 export function drawMenuScreen(grid: TextGrid, selected: number): void {

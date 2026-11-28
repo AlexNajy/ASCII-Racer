@@ -50,7 +50,16 @@ export interface RaceHudValues {
   race: Race;
   tick: number; // world tick
   guidance: Guidance | null;
+  giveUp?: boolean; // the daily's: whether Esc is waiting for Enter to give up; not given outside the daily
 }
+
+// Asked while the daily race keeps running (no pause: that would stop the clock to plan); shorter forms on smaller grids.
+export const GIVE_UP_TEXT = 'give up? this is your one try   enter: give up   esc: keep driving';
+export const GIVE_UP_SHORT_TEXT = 'give up?  enter: yes  esc: no';
+export const GIVE_UP_MIN_TEXT = 'give up? enter/esc';
+const GIVE_UP_COLOR = 0xff7040;
+const GIVE_UP_BACKING_COLUMNS = 2;
+const GIVE_UP_HEIGHT = 3; // a solid row above and below the line
 
 interface Rect {
   left: number;
@@ -78,41 +87,127 @@ function numberRows(kmh: number): string[] {
   return blockRows(String(kmh).padStart(SPEED_DIGITS, ' '));
 }
 
+interface Element {
+  rect: Rect;
+  draw: () => void;
+}
+
 // The race elements in order; each needs the ones before it, so a grid too small drops the banner first, then
-// the arrow, then the timer. None is drawn over the speedometer or the minimap.
-function drawRace(grid: TextGrid, { race, tick, guidance }: RaceHudValues, taken: Rect[]): void {
+// the arrow, then the timer. None is placed over the speedometer or the minimap.
+function raceElements(grid: TextGrid, { race, tick, guidance }: RaceHudValues, taken: Rect[]): Element[] {
   const timer = { left: Math.floor((grid.columns - TIMER_WIDTH) / 2), top: MARGIN, width: TIMER_WIDTH, height: TIMER_HEIGHT };
   const arrow = { left: timer.left + TIMER_WIDTH + MARGIN, top: MARGIN, width: ARROW_PANEL_WIDTH, height: ARROW_PANEL_HEIGHT };
   const banner = { left: Math.floor((grid.columns - BANNER_WIDTH) / 2), top: MARGIN + TIMER_HEIGHT + MARGIN, width: BANNER_WIDTH, height: BANNER_HEIGHT };
-  const elements: [Rect, () => void][] = [
-    [timer, () => drawTimer(grid, timer.left, timer.top, raceTicks(race, tick), race.nextGate, race.route.gates.length)],
-    [arrow, () => drawArrow(grid, arrow.left, arrow.top, guidance)],
-    [banner, () => drawBanner(grid, banner.left, banner.top, raceBanner(race, tick))],
+  const elements: Element[] = [
+    { rect: timer, draw: () => drawTimer(grid, timer.left, timer.top, raceTicks(race, tick), race.nextGate, race.route.gates.length) },
+    { rect: arrow, draw: () => drawArrow(grid, arrow.left, arrow.top, guidance) },
+    { rect: banner, draw: () => drawBanner(grid, banner.left, banner.top, raceBanner(race, tick)) },
   ];
-  for (const [rect, draw] of elements) {
-    const inside = rect.left >= MARGIN && rect.left + rect.width + MARGIN <= grid.columns && rect.top + rect.height + MARGIN <= grid.rows;
-    if (!inside || !taken.every((other) => apart(rect, other))) return;
-    draw();
+  const placed: Element[] = [];
+  for (const element of elements) {
+    if (!inside(grid, element.rect) || !taken.every((other) => apart(element.rect, other))) break;
+    placed.push(element);
+  }
+  return placed;
+}
+
+function inside(grid: TextGrid, rect: Rect): boolean {
+  return rect.left >= MARGIN && rect.top >= 0 && rect.left + rect.width + MARGIN <= grid.columns && rect.top + rect.height + MARGIN <= grid.rows;
+}
+
+function overlaps(a: Rect, b: Rect): boolean {
+  return a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
+}
+
+function within(rects: Rect[], x: number, y: number): boolean {
+  return rects.some((rect) => x >= rect.left && x < rect.left + rect.width && y >= rect.top && y < rect.top + rect.height);
+}
+
+interface Question {
+  rect: Rect;
+  line: string; // the middle row, or the only one
+  over: boolean; // drawn over the other elements, which are hidden while it is asked
+}
+
+// The part of the question that must be seen for it to be asked.
+const GIVE_UP_WORDS = 'give up?';
+
+// Whether the give-up question can be drawn on a grid this size: on one row, its smallest form clipped to the grid
+// as long as the question itself shows.
+export function giveUpShown(columns: number, rows: number): boolean {
+  return columns >= GIVE_UP_WORDS.length && rows >= 1;
+}
+
+// Where the question goes: the first place free of everything else, from under the banner up to the top; on a
+// grid with no such place the first place it fits over the others; at the last the smallest form on the top row.
+function questionPlace(grid: TextGrid, taken: Rect[]): Question | null {
+  const tops = [MARGIN + TIMER_HEIGHT + MARGIN + BANNER_HEIGHT + MARGIN, MARGIN + TIMER_HEIGHT + MARGIN, MARGIN];
+  for (const over of [false, true]) {
+    for (const text of over ? [GIVE_UP_TEXT, GIVE_UP_SHORT_TEXT, GIVE_UP_MIN_TEXT] : [GIVE_UP_TEXT, GIVE_UP_SHORT_TEXT]) {
+      const width = text.length + 2 * GIVE_UP_BACKING_COLUMNS;
+      for (const top of tops) {
+        const rect = { left: Math.floor((grid.columns - width) / 2), top, width, height: GIVE_UP_HEIGHT };
+        if (!inside(grid, rect) || (!over && !taken.every((other) => apart(rect, other)))) continue;
+        const backing = ' '.repeat(GIVE_UP_BACKING_COLUMNS);
+        return { rect, line: backing + text + backing, over };
+      }
+    }
+  }
+  if (!giveUpShown(grid.columns, grid.rows)) return null;
+  const line = GIVE_UP_MIN_TEXT.slice(0, grid.columns);
+  const rect = { left: Math.floor((grid.columns - line.length) / 2), top: 0, width: line.length, height: 1 };
+  return { rect, line, over: true };
+}
+
+// The same place every call. In a free place it is written blank and see-through while nothing is asked; over the
+// others, the cells no element covers are, and while it is asked the elements under it are written blank instead of
+// drawn, so every cell is written once per call and nothing is left behind when it goes.
+function drawQuestion(grid: TextGrid, { rect, line }: Question, asked: boolean, elements: Rect[]): void {
+  const middle = rect.height === 1 ? 0 : 1;
+  for (let y = 0; y < rect.height; y++) {
+    const text = y === middle && asked ? line : ' '.repeat(rect.width);
+    for (let x = 0; x < rect.width; x++) {
+      if (!asked && within(elements, rect.left + x, rect.top + y)) continue;
+      grid.put(rect.left + x, rect.top + y, text[x], GIVE_UP_COLOR, asked);
+    }
   }
 }
 
-export function drawHud(grid: TextGrid, { speed, topSpeed, minimap, race }: HudValues): void {
+function blankExcept(grid: TextGrid, rect: Rect, kept: Rect): void {
+  for (let y = rect.top; y < rect.top + rect.height; y++) {
+    for (let x = rect.left; x < rect.left + rect.width; x++) if (!within([kept], x, y)) grid.put(x, y, ' ');
+  }
+}
+
+// True when the give-up question is on the grid after this call.
+export function drawHud(grid: TextGrid, { speed, topSpeed, minimap, race }: HudValues): boolean {
   const left = grid.columns - MARGIN - PANEL_WIDTH;
   const top = grid.rows - MARGIN - PANEL_HEIGHT;
-  if (left < 0 || top < 0) return;
-  const taken: Rect[] = [{ left, top, width: PANEL_WIDTH, height: PANEL_HEIGHT }];
-  if (minimap) {
-    const { width, height } = minimap.minimap.layout;
-    const mapTop = grid.rows - MARGIN - height;
-    // Only beside the speedometer with a margin between them, never over it.
-    if (mapTop >= 0 && MARGIN + width + MARGIN <= left) {
-      const route = race ? { route: race.race.route, nextGate: race.race.nextGate } : null;
-      drawMinimap(grid, minimap.minimap, MARGIN, mapTop, minimap.car, route);
-      taken.push({ left: MARGIN, top: mapTop, width, height });
+  const elements: Element[] = [];
+  if (left >= 0 && top >= 0) {
+    elements.push({ rect: { left, top, width: PANEL_WIDTH, height: PANEL_HEIGHT }, draw: () => drawSpeedometer(grid, left, top, speed, topSpeed) });
+    if (minimap) {
+      const { width, height } = minimap.minimap.layout;
+      const mapTop = grid.rows - MARGIN - height;
+      // Only beside the speedometer with a margin between them, never over it.
+      if (mapTop >= 0 && MARGIN + width + MARGIN <= left) {
+        const route = race ? { route: race.race.route, nextGate: race.race.nextGate } : null;
+        elements.push({ rect: { left: MARGIN, top: mapTop, width, height }, draw: () => drawMinimap(grid, minimap.minimap, MARGIN, mapTop, minimap.car, route) });
+      }
     }
+    if (race) elements.push(...raceElements(grid, race, elements.map(({ rect }) => rect)));
   }
-  if (race) drawRace(grid, race, taken);
+  const question = race?.giveUp === undefined ? null : questionPlace(grid, elements.map(({ rect }) => rect));
+  const asked = race?.giveUp === true;
+  for (const element of elements) {
+    if (question?.over && asked && overlaps(element.rect, question.rect)) blankExcept(grid, element.rect, question.rect);
+    else element.draw();
+  }
+  if (question) drawQuestion(grid, question, asked, elements.map(({ rect }) => rect));
+  return question !== null && asked;
+}
 
+function drawSpeedometer(grid: TextGrid, left: number, top: number, speed: number, topSpeed: number): void {
   const kmh = Math.min(10 ** SPEED_DIGITS - 1, Math.round(Math.abs(speed) * MS_TO_KMH));
   const share = topSpeed > 0 ? Math.min(1, Math.abs(speed) / topSpeed) : 0;
   const filled = Math.round(share * BAR_LENGTH);

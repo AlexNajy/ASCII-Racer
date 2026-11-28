@@ -30,8 +30,8 @@ describe('main menu screen', () => {
       expect(next).toBeGreaterThan(at);
       at = next;
     }
-    expect(line(grid, layout.entryRows[FIRST_ENTRY])).toMatch(/> unlimited +</);
-    expect(line(grid, layout.entryRows[0])).not.toContain('>');
+    expect(line(grid, layout.entryRows[FIRST_ENTRY])).toMatch(/> daily +</);
+    expect(line(grid, layout.entryRows[1])).not.toContain('>');
   });
 
   it('marks the selected entry with bright yellow markers, the label grey when not built', () => {
@@ -117,9 +117,9 @@ describe('main menu screen', () => {
         expect(layout.listTop + layout.listHeight).toBeLessThanOrEqual(rows);
       }
     }
-    expect(menuLayout(100, 40)!.title.length).toBe(7); // one row per stroke
+    expect(menuLayout(70, 40)!.title.length).toBe(7); // one row per stroke
     expect(menuLayout(40, 30)!.title).toHaveLength(3); // one line of text
-    expect(menuLayout(40, 30)!.title[1]).toContain('ascii racer');
+    expect(menuLayout(40, 30)!.title[1]).toContain('driftle');
     expect(menuLayout(10, 10)).toBeNull();
   });
 });
