@@ -17,6 +17,7 @@ import {
   parseDailyRecord,
   saveDailyRecord,
   serialiseDailyRecord,
+  recordTicks,
   settleRecord,
   startedRecord,
   type DailyRecord,
@@ -45,8 +46,8 @@ describe('daily record', () => {
     for (const record of [startedRecord(DAY), FINISHED, didNotFinishRecord(-3)]) {
       expect(parseDailyRecord(serialiseDailyRecord(record))).toEqual(record);
     }
-    expect(FINISHED).toEqual({ day: DAY, status: 'finished', ticks: 6, log: LOG, version: SIMULATION_VERSION });
-    expect(startedRecord(DAY)).toEqual({ day: DAY, status: 'started', ticks: null, log: null, version: SIMULATION_VERSION });
+    expect(FINISHED).toEqual({ day: DAY, status: 'finished', ticks: 6, log: LOG, version: SIMULATION_VERSION, sent: null });
+    expect(startedRecord(DAY)).toEqual({ day: DAY, status: 'started', ticks: null, log: null, version: SIMULATION_VERSION, sent: null });
   });
 
   it('knows no try from nothing, junk, or a record without a day or status', () => {
@@ -81,6 +82,28 @@ describe('daily record', () => {
     const fields = JSON.parse(serialiseDailyRecord(FINISHED));
     for (const version of [undefined, 0, 1.5, '1']) expect(parseDailyRecord(JSON.stringify({ ...fields, version }))).toEqual({ ...FINISHED, version: null });
     expect(parseDailyRecord(JSON.stringify({ ...fields, version: 7 }))).toEqual({ ...FINISHED, version: 7 });
+  });
+
+  it("reads the server's answer to a finished run, and loads records stored before it existed", () => {
+    const fields = JSON.parse(serialiseDailyRecord(FINISHED));
+    const { sent: _, ...old } = fields;
+    expect(parseDailyRecord(JSON.stringify(old))).toEqual(FINISHED);
+    const stored = { ...FINISHED, sent: { status: 'stored' as const, ticks: 7 } };
+    const refused = { ...FINISHED, sent: { status: 'refused' as const, reason: 'tooLate' } };
+    for (const record of [stored, refused]) expect(parseDailyRecord(serialiseDailyRecord(record))).toEqual(record);
+    for (const sent of [{ status: 'stored', ticks: 0 }, { status: 'stored', ticks: MAX_RUN_TICKS + 1 }, { status: 'stored' }, { status: 'refused', reason: 'no way' }, { status: 'refused', reason: 4 }, { status: 'sent' }, 'stored', [], 3]) {
+      expect(parseDailyRecord(JSON.stringify({ ...fields, sent })), JSON.stringify(sent)).toEqual(FINISHED);
+    }
+    const dnf = JSON.parse(serialiseDailyRecord(didNotFinishRecord(DAY)));
+    expect(parseDailyRecord(JSON.stringify({ ...dnf, sent: { status: 'stored', ticks: 7 } }))?.sent).toBeNull();
+  });
+
+  it("shows the server's time once it stored the run", () => {
+    expect(recordTicks(FINISHED)).toBe(6);
+    expect(recordTicks({ ...FINISHED, sent: { status: 'stored', ticks: 9 } })).toBe(9);
+    expect(recordTicks({ ...FINISHED, sent: { status: 'refused', reason: 'badLog' } })).toBe(6);
+    expect(recordTicks(didNotFinishRecord(DAY))).toBeNull();
+    expect(dailyTry({ ...FINISHED, sent: { status: 'stored', ticks: 9 } }, DAY)).toEqual({ day: DAY, used: true, ticks: 9 });
   });
 
   it('turns a try that started and never finished into did not finish', () => {
@@ -204,5 +227,18 @@ describe('writing over the stored try', () => {
   it('keeps the first finish of a day', () => {
     const first = finishedRecord(DAY, 6000, LOG);
     expect(mergeForStore(first, finishedRecord(DAY, 6, LOG), DAY)).toBe(first);
+  });
+
+  it("takes the server's answer to the stored finish, only to that one and only once", () => {
+    const stored = { ...FINISHED, sent: { status: 'stored' as const, ticks: 6 } };
+    const refused = { ...FINISHED, sent: { status: 'refused' as const, reason: 'tooLate' } };
+    expect(mergeForStore(FINISHED, stored, DAY)).toBe(stored);
+    expect(mergeForStore(stored, FINISHED, DAY)).toBe(stored);
+    expect(mergeForStore(stored, refused, DAY)).toBe(stored);
+    expect(mergeForStore(refused, stored, DAY)).toBe(refused);
+    const other = finishedRecord(DAY, 6, encodeLogText(new Uint8Array([4, 4, 4, 5, 5, 2])));
+    expect(mergeForStore(other, stored, DAY)).toBe(other);
+    expect(mergeForStore(finishedRecord(DAY, 6000, LOG), stored, DAY).sent).toBeNull();
+    expect(mergeForStore(stored, didNotFinishRecord(DAY), DAY)).toBe(stored);
   });
 });

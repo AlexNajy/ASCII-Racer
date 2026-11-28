@@ -26,6 +26,8 @@ import { createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorl
 import { DAILY_EPOCH, dailyCitySettings, dailyRace, dayNumber, MS_PER_DAY } from './game/daily.ts';
 import { carSettingsFor, cityRoute, enterState, randomCitySeed, seedRoute, unlimitedRoute } from './app/flow.ts';
 import { dailyEntry, recordOnChange, resultsOfRecord, startDaily } from './app/dailyFlow.ts';
+import { backendConfig, createDailyBackend } from './app/dailyBackend.ts';
+import { browserBackend } from './app/dailyBackendBrowser.ts';
 import {
   dailyTry,
   finishedRecord,
@@ -438,6 +440,18 @@ function latestDaily() {
   if (latest && latest !== dailyRecord) storeDaily(latest);
 }
 latestDaily();
+// The daily's server, only in a build that has one and on a load that may store the try: nothing else signs in or
+// sends anything. supabase-js loads the first time the daily is opened.
+const dailyBackend = createDailyBackend(backendConfig(import.meta.env, urlParams.dailyStorage), (config) => ({
+  ...browserBackend(config),
+  record: knownDaily,
+  write: (record) => {
+    storeDaily(record);
+    if (gameState.kind === 'dailyResults') changeState(resultsOfRecord(gameState, dailyRecord));
+  },
+  nickname: () => playerSettings.nickname,
+  log: (message) => console.log(message),
+}));
 // shape= and color= pick the car as the garage would (saved with the next change unless under shot).
 if (urlParams.shape) playerSettings = { ...playerSettings, carShape: urlParams.shape };
 if (urlParams.color) playerSettings = { ...playerSettings, carColor: urlParams.color };
@@ -859,6 +873,12 @@ function setGameState(entered: GameState) {
   const written = recordOnChange(gameState, entered);
   if (written) storeDaily(written);
   const next = resultsOfRecord(entered, dailyRecord);
+  if (dailyBackend) {
+    if (written?.status === 'started') dailyBackend.startAttempt(written.day);
+    const daily = next.kind === 'preRace' || next.kind === 'dailyResults' || ((next.kind === 'loading' || next.kind === 'race') && next.mode === 'daily');
+    if ((next.kind === 'preRace' || next.kind === 'dailyResults') && next.kind !== gameState.kind) dailyBackend.open();
+    else if (!daily) dailyBackend.close();
+  }
   world.carSettings = carSettingsFor(next, carSettings);
   enterState(world, next, gameState);
   // Every state but the results puts the car somewhere new.
@@ -899,7 +919,8 @@ function enter(state: GameState): GameState {
   return dailyEntry(today, dailyRecord, dailyCityBuilt);
 }
 function dailyResultsShown(state: Extract<GameState, { kind: 'dailyResults' }>) {
-  return { day: state.day, ticks: state.ticks, untilNext: millisecondsToDay(state.day + 1, now()) };
+  const leaderboard = dailyBackend ? dailyBackend.status(dailyRecord, state.day) : 'unavailable';
+  return { day: state.day, ticks: state.ticks, untilNext: millisecondsToDay(state.day + 1, now()), leaderboard };
 }
 function moveMenuSelection(step: number) {
   if (listShown() && !devMenu.isOpen()) changeState(moveSelection(gameState, step));
@@ -1097,6 +1118,7 @@ function frame(timeMs: number) {
       else if (raceEvent?.kind === 'finish') {
         storeDaily(finishedRecord(gameState.day, raceEvent.ticks, encodeLogText(recorder.log())));
         gameState = raceFinished(gameState, raceEvent.ticks);
+        dailyBackend?.finished();
       }
     }
     if (raceEvent?.kind === 'finish' && (import.meta.env.DEV || urlParams.replay)) {

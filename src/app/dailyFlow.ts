@@ -1,5 +1,5 @@
 import { dailyRace, type DailyRace } from '../game/daily.ts';
-import { dailyTry, didNotFinishRecord, readableRecord, startedRecord, type DailyRecord } from './dailyRecord.ts';
+import { dailyTry, didNotFinishRecord, readableRecord, recordTicks, startedRecord, type DailyRecord } from './dailyRecord.ts';
 import { dailyResults, loadingDaily, preRace, pressEnter, type GameState } from './gameState.ts';
 
 // Where opening the daily leads: a used try to its results; an open one to the pre-race screen, through the loading
@@ -28,14 +28,14 @@ export function startDaily(
 ): GameState {
   const known = readableRecord(record, today);
   if (known && known.day > state.day) return dailyEntry(today, known, cityBuilt, raceOf);
-  if (known?.day === state.day) return dailyResults(state.day, known.status === 'finished' ? known.ticks : null);
+  if (known?.day === state.day) return dailyResults(state.day, recordTicks(known));
   return pressEnter(state);
 }
 
 // The results of a day show its stored try, which may be another tab's that came first.
 export function resultsOfRecord(state: GameState, record: DailyRecord | null): GameState {
   if (state.kind !== 'dailyResults' || record?.day !== state.day) return state;
-  const ticks = record.status === 'finished' ? record.ticks : null;
+  const ticks = recordTicks(record);
   return ticks === state.ticks ? state : dailyResults(state.day, ticks);
 }
 

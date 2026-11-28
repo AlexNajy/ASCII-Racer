@@ -16,7 +16,13 @@ export interface DailyRecord {
   ticks: number | null; // the race time, when finished
   log: string | null; // the packed input log as text, when finished, for sending later
   version: number | null; // the SIMULATION_VERSION it was driven with, null when unreadable
+  sent: DailySent | null; // what the server made of the finished run; null: not sent yet, or nothing to send
 }
+
+// The server's answer to a finished run, once it is final: stored with the server's time, or refused for good with
+// the reason it gave (versionMismatch, tooLate, badLog...).
+export type DailySent = { status: 'stored'; ticks: number } | { status: 'refused'; reason: string };
+const REASON = /^[A-Za-z]{1,40}$/;
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -31,6 +37,18 @@ function logText(value: unknown, ticks: number): string | null {
   if (typeof value !== 'string' || value.length > MAX_LOG_TEXT) return null;
   const decoded = decodeLogText(value);
   return decoded.ok && decoded.log.length === ticks ? value : null;
+}
+
+function sentOf(value: unknown): DailySent | null {
+  const fields = record(value);
+  if (fields?.status === 'stored') {
+    const ticks = wholeNumber(fields.ticks, 1, MAX_RUN_TICKS);
+    return ticks === null ? null : { status: 'stored', ticks };
+  }
+  if (fields?.status === 'refused' && typeof fields.reason === 'string' && REASON.test(fields.reason)) {
+    return { status: 'refused', reason: fields.reason };
+  }
+  return null;
 }
 
 // Null when there is nothing usable: no day or no status means no try is known, so the day's try is open. A finished
@@ -49,8 +67,9 @@ export function parseDailyRecord(text: string | null): DailyRecord | null {
   if (day === null || !status) return null;
   const version = wholeNumber(fields.version, 1, Number.MAX_SAFE_INTEGER);
   const ticks = status === 'finished' ? wholeNumber(fields.ticks, 1, MAX_RUN_TICKS) : null;
-  if (status === 'finished' && ticks === null) return { day, status: 'didNotFinish', ticks: null, log: null, version };
-  return { day, status, ticks, log: ticks === null ? null : logText(fields.log, ticks), version };
+  if (status === 'finished' && ticks === null) return { day, status: 'didNotFinish', ticks: null, log: null, version, sent: null };
+  const sent = ticks === null ? null : sentOf(fields.sent);
+  return { day, status, ticks, log: ticks === null ? null : logText(fields.log, ticks), version, sent };
 }
 
 export function serialiseDailyRecord(record: DailyRecord): string {
@@ -59,15 +78,15 @@ export function serialiseDailyRecord(record: DailyRecord): string {
 
 // Written before the countdown's first tick: from here on the try is used.
 export function startedRecord(day: number): DailyRecord {
-  return { day, status: 'started', ticks: null, log: null, version: SIMULATION_VERSION };
+  return { day, status: 'started', ticks: null, log: null, version: SIMULATION_VERSION, sent: null };
 }
 
 export function finishedRecord(day: number, ticks: number, log: string): DailyRecord {
-  return { day, status: 'finished', ticks, log, version: SIMULATION_VERSION };
+  return { day, status: 'finished', ticks, log, version: SIMULATION_VERSION, sent: null };
 }
 
 export function didNotFinishRecord(day: number): DailyRecord {
-  return { day, status: 'didNotFinish', ticks: null, log: null, version: SIMULATION_VERSION };
+  return { day, status: 'didNotFinish', ticks: null, log: null, version: SIMULATION_VERSION, sent: null };
 }
 
 // A try that started and never finished (tab closed, reload, crash) did not finish.
@@ -77,12 +96,19 @@ export function settleRecord(record: DailyRecord | null): DailyRecord | null {
 
 const STATUS_RANK: Record<DailyStatus, number> = { started: 0, didNotFinish: 1, finished: 2 };
 
-// The one that says more: the later day, on the same day the further status. For the record in memory against the
-// stored one, which another tab may have changed or which may be gone.
+// The one that says more: the later day, on the same day the further status, then the one with the server's answer.
+// For the record in memory against the stored one, which another tab may have changed or which may be gone.
 export function newerRecord(a: DailyRecord | null, b: DailyRecord | null): DailyRecord | null {
   if (!a || !b) return a ?? b;
   if (a.day !== b.day) return a.day > b.day ? a : b;
-  return STATUS_RANK[b.status] > STATUS_RANK[a.status] ? b : a;
+  if (a.status !== b.status) return STATUS_RANK[b.status] > STATUS_RANK[a.status] ? b : a;
+  return b.sent && !a.sent && b.ticks === a.ticks && b.log === a.log ? b : a;
+}
+
+// The time the results show: the server's once it stored the run, else the browser's.
+export function recordTicks(record: DailyRecord): number | null {
+  if (record.status !== 'finished') return null;
+  return record.sent?.status === 'stored' ? record.sent.ticks : record.ticks;
 }
 
 export type DailyTry = { day: number; used: false } | { day: number; used: true; ticks: number | null }; // ticks null: did not finish
@@ -102,7 +128,7 @@ export function readableRecord(record: DailyRecord | null, today: number): Daily
 export function dailyTry(record: DailyRecord | null, today: number): DailyTry {
   const known = readableRecord(record, today);
   if (!known || known.day < today) return { day: today, used: false };
-  return { day: known.day, used: true, ticks: known.status === 'finished' ? known.ticks : null };
+  return { day: known.day, used: true, ticks: recordTicks(known) };
 }
 
 // What storage holds after writing `next` over `stored` (read just before): `next` only if newerRecord picks it, so

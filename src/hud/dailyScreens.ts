@@ -1,3 +1,4 @@
+import type { LeaderboardStatus } from '../app/dailyBackend.ts';
 import { TICKS_PER_SECOND } from '../game/clock.ts';
 import type { Route } from '../game/route.ts';
 import { drawListScreen, listScreenLayout, MARGIN, SELECTED_COLOR, titleRows, type ListScreen, type MenuLayout } from './menuScreen.ts';
@@ -200,6 +201,20 @@ export function countdownText(milliseconds: number): string {
 }
 
 export const LEADERBOARD_TEXT = 'leaderboard unavailable';
+// The status line under the day: what became of the run on the server. Every state is centred in the same width.
+export const LEADERBOARD_STATUS: Record<LeaderboardStatus, { text: string; color: number }> = {
+  unavailable: { text: LEADERBOARD_TEXT, color: DIM_COLOR },
+  sending: { text: 'sending run...', color: TEXT_COLOR },
+  stored: { text: 'run recorded', color: ROUTE_COLOR },
+  updateNeeded: { text: 'game updated: reload', color: ONE_TRY_COLOR },
+};
+const STATUS_WIDTH = Math.max(...Object.values(LEADERBOARD_STATUS).map(({ text }) => text.length));
+
+export function leaderboardLine(status: LeaderboardStatus): { text: string; color: number } {
+  const { text, color } = LEADERBOARD_STATUS[status];
+  const left = Math.floor((STATUS_WIDTH - text.length) / 2);
+  return { text: (' '.repeat(left) + text).padEnd(STATUS_WIDTH, ' '), color };
+}
 const DID_NOT_FINISH = 'DID NOT FINISH';
 
 // The daily results: the time (or did not finish) where the menu has its title, the day, the leaderboard line and
@@ -208,9 +223,10 @@ export interface DailyResultsScreen {
   day: number;
   ticks: number | null; // null: did not finish
   untilNext: number; // ms to the next daily, 0 or less once it has begun
+  leaderboard?: LeaderboardStatus; // unavailable when not given
 }
 
-function dailyResultsScreen({ day, ticks, untilNext }: DailyResultsScreen): ListScreen {
+function dailyResultsScreen({ day, ticks, untilNext, leaderboard = 'unavailable' }: DailyResultsScreen): ListScreen {
   const time = ticks === null ? null : timerText(ticks);
   return {
     title: time ?? DID_NOT_FINISH,
@@ -218,7 +234,7 @@ function dailyResultsScreen({ day, ticks, untilNext }: DailyResultsScreen): List
     titleColor: time ? TIME_COLOR : DID_NOT_FINISH_COLOR,
     lines: [
       { text: dayText(day), color: DAY_COLOR },
-      { text: LEADERBOARD_TEXT, color: DIM_COLOR },
+      leaderboardLine(leaderboard),
       { text: countdownText(untilNext), color: untilNext > 0 ? TEXT_COLOR : ROUTE_COLOR },
     ],
     entries: [{ label: untilNext > 0 ? 'menu' : 'play', enabled: true }],

@@ -10,6 +10,7 @@ import {
   FLYOVER_HOLD_TICKS,
   FLYOVER_SPEED,
   flyoverPose,
+  LEADERBOARD_STATUS,
   LEADERBOARD_TEXT,
   preRaceLayout,
   READY_TEXT,
@@ -189,6 +190,34 @@ describe('daily results screen', () => {
     expect(grid.dirty).toBe(false);
     drawDailyResultsScreen(grid, { ...finished, untilNext: 5 * HOUR - 1300 });
     expect(grid.dirty).toBe(true);
+  });
+
+  it('shows what became of the run in one line of the same width for every state', () => {
+    const statuses = Object.keys(LEADERBOARD_STATUS) as (keyof typeof LEADERBOARD_STATUS)[];
+    for (const size of [SHOT_GRID, SMALL_GRID]) {
+      const layout = dailyResultsLayout(...size, finished);
+      for (const leaderboard of statuses) {
+        const grid = new TextGrid(...size);
+        drawDailyResultsScreen(grid, { ...finished, leaderboard });
+        expect(text(grid)).toContain(LEADERBOARD_STATUS[leaderboard].text);
+        expect(dailyResultsLayout(...size, { ...finished, leaderboard })).toEqual(layout);
+      }
+    }
+    const plain = new TextGrid(...SHOT_GRID);
+    drawDailyResultsScreen(plain, finished);
+    const unavailable = new TextGrid(...SHOT_GRID);
+    drawDailyResultsScreen(unavailable, { ...finished, leaderboard: 'unavailable' });
+    expect(text(unavailable)).toBe(text(plain));
+    expect(LEADERBOARD_STATUS.unavailable.text).toBe(LEADERBOARD_TEXT);
+  });
+
+  it('writes only the status line when it changes', () => {
+    const grid = new TextGrid(...SHOT_GRID);
+    drawDailyResultsScreen(grid, { ...finished, leaderboard: 'sending' });
+    const before = text(grid).split('\n');
+    drawDailyResultsScreen(grid, { ...finished, leaderboard: 'stored' });
+    const after = text(grid).split('\n');
+    expect(before.filter((row, i) => row !== after[i])).toHaveLength(1);
   });
 
   it('finds its one entry under the pointer', () => {
