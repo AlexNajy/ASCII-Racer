@@ -197,3 +197,6 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 - Step 18: sound starts on the first key press or click (browsers allow nothing earlier); before that, and where Web Audio is missing, the game is silent. Nothing is queued for later.
 - Step 18: the volume steps follow a curve (`(step / 10) ^ 1.5`), so they sound even; 0 and mute are true silence. Changing the volume or switching mute off plays a short blip at the new level.
 - Step 18: everything goes through one master level and a limiter, so layered sounds can't clip.
+- Step 18: the engine is heard whenever the player's car is on screen in the city (the daily's pre-race screen, the race from the countdown, the results while it rolls on) and is silent on the menu, in the settings, the garage and while loading; it idles while the game reads no pedals.
+- Step 18: the engine has five gears in sound only (the pitch climbs within a gear and drops at a shift, from the share of top speed), plus one reverse gear; it is louder and brighter on the throttle, quieter coasting and braking, never under idle. Nothing in the driving depends on it.
+- Step 18: a hidden tab fades all sound to silence and showing it brings it back.

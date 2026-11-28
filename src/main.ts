@@ -1,6 +1,7 @@
 import './style.css';
 import { parseUrlParams } from './dev/urlParams.ts';
-import { browserContextFactory, createAudio, installGestureStart, shouldBlip } from './audio/audio.ts';
+import { browserContextFactory, createAudio, installGestureStart, installVisibility, shouldBlip } from './audio/audio.ts';
+import { createEngine, engineHeard, engineSpeed } from './audio/engine.ts';
 import { createAudioTuning } from './audio/tuning.ts';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, capFrameSeconds, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
@@ -483,7 +484,18 @@ const audioTuning = createAudioTuning();
 const audio = createAudio(urlParams.shot ? null : browserContextFactory(), audioTuning);
 audio.setLevels(playerSettings.volume, playerSettings.muted);
 if (!urlParams.shot) installGestureStart(window, audio);
-if (urlParams.audioDebug) (window as unknown as { audioDebug: { stats: typeof audio.stats } }).audioDebug = { stats: audio.stats };
+installVisibility(document, audio);
+const engine = createEngine(audio, audioTuning);
+// Filled in place every frame, so driving the engine allocates nothing.
+const engineInput = { speed: 0, topSpeed: 0, throttle: 0, brake: 0 };
+if (urlParams.audioDebug) {
+  (window as unknown as { audioDebug: object }).audioDebug = {
+    stats: audio.stats,
+    waveform: audio.waveform,
+    engine: () => ({ ...engine.targets(), ...engineInput }),
+    tuning: audioTuning,
+  };
+}
 
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
 const sceneTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scene');
@@ -854,7 +866,14 @@ const devMenu = createDevMenu(
     if (open) document.exitPointerLock();
     else if (!hasList(gameState)) canvas.requestPointerLock().catch(() => {});
   },
-  { tuning: audioTuning, onChange: audio.retune, stats: audio.stats },
+  {
+    tuning: audioTuning,
+    onChange: () => {
+      audio.retune();
+      engine.retune();
+    },
+    stats: audio.stats,
+  },
 );
 
 trackKeyboard();
@@ -1207,6 +1226,14 @@ function frame(timeMs: number) {
   } else {
     fovBoost = updateChaseCamera(camera, chase, drawnCar, world.carSettings, chaseSettings, world.colliders, dt);
   }
+  // The countdown holds the car and reads no input, so the engine idles through it.
+  const pedalsRead = gameState.kind === 'race' && world.race?.phase !== 'countdown';
+  engineInput.speed = engineSpeed(drawnCar);
+  engineInput.topSpeed = world.carSettings.topSpeed;
+  engineInput.throttle = pedalsRead ? carInput.throttle : 0;
+  engineInput.brake = pedalsRead ? carInput.brake : 0;
+  engine.update(engineInput, engineHeard(gameState, world.race !== null));
+
   giveUpOnScreen = false;
   if (gameState.kind === 'dailyResults') resultsBoard?.show(gameState.day);
   else resultsBoard?.hide();

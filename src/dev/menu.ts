@@ -320,6 +320,41 @@ export function createDevMenu(
   }
   slider(soundPage, 'Blip gain', soundTuning.blipGain, 0, 0.5, 0.01, (value) => (soundTuning.blipGain = value));
   slider(soundPage, 'Blip pitch (Hz)', soundTuning.blipHertz, 200, 2000, 10, (value) => (soundTuning.blipHertz = value));
+  // Read by the engine every frame; the few the graph holds apply through the retune.
+  const engine = soundTuning.engine;
+  const engineSlider = (label: string, key: Exclude<keyof typeof engine, 'gearTops'>, min: number, max: number, step: number) =>
+    slider(soundPage, `Engine ${label}`, engine[key], min, max, step, (value) => ((engine[key] = value), retune()));
+  engineSlider('gain', 'gain', 0, 1.5, 0.01);
+  engineSlider('idle (Hz)', 'idleHertz', 15, 120, 1);
+  engineSlider('launch rise (Hz)', 'launchHertz', 0, 80, 1);
+  engineSlider('shift point (Hz)', 'shiftHertz', 40, 400, 1);
+  engineSlider('max (Hz)', 'maxHertz', 40, 500, 1);
+  engine.gearTops.forEach((top, gear) =>
+    slider(soundPage, `Engine gear ${gear + 1} top (share of top speed)`, top, 0.05, 1.5, 0.01, (value) => (engine.gearTops[gear] = value)),
+  );
+  engineSlider('shift hysteresis (share)', 'shiftHysteresis', 0, 0.2, 0.005);
+  engineSlider('reverse top (share)', 'reverseTop', 0.05, 1, 0.01);
+  engineSlider('idle level', 'idleLevel', 0, 1, 0.01);
+  engineSlider('rev level', 'revLevel', 0, 1, 0.01);
+  engineSlider('load level', 'loadLevel', 0, 1, 0.01);
+  engineSlider('coast share', 'coastShare', 0, 1, 0.01);
+  engineSlider('brake cut', 'brakeCut', 0, 1, 0.01);
+  engineSlider('coast brightness (× note)', 'coastBrightness', 1, 30, 0.5);
+  engineSlider('load brightness (× note)', 'loadBrightness', 1, 40, 0.5);
+  engineSlider('min cutoff (Hz)', 'minCutoff', 50, 3000, 10);
+  engineSlider('max cutoff (Hz)', 'maxCutoff', 500, 15000, 50);
+  engineSlider('resonance (Q, dB)', 'resonance', 0.1, 20, 0.1);
+  engineSlider('high-pass (Hz)', 'highpassHertz', 10, 200, 1);
+  engineSlider('sawtooth mix', 'sawMix', 0, 1, 0.01);
+  engineSlider('square mix', 'squareMix', 0, 1, 0.01);
+  engineSlider('sub-octave mix', 'subMix', 0, 1, 0.01);
+  engineSlider('detune (cents)', 'detuneCents', 0, 50, 1);
+  engineSlider('noise at idle', 'noiseIdle', 0, 0.5, 0.005);
+  engineSlider('noise under load', 'noiseLoad', 0, 0.5, 0.005);
+  engineSlider('noise band (× note)', 'noiseBand', 1, 30, 0.5);
+  engineSlider('idle wobble (cents)', 'wobbleCents', 0, 100, 1);
+  engineSlider('wobble fade (share of revs)', 'wobbleFade', 0.01, 1, 0.01);
+  engineSlider('wobble rate (Hz)', 'wobbleHertz', 0.5, 20, 0.5);
 
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,

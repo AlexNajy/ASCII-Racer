@@ -5,79 +5,11 @@ import {
   createAudio,
   GESTURE_EVENTS,
   installGestureStart,
+  installVisibility,
   shouldBlip,
-  type AnalyserLike,
-  type CompressorLike,
-  type ContextLike,
-  type GainLike,
-  type NodeLike,
-  type OscillatorLike,
-  type ParamLike,
 } from './audio.ts';
+import { FakeContext, type FakeNode } from './fakeContext.ts';
 import { createAudioTuning } from './tuning.ts';
-
-function param(): ParamLike {
-  const self: ParamLike = {
-    value: 0,
-    setTargetAtTime(target) {
-      self.value = target;
-    },
-    setValueAtTime(value) {
-      self.value = value;
-    },
-    linearRampToValueAtTime(value) {
-      self.value = value;
-    },
-  };
-  return self;
-}
-
-class FakeNode implements NodeLike {
-  connections: NodeLike[] = [];
-  disconnected = false;
-  connect(destination: NodeLike) {
-    this.connections.push(destination);
-  }
-  disconnect() {
-    this.disconnected = true;
-  }
-}
-
-class FakeContext implements ContextLike {
-  state = 'running';
-  currentTime = 0;
-  resumes = 0;
-  destination = new FakeNode();
-  oscillators: (FakeNode & OscillatorLike)[] = [];
-  gains: (FakeNode & GainLike)[] = [];
-  resume() {
-    this.resumes++;
-    this.state = 'running';
-    return Promise.resolve();
-  }
-  createGain() {
-    const node = Object.assign(new FakeNode(), { gain: param() });
-    this.gains.push(node);
-    return node;
-  }
-  createDynamicsCompressor(): CompressorLike {
-    return Object.assign(new FakeNode(), { threshold: param(), knee: param(), ratio: param(), attack: param(), release: param() });
-  }
-  createAnalyser(): AnalyserLike {
-    return Object.assign(new FakeNode(), { fftSize: 0, getFloatTimeDomainData: () => {} });
-  }
-  createOscillator() {
-    const node = Object.assign(new FakeNode(), {
-      type: '',
-      frequency: param(),
-      onended: null as (() => void) | null,
-      start: () => {},
-      stop: () => {},
-    });
-    this.oscillators.push(node);
-    return node;
-  }
-}
 
 function setup() {
   const context = new FakeContext();
@@ -221,6 +153,50 @@ describe('graph and buses', () => {
     expect(audio.stats().masterGain).toBe(0);
     audio.setLevels(5, false);
     expect(audio.stats().masterGain).toBe(five);
+  });
+});
+
+describe('hidden tab', () => {
+  it('fades the master to 0 while hidden and back to the volume when shown', () => {
+    const { audio } = setup();
+    audio.setLevels(8, false);
+    audio.start();
+    const shown = audio.stats().masterGain;
+    expect(shown).toBeGreaterThan(0);
+    audio.setHidden(true);
+    expect(audio.stats().masterGain).toBe(0);
+    audio.setLevels(10, false);
+    audio.retune();
+    expect(audio.stats().masterGain).toBe(0);
+    audio.setHidden(false);
+    expect(audio.stats().masterGain).toBe(1);
+  });
+
+  it('starts silent when the tab is hidden before the context exists, and plays no blip', () => {
+    const { audio, context } = setup();
+    audio.setLevels(8, false);
+    audio.setHidden(true);
+    audio.start();
+    expect(audio.stats().masterGain).toBe(0);
+    audio.blip();
+    expect(context.oscillators).toHaveLength(0);
+  });
+
+  it('follows the visibilitychange event of the target', () => {
+    let listener: (() => void) | null = null;
+    const target = {
+      hidden: true,
+      addEventListener: (_type: 'visibilitychange', callback: () => void) => {
+        listener = callback;
+      },
+    };
+    const calls: boolean[] = [];
+    installVisibility(target, { setHidden: (hidden) => calls.push(hidden) });
+    target.hidden = false;
+    listener!();
+    target.hidden = true;
+    listener!();
+    expect(calls).toEqual([true, false, true]);
   });
 });
 

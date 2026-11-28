@@ -14,7 +14,7 @@ export interface ParamLike {
   linearRampToValueAtTime(value: number, endTime: number): unknown;
 }
 export interface NodeLike {
-  connect(destination: NodeLike): unknown;
+  connect(destination: NodeLike | ParamLike): unknown;
   disconnect(): void;
 }
 export interface GainLike extends NodeLike {
@@ -34,19 +34,37 @@ export interface AnalyserLike extends NodeLike {
 export interface OscillatorLike extends NodeLike {
   type: string;
   frequency: ParamLike;
+  detune: ParamLike;
   onended: (() => void) | null;
   start(when: number): void;
   stop(when: number): void;
 }
+export interface FilterLike extends NodeLike {
+  type: string;
+  frequency: ParamLike;
+  Q: ParamLike;
+}
+export interface BufferLike {
+  getChannelData(channel: number): Float32Array;
+}
+export interface BufferSourceLike extends NodeLike {
+  buffer: BufferLike | null;
+  loop: boolean;
+  start(when: number): void;
+}
 export interface ContextLike {
   readonly state: string;
   readonly currentTime: number;
+  readonly sampleRate: number;
   readonly destination: NodeLike;
   resume(): Promise<void>;
   createGain(): GainLike;
   createDynamicsCompressor(): CompressorLike;
   createAnalyser(): AnalyserLike;
   createOscillator(): OscillatorLike;
+  createBiquadFilter(): FilterLike;
+  createBuffer(channels: number, length: number, sampleRate: number): BufferLike;
+  createBufferSource(): BufferSourceLike;
 }
 
 export type AudioState = 'none' | 'suspended' | 'running';
@@ -59,6 +77,7 @@ export interface AudioStats {
 }
 
 const RAMP_SECONDS = 0.005; // time constant of gain changes, so none clicks
+const HIDE_SECONDS = 0.02; // time constant of the master's fade when the tab is hidden or shown
 const LIMITER = { threshold: -6, knee: 6, ratio: 12, attack: 0.003, release: 0.25 };
 const ANALYSER_SIZE = 2048;
 const FLOOR_DB = -120;
@@ -85,14 +104,19 @@ export interface Audio {
   retune(): void;
   // A bus under the master, made on first ask (null until the context exists). Sources connect to it.
   bus(name: string): GainLike | null;
-  // Runs once when the graph first exists (at once if it does already): where later sounds build their nodes.
-  whenReady(callback: (audio: Audio) => void): void;
+  // Runs once when the graph first exists (at once if it does already): where later sounds build their nodes. The
+  // context is given even while it is still suspended.
+  whenReady(callback: (audio: Audio, context: ContextLike) => void): void;
   // Creates a node counted in the stats; release it with `released` when it is disconnected for good.
   counted<T extends NodeLike>(node: T): T;
   released(count?: number): void;
   context(): ContextLike | null; // only when running
   blip(): void;
+  // While the tab is hidden the frame loop stops, so continuous sounds would hold their last note: the master fades out.
+  setHidden(hidden: boolean): void;
   stats(): AudioStats;
+  // The analyser's last window, for headless checks (audio=debug); null before a context exists.
+  waveform(): { sampleRate: number; samples: number[] } | null;
 }
 
 export function createAudio(makeContext: (() => ContextLike) | null, tuning: AudioTuning): Audio {
@@ -101,13 +125,14 @@ export function createAudio(makeContext: (() => ContextLike) | null, tuning: Aud
   let master: GainLike | null = null;
   let analyser: AnalyserLike | null = null;
   const buses = new Map<string, GainLike>();
-  const waiting: ((audio: Audio) => void)[] = [];
+  const waiting: ((audio: Audio, context: ContextLike) => void)[] = [];
   let nodes = 0;
   let volume = 0;
   let muted = true;
+  let hidden = false;
   const samples = new Float32Array(ANALYSER_SIZE);
 
-  const targetGain = () => masterGain(volume, muted, tuning);
+  const targetGain = () => (hidden ? 0 : masterGain(volume, muted, tuning));
 
   function counted<T extends NodeLike>(node: T): T {
     nodes++;
@@ -138,7 +163,7 @@ export function createAudio(makeContext: (() => ContextLike) | null, tuning: Aud
     limiter.connect(analyser);
     ctx = context;
     for (const name of Object.keys(tuning.busGains)) bus(name);
-    for (const callback of waiting.splice(0)) callback(self);
+    for (const callback of waiting.splice(0)) callback(self, context);
   }
 
   const self: Audio = {
@@ -167,7 +192,7 @@ export function createAudio(makeContext: (() => ContextLike) | null, tuning: Aud
     },
     bus,
     whenReady(callback) {
-      if (ctx) callback(self);
+      if (ctx) callback(self, ctx);
       else waiting.push(callback);
     },
     counted,
@@ -196,6 +221,16 @@ export function createAudio(makeContext: (() => ContextLike) | null, tuning: Aud
       };
       osc.start(start);
       osc.stop(start + BLIP_SECONDS);
+    },
+    setHidden(next) {
+      if (next === hidden) return;
+      hidden = next;
+      if (ctx && master) master.gain.setTargetAtTime(targetGain(), ctx.currentTime, HIDE_SECONDS);
+    },
+    waveform() {
+      if (!ctx || !analyser) return null;
+      analyser.getFloatTimeDomainData(samples);
+      return { sampleRate: ctx.sampleRate, samples: Array.from(samples) };
     },
     stats() {
       const state: AudioState = !ctx ? 'none' : ctx.state === 'running' ? 'running' : 'suspended';
@@ -231,4 +266,15 @@ export const GESTURE_EVENTS = ['keydown', 'pointerup', 'click'] as const;
 // key handler that stops the event (the settings screen's) can't hide the gesture.
 export function installGestureStart(target: GestureTarget, audio: Pick<Audio, 'start'>): void {
   for (const type of GESTURE_EVENTS) target.addEventListener(type, () => audio.start(), true);
+}
+
+export interface VisibilityTarget {
+  readonly hidden: boolean;
+  addEventListener(type: 'visibilitychange', listener: () => void): void;
+}
+
+// Hiding the tab fades the master out and showing it fades it back, for every sound at once.
+export function installVisibility(target: VisibilityTarget, audio: Pick<Audio, 'setHidden'>): void {
+  audio.setHidden(target.hidden);
+  target.addEventListener('visibilitychange', () => audio.setHidden(target.hidden));
 }
