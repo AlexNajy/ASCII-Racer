@@ -1,13 +1,14 @@
 import { CELL_WIDTH_MAX, CELL_WIDTH_MIN, DEFAULT_CELL_WIDTH } from '../dev/menu.ts';
 import { CAR_SHAPES, type CarShape } from '../render/models/car.ts';
 import { CAR_COLORS } from '../render/models/palettes.ts';
+import { validNickname } from './nickname.ts';
 
 // The player's settings, kept in the browser. Parsing and checking are pure; loading and saving only touch the
 // storage they are given and never throw, so the game runs without storage (private mode).
 
+export { NICKNAME_MAX, NICKNAME_MIN, nicknameCharacter, normaliseNickname, validNickname } from './nickname.ts';
+
 export const VOLUME_STEPS = 10; // volume is a whole number of steps, 0 (silent) to this (full)
-export const NICKNAME_MIN = 3;
-export const NICKNAME_MAX = 12;
 export const SETTINGS_KEY = 'ascii-racer-settings';
 export const SETTINGS_VERSION = 1;
 
@@ -28,27 +29,6 @@ export const DEFAULT_PLAYER_SETTINGS: Readonly<PlayerSettings> = {
   carShape: CAR_SHAPES[0],
   carColor: CAR_COLORS[0].id,
 };
-
-const NICKNAME_CHARACTER = /^[A-Za-z0-9 ]$/;
-
-export function nicknameCharacter(char: string): boolean {
-  return NICKNAME_CHARACTER.test(char);
-}
-
-// Spaces at the ends dropped, runs of spaces made one.
-export function normaliseNickname(text: string): string {
-  return text.trim().replace(/ +/g, ' ');
-}
-
-// Letters, digits and single spaces inside, 3 to 12 characters, as normaliseNickname leaves it.
-export function validNickname(text: string): boolean {
-  return (
-    text === normaliseNickname(text) &&
-    text.length >= NICKNAME_MIN &&
-    text.length <= NICKNAME_MAX &&
-    [...text].every(nicknameCharacter)
-  );
-}
 
 function wholeNumber(value: unknown, min: number, max: number): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max ? value : null;

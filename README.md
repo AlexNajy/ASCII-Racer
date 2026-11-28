@@ -18,9 +18,9 @@ npm run preview   # serve the production build locally
 npm test          # run the tests once
 npm run check     # type check, tests and build
 npm run shots     # pictures from fixed camera spots into shots/ (needs Google Chrome)
-npm run db:start  # local Supabase database (needs Docker)
-npm run db:test   # reset it to the migrations and run the database tests
-npm run db:stop   # stop it
+npm run backend:start  # local Supabase stack: database, auth, Edge Functions (needs Docker)
+npm run backend:test   # start it if needed, reset the database, database and function tests end to end
+npm run backend:stop   # stop it
 ```
 
 ## Controls
@@ -174,7 +174,7 @@ npm run db:stop   # stop it
   - [x] Simulation version constant, bumped by any change to simulation or generation (a test fails when the reference run changes without it)
   - [x] Daily flow without a backend: pre-race screen, one try kept in the browser, results with time, countdown to the next day
   - [x] Supabase project files: migrations for attempts and runs with row level security, anonymous sign-ins, local config
-  - [ ] Edge Functions: start an attempt, check a run by replaying its inputs with the game's own simulation, tested with Deno
+  - [x] Edge Functions: start an attempt, check a run by replaying its inputs with the game's own simulation, tested with Deno
   - [ ] Deploy action for migrations and functions, skipped when the secrets are missing
   - [ ] Client: sign in, start attempt, send run, handle offline and errors
   - [ ] Results: rank, percentile, top times, bell curve histogram in glyphs with the player marked

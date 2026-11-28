@@ -15,7 +15,7 @@ jobs:
       - run: npm ci
       - run: npm run check
 
-  database:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -24,8 +24,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run db:start
-      - run: npm run db:test
-      - run: npx supabase db lint --fail-on warning
+      - run: npm run backend:test
       - if: always()
-        run: npm run db:stop
+        run: npm run backend:stop

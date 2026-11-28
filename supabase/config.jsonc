@@ -45,6 +45,13 @@
     "sms": { "enabled": false }
   },
 
+  // The functions verify the caller's token themselves (the gateway check knows only the legacy secret, and a
+  // browser's CORS preflight carries no token).
+  "functions": {
+    "start-attempt": { "verify_jwt": false },
+    "submit-run": { "verify_jwt": false }
+  },
+
   "edge_runtime": {
     "enabled": true,
     "policy": "per_worker",

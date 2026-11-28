@@ -2,7 +2,7 @@
 -- anonymous sign-in), switched with the JWT claims PostgREST sets.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(58);
+select plan(63);
 
 -- a: the player under test, b and c: other players
 insert into auth.users (id, is_anonymous) values
@@ -60,6 +60,30 @@ select is(
    where attrelid in ('public.attempts'::regclass, 'public.runs'::regclass, 'public.run_logs'::regclass)
      and attacl is not null),
   0::bigint, 'no column level privileges'
+);
+
+-- Exact function privileges: hosted defaults grant EXECUTE on new functions to public, anon and authenticated.
+create function pg_temp.fprivs(fn regprocedure, grantee_name text) returns text language sql as $$
+  select coalesce(string_agg(a.privilege_type, ',' order by a.privilege_type), '')
+  from pg_proc p
+  cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+  where p.oid = fn
+    and a.grantee = case when grantee_name = 'public' then 0 else (select oid from pg_roles where rolname = grantee_name) end
+$$;
+
+select is(
+  pg_temp.fprivs('public.store_run(uuid, integer, integer, text, integer, text)', r), '',
+  r || ' has no privilege on store_run'
+) from unnest(array['public', 'anon', 'authenticated']) r;
+select is(
+  pg_temp.fprivs('public.store_run(uuid, integer, integer, text, integer, text)', 'service_role'), 'EXECUTE',
+  'service_role: exactly EXECUTE on store_run'
+);
+select is(
+  (select count(*) from pg_proc
+   where pronamespace = 'public'::regnamespace
+     and (has_function_privilege('anon', oid, 'execute') or has_function_privilege('authenticated', oid, 'execute'))),
+  0::bigint, 'no function in public is executable by anon or authenticated'
 );
 
 -- anon
