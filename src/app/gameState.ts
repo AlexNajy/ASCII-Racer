@@ -24,7 +24,8 @@ export type GameState =
   // the finish on, with the time
   | { kind: 'race'; mode: 'daily'; day: number; route: Route; givingUp: boolean; finished: number | null }
   | { kind: 'results'; mode: 'unlimited'; route: Route; ticks: number; selected: number } // index into RESULTS_OPTIONS
-  | { kind: 'dailyResults'; day: number; ticks: number | null } // null: did not finish
+  // null: did not finish; `selected` indexes the entries: `share` (finished only) and then `menu` / `play`
+  | { kind: 'dailyResults'; day: number; ticks: number | null; selected: number }
   | ({ kind: 'settings' } & SettingsScreen)
   | { kind: 'garage'; selected: number } // index into GARAGE_ROWS
   | { kind: 'loading'; mode: 'unlimited' } // a new city and route being made for an unlimited race
@@ -58,8 +59,19 @@ export function dailyRacing(day: number, route: Route): DailyRaceState {
   return { kind: 'race', mode: 'daily', day, route, givingUp: false, finished: null };
 }
 
-export function dailyResults(day: number, ticks: number | null): GameState {
-  return { kind: 'dailyResults', day, ticks };
+export function dailyResults(day: number, ticks: number | null, selected = FIRST_DAILY_ENTRY): GameState {
+  return { kind: 'dailyResults', day, ticks, selected };
+}
+
+// A finished try offers `share` before `menu`; one that did not finish only `menu`. The first is selected.
+export const FIRST_DAILY_ENTRY = 0;
+export function dailyEntryCount(ticks: number | null): number {
+  return ticks === null ? 1 : 2;
+}
+
+// Whether the selected entry of the daily results is `share`.
+export function picksShare(state: GameState): boolean {
+  return state.kind === 'dailyResults' && state.ticks !== null && state.selected === 0;
 }
 
 export function loading(mode: 'unlimited'): GameState {
@@ -81,6 +93,7 @@ export function loaded(state: GameState, route: Route | null): GameState {
 function optionCount(state: GameState): number {
   if (state.kind === 'menu') return MENU_ENTRIES.length;
   if (state.kind === 'garage') return GARAGE_ROWS.length;
+  if (state.kind === 'dailyResults') return dailyEntryCount(state.ticks);
   return state.kind === 'results' ? RESULTS_OPTIONS.length : 0;
 }
 
@@ -93,8 +106,8 @@ export function moveSelection(state: GameState, step: number): GameState {
     if (state.editing || step === 0) return state;
     return { ...state, selected: wrapSettingsRow(state.selected + step) };
   }
-  if (state.kind !== 'results') return state;
-  const count = RESULTS_OPTIONS.length;
+  if (state.kind !== 'results' && state.kind !== 'dailyResults') return state;
+  const count = optionCount(state);
   return selectEntry(state, (((state.selected + step) % count) + count) % count);
 }
 
@@ -104,7 +117,7 @@ export function selectEntry(state: GameState, index: number): GameState {
     const screen = selectSettingsRow(state, index);
     return screen === state ? state : { ...state, ...screen };
   }
-  if (state.kind !== 'menu' && state.kind !== 'results' && state.kind !== 'garage') return state;
+  if (state.kind !== 'menu' && state.kind !== 'results' && state.kind !== 'garage' && state.kind !== 'dailyResults') return state;
   if (index === state.selected || !Number.isInteger(index) || index < 0 || index >= optionCount(state)) return state;
   return { ...state, selected: index };
 }
@@ -113,7 +126,7 @@ export function selectEntry(state: GameState, index: number): GameState {
 // What it opens needs the clock and the stored try, so it is dailyEntry's (dailyFlow.ts), not pressEnter's.
 export function opensDaily(state: GameState, today: number): boolean {
   if (state.kind === 'menu') return MENU_ENTRIES[state.selected]?.opens === 'daily';
-  return state.kind === 'dailyResults' && today > state.day;
+  return state.kind === 'dailyResults' && today > state.day && !picksShare(state);
 }
 
 // The daily race given up (or run past the timer's cap): it did not finish.
@@ -149,8 +162,8 @@ export function pressEnter(state: GameState, canAsk = true): GameState {
       if (option === 'again') return race(state.mode, state.route);
       return option === 'menu' ? menuAt('unlimited') : loading(state.mode);
     }
-    case 'dailyResults':
-      return MENU;
+    case 'dailyResults': // sharing is main.ts's: it copies and stays
+      return picksShare(state) ? state : MENU;
   }
 }
 

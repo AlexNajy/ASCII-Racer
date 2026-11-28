@@ -6,7 +6,9 @@ import { generateRoute } from '../game/route.ts';
 import {
   afterTick,
   dailyRacing,
+  dailyEntryCount,
   dailyResults,
+  picksShare,
   FIRST_OPTION,
   giveUp,
   loadingDaily,
@@ -241,7 +243,8 @@ describe('daily game state', () => {
     expect(opensDaily({ kind: 'menu', selected: screenEntry('daily') }, DAY)).toBe(true);
     expect(opensDaily(UNLIMITED_MENU, DAY)).toBe(false);
     expect(opensDaily(dailyResults(DAY, 100), DAY)).toBe(false);
-    expect(opensDaily(dailyResults(DAY, 100), DAY + 1)).toBe(true);
+    expect(opensDaily(dailyResults(DAY, 100, 1), DAY + 1)).toBe(true);
+    expect(opensDaily(dailyResults(DAY, 100), DAY + 1)).toBe(false); // share is selected
     expect(opensDaily(dailyResults(DAY, null), DAY + 1)).toBe(true);
     for (const state of [PRE_RACE, DAILY, RACE, RESULTS, LOADING, SETTINGS, GARAGE]) expect(opensDaily(state, DAY + 1)).toBe(false);
   });
@@ -298,12 +301,39 @@ describe('daily game state', () => {
     expect(afterTick(finished, current, current.finishTick + RESULTS_AFTER_TICKS)).toEqual(dailyResults(DAY, 777));
   });
 
-  it('goes from the daily results to the menu on Enter and Escape, and has nothing to select', () => {
+  it('selects share first for a finished try and menu for one that did not finish', () => {
+    expect(dailyResults(DAY, 100)).toMatchObject({ selected: 0 });
+    expect(picksShare(dailyResults(DAY, 100))).toBe(true);
+    expect(picksShare(dailyResults(DAY, 100, 1))).toBe(false);
+    expect(picksShare(dailyResults(DAY, null))).toBe(false);
+    expect(dailyEntryCount(100)).toBe(2);
+    expect(dailyEntryCount(null)).toBe(1);
+  });
+
+  it('moves the daily results selection with wrapping and the pointer, and stays on the screen for share', () => {
     const shown = dailyResults(DAY, 100);
+    expect(moveSelection(shown, 1)).toEqual(dailyResults(DAY, 100, 1));
+    expect(moveSelection(shown, -1)).toEqual(dailyResults(DAY, 100, 1));
+    expect(moveSelection(moveSelection(shown, 1), 1)).toEqual(shown);
+    expect(selectEntry(shown, 1)).toEqual(dailyResults(DAY, 100, 1));
+    expect(selectEntry(shown, 0)).toBe(shown);
+    expect(selectEntry(shown, 2)).toBe(shown);
+    expect(pressEnter(shown)).toBe(shown);
+  });
+
+  it('goes from the daily results to the menu on Enter on menu and on Escape', () => {
+    const shown = dailyResults(DAY, 100, 1);
     expect(pressEnter(shown)).toEqual(MENU);
     expect(pressEscape(shown)).toEqual(MENU);
-    expect(moveSelection(shown, 1)).toBe(shown);
-    expect(selectEntry(shown, 0)).toBe(shown);
+    expect(pressEscape(dailyResults(DAY, 100))).toEqual(MENU);
     expect(afterTick(shown, null, 1000)).toBe(shown);
+  });
+
+  it('has only menu when the try did not finish', () => {
+    const shown = dailyResults(DAY, null);
+    expect(moveSelection(shown, 1)).toBe(shown);
+    expect(moveSelection(shown, -1)).toBe(shown);
+    expect(selectEntry(shown, 1)).toBe(shown);
+    expect(pressEnter(shown)).toEqual(MENU);
   });
 });

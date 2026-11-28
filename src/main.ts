@@ -29,6 +29,8 @@ import { dailyEntry, recordOnChange, resultsOfRecord, startDaily } from './app/d
 import { backendConfig, createDailyBackend, ResultsBoard, runNickname } from './app/dailyBackend.ts';
 import { sampleBoard } from './dev/sampleBoard.ts';
 import type { DailyResults } from './app/dailyResults.ts';
+import { copyText } from './app/clipboard.ts';
+import { shareLabel, shareText, type ShareFeedback } from './app/share.ts';
 import { browserBackend } from './app/dailyBackendBrowser.ts';
 import {
   dailyTry,
@@ -57,6 +59,8 @@ import {
   loaded,
   loading,
   pressEnter,
+  picksShare,
+  FIRST_DAILY_ENTRY,
   pressEscape,
   race as raceState,
   raceFinished,
@@ -696,7 +700,7 @@ if (urlParams.state === 'race' || urlParams.state === 'results') {
     gameState = preRace(day, route);
     enterState(world, gameState, MENU);
   } else if (urlParams.state === 'dailyResults' && urlParams.dnf) {
-    gameState = dailyResults(day, null);
+    gameState = selectEntry(dailyResults(day, null), urlParams.entry ?? FIRST_DAILY_ENTRY);
   } else {
     gameState = { ...dailyRacing(day, route), givingUp: urlParams.giveUp };
     startRace(world, route);
@@ -741,7 +745,7 @@ if (urlParams.state === 'results' || (urlParams.state === 'dailyResults' && !url
   const ticks = raceTicks(world.race, world.tick);
   gameState =
     gameState.kind === 'race' && gameState.mode === 'daily'
-      ? dailyResults(gameState.day, ticks)
+      ? selectEntry(dailyResults(gameState.day, ticks), urlParams.entry ?? FIRST_DAILY_ENTRY)
       : selectEntry({ kind: 'results', mode: 'unlimited', route: world.race.route, ticks, selected: FIRST_OPTION }, urlParams.entry ?? FIRST_OPTION);
 }
 let cityMeshes = buildCityMeshes(world);
@@ -925,6 +929,10 @@ function changeState(next: GameState) {
 // Enter, which on the daily entry (and on the daily results once the next day has begun) reads the clock and the
 // stored try.
 function enter(state: GameState): GameState {
+  if (state.kind === 'dailyResults' && picksShare(state)) {
+    shareResults(state);
+    return state;
+  }
   const today = dayNumber(now());
   if (state.kind === 'preRace') {
     latestDaily();
@@ -941,10 +949,19 @@ function boardOf(state: Extract<GameState, { kind: 'dailyResults' }>): DailyResu
   if (shotBoard?.ticks !== state.ticks) shotBoard = { ticks: state.ticks, board: sampleBoard(state.day, urlParams.board, state.ticks, runNickname(playerSettings.nickname)) };
   return shotBoard.board;
 }
+// The share entry: the text goes to the clipboard from inside the key or click handler; the entry says how it went.
+let shareFeedback: ShareFeedback | null = null;
+function shareResults(state: Extract<GameState, { kind: 'dailyResults' }>) {
+  if (state.ticks === null) return;
+  const text = shareText({ day: state.day, ticks: state.ticks, results: boardOf(state) });
+  copyText(text).then((copied) => {
+    shareFeedback = { outcome: copied ? 'copied' : 'failed', at: performance.now() };
+  });
+}
 function dailyResultsShown(state: Extract<GameState, { kind: 'dailyResults' }>) {
   const leaderboard = dailyBackend ? dailyBackend.status(dailyRecord, state.day) : 'unavailable';
   const untilNext = millisecondsToDay(state.day + 1, now());
-  return { day: state.day, ticks: state.ticks, untilNext, leaderboard, board: boardOf(state), nickname: runNickname(playerSettings.nickname) };
+  return { day: state.day, ticks: state.ticks, untilNext, leaderboard, board: boardOf(state), nickname: runNickname(playerSettings.nickname), shareLabel: shareLabel(shareFeedback, performance.now()) };
 }
 function moveMenuSelection(step: number) {
   if (listShown() && !devMenu.isOpen()) changeState(moveSelection(gameState, step));
@@ -1192,7 +1209,7 @@ function frame(timeMs: number) {
     } else if (gameState.kind === 'results') {
       drawFinishScreen(hud, gameState.ticks, gameState.selected);
     } else if (gameState.kind === 'dailyResults') {
-      drawDailyResultsScreen(hud, dailyResultsShown(gameState));
+      drawDailyResultsScreen(hud, dailyResultsShown(gameState), gameState.selected);
     } else if (gameState.kind === 'garage') {
       drawGarageScreen(hud, { selected: gameState.selected, settings: playerSettings });
     } else if (gameState.kind === 'settings') {

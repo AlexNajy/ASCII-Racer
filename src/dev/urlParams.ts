@@ -149,7 +149,7 @@ export function parseUrlParams(search: string): UrlParams {
 
   const entryNumber = entry === null ? null : number('entry', entry);
   const entries =
-    state === 'results' ? RESULTS_OPTIONS.length : state === 'settings' ? SETTINGS_ROWS.length : state === 'garage' ? GARAGE_ROWS.length : MENU_ENTRIES.length;
+    state === 'results' ? RESULTS_OPTIONS.length : state === 'dailyresults' ? 2 : state === 'settings' ? SETTINGS_ROWS.length : state === 'garage' ? GARAGE_ROWS.length : MENU_ENTRIES.length;
   if (entryNumber !== null && (!Number.isInteger(entryNumber) || entryNumber < 0 || entryNumber >= entries)) {
     throw new Error(`URL parameter entry: expected a whole number, 0 to ${entries - 1}`);
   }

@@ -1,6 +1,7 @@
 import type { LeaderboardStatus } from '../app/dailyBackend.ts';
 import { TICKS_PER_SECOND } from '../game/clock.ts';
 import type { Route } from '../game/route.ts';
+import { SHARE_LABEL_WIDTH, SHARE_LABELS } from '../app/share.ts';
 import { percentFaster, type DailyResults } from '../app/dailyResults.ts';
 import {
   COMPACT_PADDING,
@@ -253,10 +254,14 @@ export interface DailyResultsScreen {
   leaderboard?: LeaderboardStatus; // unavailable when not given
   board?: DailyResults | null; // none: the plain screen
   nickname?: string; // the player's, for their own row when it isn't among the top times
+  shareLabel?: string; // the share entry's label (a finished try only), `share` when not given
 }
 
-function entriesOf(untilNext: number): ListEntry[] {
-  return [{ label: untilNext > 0 ? 'menu' : 'play', enabled: true }];
+// `share` for a finished try, then `menu` (`play` once the next daily is ready). The share label's width is fixed,
+// so `copied` and `copy failed` move nothing.
+function entriesOf({ untilNext, ticks, shareLabel = SHARE_LABELS.idle }: Pick<DailyResultsScreen, 'untilNext' | 'ticks' | 'shareLabel'>): ListEntry[] {
+  const leave = { label: untilNext > 0 ? 'menu' : 'play', enabled: true };
+  return ticks === null ? [leave] : [{ label: shareLabel, enabled: true, width: SHARE_LABEL_WIDTH }, leave];
 }
 
 function countdownLine(untilNext: number): ScreenLine {
@@ -268,11 +273,12 @@ function titleOf(ticks: number | null): Pick<ListScreen, 'title' | 'smallTitle' 
   return { title: time ?? DID_NOT_FINISH, smallTitle: time ?? DID_NOT_FINISH.toLowerCase(), titleColor: time ? TIME_COLOR : DID_NOT_FINISH_COLOR };
 }
 
-function dailyResultsScreen({ day, ticks, untilNext, leaderboard = 'unavailable' }: DailyResultsScreen): ListScreen {
+function dailyResultsScreen(screen: DailyResultsScreen): ListScreen {
+  const { day, ticks, untilNext, leaderboard = 'unavailable' } = screen;
   return {
     ...titleOf(ticks),
     lines: [{ text: dayText(day), color: DAY_COLOR }, leaderboardLine(leaderboard), countdownLine(untilNext)],
-    entries: entriesOf(untilNext),
+    entries: entriesOf(screen),
   };
 }
 
@@ -339,7 +345,7 @@ const EMPTY_BOARD_STYLES: BoardStyle[] = [
   ...BOARD_STYLES.filter(({ panels }) => panels === 'none'),
 ];
 const PANEL_GAP = 2; // columns between panels side by side
-const ENTRY_ROOM = 2; // entries the list has room for (menu, and share to come)
+const ENTRY_ROOM = 2; // entries the list has room for, so a try that did not finish lays out as a finished one
 const BOARD_ABOVE = 0.3; // share of the free rows above the title
 
 export interface PlacedPanel {
@@ -355,7 +361,7 @@ export interface DailyResultsLayout extends MenuLayout {
 }
 
 function boardLayout(columns: number, rows: number, screen: DailyResultsScreen, board: DailyResults): DailyResultsLayout | null {
-  const entries = entriesOf(screen.untilNext);
+  const entries = entriesOf(screen);
   for (const style of board.count === 0 ? EMPTY_BOARD_STYLES : BOARD_STYLES) {
     const { compact } = style;
     const backing = compact ? 0 : TITLE_BACKING_ROWS;
@@ -431,10 +437,10 @@ export function dailyResultsLayout(columns: number, rows: number, screen: DailyR
   return layout && { ...layout, style: null, lines: [], panels: [] };
 }
 
-export function drawDailyResultsScreen(grid: TextGrid, screen: DailyResultsScreen): void {
+export function drawDailyResultsScreen(grid: TextGrid, screen: DailyResultsScreen, selected = 0): void {
   const layout = screen.board ? boardLayout(grid.columns, grid.rows, screen, screen.board) : null;
   if (!layout) {
-    drawListScreen(grid, dailyResultsScreen(screen), 0);
+    drawListScreen(grid, dailyResultsScreen(screen), selected);
     return;
   }
   const { titleColor } = titleOf(screen.ticks);
@@ -449,5 +455,5 @@ export function drawDailyResultsScreen(grid: TextGrid, screen: DailyResultsScree
       }
     });
   }
-  drawEntryList(grid, layout, entriesOf(screen.untilNext), 0);
+  drawEntryList(grid, layout, entriesOf(screen), selected);
 }

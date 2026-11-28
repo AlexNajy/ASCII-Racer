@@ -154,7 +154,8 @@ describe('daily results screen', () => {
       expect(all).toContain(`daily #${DAY}`);
       expect(all).toContain(LEADERBOARD_TEXT);
       expect(all).toContain('next daily in 05:00:00');
-      expect(all).toMatch(/> menu </);
+      expect(all).toMatch(/> share\s+</);
+      expect(all).toMatch(/ menu /);
       expect(all).not.toContain('again');
       expect(all).not.toMatch(/> next/);
     }
@@ -177,7 +178,8 @@ describe('daily results screen', () => {
     drawDailyResultsScreen(grid, { ...finished, untilNext: 0 });
     const all = text(grid);
     expect(all).toContain(READY_TEXT);
-    expect(all).toMatch(/> play </);
+    expect(all).toMatch(/ play /);
+    expect(all).toMatch(/> share\s+</);
     expect(dailyResultsLayout(...SHOT_GRID, finished)).toEqual(dailyResultsLayout(...SHOT_GRID, { ...finished, untilNext: 0 }));
     expect(before.length).toBe(all.length);
   });
@@ -220,10 +222,47 @@ describe('daily results screen', () => {
     expect(before.filter((row, i) => row !== after[i])).toHaveLength(1);
   });
 
-  it('finds its one entry under the pointer', () => {
-    const layout = dailyResultsLayout(...SHOT_GRID, finished)!;
-    expect(menuEntryAt(layout, layout.listLeft + 2, layout.entryRows[0])).toBe(0);
-    expect(menuEntryAt(layout, layout.listLeft + 2, layout.entryRows[0] + 1)).toBeNull();
+  it('finds both entries under the pointer in every style, and one for a try that did not finish', () => {
+    for (const size of [DEFAULT_GRID, SHOT_GRID, SMALL_GRID]) {
+      const layout = dailyResultsLayout(...size, finished)!;
+      expect(menuEntryAt(layout, layout.listLeft + 2, layout.entryRows[0])).toBe(0);
+      expect(menuEntryAt(layout, layout.listLeft + 2, layout.entryRows[1])).toBe(1);
+      expect(menuEntryAt(layout, layout.listLeft + 2, layout.entryRows[1] + 1)).toBeNull();
+      const single = dailyResultsLayout(...size, dnf)!;
+      expect(single.entryRows).toHaveLength(1);
+      expect(menuEntryAt(single, single.listLeft + 2, single.entryRows[0])).toBe(0);
+    }
+  });
+
+  it('marks the selected entry, shows the share label and keeps every width', () => {
+    for (const size of [SHOT_GRID, SMALL_GRID]) {
+      const layout = dailyResultsLayout(...size, finished);
+      for (const [label, selected] of [['copied', 0], ['copy failed', 0], ['share', 1]] as const) {
+        const grid = new TextGrid(...size);
+        drawDailyResultsScreen(grid, { ...finished, shareLabel: label }, selected);
+        const all = text(grid);
+        expect(all).toContain(label);
+        expect(all).toMatch(selected === 0 ? new RegExp(`> ${label}\\s* <`) : /> menu\s* </);
+        expect(dailyResultsLayout(...size, { ...finished, shareLabel: label })).toEqual(layout);
+      }
+    }
+  });
+
+  it('fits both entries on the smallest grid, 640 x 400 at glyph size 16, plain', () => {
+    const layout = dailyResultsLayout(40, 14, finished)!;
+    expect(layout).not.toBeNull();
+    expect(layout.entryRows).toHaveLength(2);
+    const grid = new TextGrid(40, 14);
+    drawDailyResultsScreen(grid, finished);
+    expect(text(grid)).toMatch(/> share\s+</);
+    expect(text(grid)).toMatch(/ menu /);
+  });
+
+  it('has no share entry when the try did not finish', () => {
+    const grid = new TextGrid(...SHOT_GRID);
+    drawDailyResultsScreen(grid, dnf);
+    expect(text(grid)).not.toContain('share');
+    expect(text(grid)).toMatch(/> menu </);
   });
 
   it('draws on a small grid and nothing on a tiny one', () => {

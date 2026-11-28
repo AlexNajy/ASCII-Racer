@@ -10,6 +10,7 @@ import type { TextGrid } from './textGrid.ts';
 export interface ListEntry {
   label: string;
   enabled: boolean; // dimmed when not
+  width?: number; // the label's room when longer than the label, so a changing label moves nothing
 }
 
 export interface ScreenLine {
@@ -40,7 +41,7 @@ export const ENTRY_PADDING = 3; // cells between the frame and a marker
 export const LINE_PADDING = 2; // solid cells each side of the longest line
 
 function labelWidth(entries: readonly ListEntry[]): number {
-  return Math.max(...entries.map((entry) => entry.label.length));
+  return Math.max(...entries.map((entry) => Math.max(entry.label.length, entry.width ?? 0)));
 }
 
 // A marker and a space each side of the label.

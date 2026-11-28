@@ -244,7 +244,8 @@ describe('daily results board screen', () => {
     expect(all).toContain('300 players');
     expect(all).toContain('top times');
     expect(all).toContain(BOARD.top[0].nickname);
-    expect(all).toMatch(/> menu </);
+    expect(all).toMatch(/> share\s+</);
+    expect(all).toMatch(/ menu /);
   });
 
   it('shows the board without a marker, rank or percentile when the try did not finish', () => {
@@ -342,14 +343,17 @@ describe('daily results board screen', () => {
     const all = text(grid);
     expect(all).toContain(`#${BOARD.own!.rank} of 300`);
     expect(all).toContain('faster than');
-    expect(all).toMatch(/> menu </);
+    expect(all).toMatch(/> share\s+</);
+    expect(all).toMatch(/ menu /);
   });
 
-  it('has room for a second entry under the board without moving anything', () => {
-    for (const [columns, rows] of [[213, 65], [100, 32], [64, 22]] as const) {
+  it('holds share and menu in the list, and a try that did not finish lays out the same around its one entry', () => {
+    for (const [columns, rows] of [[213, 65], [100, 32], [64, 22], [40, 14]] as const) {
       const layout = dailyResultsLayout(columns, rows, screen())!;
-      const spacing = layout.style!.compact ? 1 : 2;
-      expect(layout.listTop + layout.listHeight + spacing).toBeLessThanOrEqual(rows - 1);
+      expect(layout.entryRows).toHaveLength(2);
+      expect(layout.listTop + layout.listHeight).toBeLessThanOrEqual(rows - 1);
+      const dnf = dailyResultsLayout(columns, rows, DNF)!;
+      expect(dnf.entryRows).toHaveLength(1);
     }
   });
 });
