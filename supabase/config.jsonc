@@ -1,6 +1,7 @@
 {
   "$schema": "https://supabase.com/schemas/config/v1.json",
-  // Local stack only; the hosted project's settings are made on its dashboard. Ports 544xx so it
+  // Local stack only, except `functions` (read by `functions deploy`); the hosted auth settings come from
+  // scripts/deploy-backend.mjs, the rest from the project's dashboard. Ports 544xx so it
   // runs beside another local Supabase project on the default 543xx.
   // Reference: https://supabase.com/docs/guides/local-development/cli/config
   "project_id": "driftle",

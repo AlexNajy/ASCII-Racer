@@ -175,7 +175,7 @@ npm run backend:stop   # stop it
   - [x] Daily flow without a backend: pre-race screen, one try kept in the browser, results with time, countdown to the next day
   - [x] Supabase project files: migrations for attempts and runs with row level security, anonymous sign-ins, local config
   - [x] Edge Functions: start an attempt, check a run by replaying its inputs with the game's own simulation, tested with Deno
-  - [ ] Deploy action for migrations and functions, skipped when the secrets are missing
+  - [x] Deploy action for migrations and functions, skipped when the secrets are missing
   - [ ] Client: sign in, start attempt, send run, handle offline and errors
   - [ ] Results: rank, percentile, top times, bell curve histogram in glyphs with the player marked
   - [ ] Share text copied to the clipboard

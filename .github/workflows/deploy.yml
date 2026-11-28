@@ -15,7 +15,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The server first, so the site is never newer than it. Without the secrets it skips and succeeds.
+  backend:
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/deploy-backend.mjs deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
   build:
+    if: github.ref == 'refs/heads/main'
+    needs: backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -24,6 +46,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # VITE_SUPABASE_URL and VITE_SUPABASE_KEY for the build; nothing without the secrets.
+      - run: node scripts/deploy-backend.mjs env
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       - run: npm run check
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
@@ -32,6 +60,7 @@ jobs:
 
   # A job of its own: straight after the upload in the same job, the artifact is sometimes not listed yet.
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:
