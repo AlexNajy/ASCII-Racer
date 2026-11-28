@@ -373,6 +373,25 @@ export function createDevMenu(
   tyreSlider('attack (s)', 'attackSeconds', 0.005, 0.5, 0.005);
   tyreSlider('release (s)', 'releaseSeconds', 0.005, 1, 0.005);
   tyreSlider('high-pass (Hz)', 'highpassHertz', 10, 1000, 5);
+  const ambience = soundTuning.ambience;
+  const ambienceSlider = (label: string, key: keyof typeof ambience, min: number, max: number, step: number) =>
+    slider(soundPage, `Hum ${label}`, ambience[key], min, max, step, (value) => ((ambience[key] = value), retune()));
+  ambienceSlider('gain', 'gain', 0, 0.5, 0.005);
+  ambienceSlider('rumble (Hz)', 'rumbleHertz', 40, 400, 5);
+  ambienceSlider('rumble Q', 'rumbleQ', 0.2, 5, 0.1);
+  ambienceSlider('rumble mix', 'rumbleMix', 0, 6, 0.05);
+  ambienceSlider('air (Hz)', 'airHertz', 300, 6000, 50);
+  ambienceSlider('air Q', 'airQ', 0.2, 5, 0.1);
+  ambienceSlider('air mix', 'airMix', 0, 3, 0.05);
+  ambienceSlider('mains note (Hz)', 'humHertz', 40, 240, 1);
+  ambienceSlider('mains mix', 'humMix', 0, 1, 0.01);
+  ambienceSlider('mains harmonics mix', 'harmonicMix', 0, 1, 0.01);
+  ambienceSlider('slow swell (share)', 'swell', 0, 0.95, 0.01);
+  ambienceSlider('air sweep (cents)', 'sweepCents', 0, 1200, 10);
+  ambienceSlider('fade time (s)', 'fadeSeconds', 0.05, 3, 0.05);
+  ambienceSlider('speed ducking (share)', 'duck', 0, 1, 0.01);
+  ambienceSlider('level with the car (share)', 'carShare', 0, 1, 0.01);
+  ambienceSlider('high-pass (Hz)', 'highpassHertz', 10, 200, 1);
   const impacts = soundTuning.impacts;
   const impactSlider = (label: string, key: keyof typeof impacts, min: number, max: number, step: number) =>
     slider(soundPage, `Thud ${label}`, impacts[key], min, max, step, (value) => ((impacts[key] = value), retune()));

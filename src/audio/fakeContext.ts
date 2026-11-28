@@ -97,6 +97,8 @@ export class FakeContext implements ContextLike {
     const node = Object.assign(new FakeNode(), {
       buffer: null as BufferLike | null,
       loop: false,
+      loopStart: 0,
+      loopEnd: 0,
       started: false,
       stopped: false,
       offset: 0,

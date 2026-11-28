@@ -53,6 +53,8 @@ export interface BufferLike {
 export interface BufferSourceLike extends NodeLike {
   buffer: BufferLike | null;
   loop: boolean;
+  loopStart: number;
+  loopEnd: number;
   start(when: number, offset?: number): void;
   stop(when: number): void;
 }

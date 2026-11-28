@@ -113,7 +113,7 @@ describe('graph and buses', () => {
     const { audio } = setup();
     audio.start();
     const base = audio.stats().nodes;
-    expect(base).toBe(5);
+    expect(base).toBe(6);
     const tyres = audio.bus('tyres');
     expect(audio.bus('tyres')).toBe(tyres);
     expect(audio.stats().nodes).toBe(base + 1);

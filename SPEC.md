@@ -202,3 +202,4 @@ Accounts, chat, money, ads, AI traffic, car upgrades or stats, touch controls, w
 - Step 18: a hidden tab fades all sound to silence and showing it brings it back.
 - Step 18: the tires screech from the same sideways slide that throws the drift sparks (from 2 m/s, full at 9 m/s), so sound and sparks start together; gripping corners, braking and reversing are silent.
 - Step 18: an impact thuds from 2 m/s into the wall, louder and brighter up to 16 m/s. Grinding along a wall or pushing into it gives one thud, not a rattle: a hit on the same wall soon after a thud is heard only if it is clearly harder, while a hit on another wall is heard.
+- Step 18: the city hum is a quiet low rumble with slow movement and a faint mains tone, heard wherever the city is drawn (menu, settings, pre-race, races, results, while a city loads) and silent in the garage; it drops to 40% while the car is heard, and a little more with speed, so the engine sits on top.

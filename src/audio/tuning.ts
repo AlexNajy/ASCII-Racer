@@ -78,6 +78,26 @@ export interface ImpactTuning {
   gain: number; // the thud's output gain at full level
 }
 
+// The city hum's numbers (audio/ambience.ts).
+export interface AmbienceTuning {
+  gain: number; // the whole hum's output gain
+  rumbleHertz: number; // the low band's centre
+  rumbleQ: number;
+  rumbleMix: number; // its gain
+  airHertz: number; // the higher band's centre
+  airQ: number;
+  airMix: number;
+  humHertz: number; // the mains-like hum's note, with a second and a third harmonic above it
+  humMix: number; // gain of the note
+  harmonicMix: number; // gain of the second harmonic (the third has half)
+  swell: number; // depth of the slow level movements, share of each level
+  sweepCents: number; // depth of the air band's slow pitch movement
+  fadeSeconds: number; // time constant of fading in and out with the screen and of the speed ducking
+  duck: number; // share of the level lost at top speed, 0 to 1
+  carShare: number; // the level while the car is heard (the idling engine covers the hum), against the level without it
+  highpassHertz: number; // nothing below this reaches the bus
+}
+
 // Numbers to tune by ear; the dev menu's Sound page edits this object and the audio module reads it on `retune`.
 export interface AudioTuning {
   volumeCurve: number; // master gain = (volume / steps) ^ this, so each step sounds like the one before
@@ -88,6 +108,7 @@ export interface AudioTuning {
   engine: EngineTuning;
   tyres: TyreTuning;
   impacts: ImpactTuning;
+  ambience: AmbienceTuning;
 }
 
 export const DEFAULT_ENGINE_TUNING: Readonly<EngineTuning> = {
@@ -165,24 +186,45 @@ export const DEFAULT_IMPACT_TUNING: Readonly<ImpactTuning> = {
   gain: 0.3,
 };
 
+export const DEFAULT_AMBIENCE_TUNING: Readonly<AmbienceTuning> = {
+  gain: 0.094,
+  rumbleHertz: 140,
+  rumbleQ: 1.5,
+  rumbleMix: 3.5,
+  airHertz: 500,
+  airQ: 0.8,
+  airMix: 0.07,
+  humHertz: 60,
+  humMix: 0.04,
+  harmonicMix: 0.04,
+  swell: 0.2,
+  sweepCents: 500,
+  fadeSeconds: 0.5,
+  duck: 0.4,
+  carShare: 0.4,
+  highpassHertz: 40,
+};
+
 export const DEFAULT_AUDIO_TUNING: Readonly<AudioTuning> = {
   volumeCurve: 1.5,
   topGain: 1,
-  busGains: { world: 1, interface: 1 },
+  busGains: { world: 1, interface: 1, ambience: 1 },
   blipGain: 0.12,
   blipHertz: 880,
   engine: DEFAULT_ENGINE_TUNING,
   tyres: DEFAULT_TYRE_TUNING,
   impacts: DEFAULT_IMPACT_TUNING,
+  ambience: DEFAULT_AMBIENCE_TUNING,
 };
 
 export function createAudioTuning(): AudioTuning {
-  const { engine, tyres, impacts } = DEFAULT_AUDIO_TUNING;
+  const { engine, tyres, impacts, ambience } = DEFAULT_AUDIO_TUNING;
   return {
     ...DEFAULT_AUDIO_TUNING,
     busGains: { ...DEFAULT_AUDIO_TUNING.busGains },
     engine: { ...engine, gearTops: [...engine.gearTops] },
     tyres: { ...tyres },
     impacts: { ...impacts },
+    ambience: { ...ambience },
   };
 }

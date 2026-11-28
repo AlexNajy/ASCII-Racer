@@ -1,6 +1,7 @@
 import './style.css';
 import { parseUrlParams } from './dev/urlParams.ts';
 import { browserContextFactory, createAudio, installGestureStart, installVisibility, shouldBlip } from './audio/audio.ts';
+import { ambienceHeard, createAmbience } from './audio/ambience.ts';
 import { createEngine, engineHeard, engineSpeed } from './audio/engine.ts';
 import { createThuds } from './audio/impacts.ts';
 import { createScreech } from './audio/tyres.ts';
@@ -490,9 +491,11 @@ installVisibility(document, audio);
 const engine = createEngine(audio, audioTuning);
 const screech = createScreech(audio, audioTuning);
 const thuds = createThuds(audio, audioTuning);
+const ambience = createAmbience(audio, audioTuning);
 // Filled in place every frame, so driving the sounds allocates nothing.
 const engineInput = { speed: 0, topSpeed: 0, throttle: 0, brake: 0 };
 const screechInput = { slide: 0, speed: 0 };
+const ambienceInput = { speed: 0, topSpeed: 0, car: false };
 const impactLog: number[] = []; // audio=debug only: every tick's impact speed
 if (urlParams.audioDebug) {
   (window as unknown as { audioDebug: object }).audioDebug = {
@@ -500,6 +503,7 @@ if (urlParams.audioDebug) {
     waveform: audio.waveform,
     engine: () => ({ ...engine.targets(), ...engineInput }),
     screech: () => ({ ...screech.targets(), ...screechInput }),
+    ambience: () => ({ ...ambience.targets(), ...ambienceInput }),
     thuds: () => ({ playing: thuds.playing(), played: thuds.played(), impacts: impactLog.splice(0) }),
     tuning: audioTuning,
   };
@@ -881,6 +885,7 @@ const devMenu = createDevMenu(
       engine.retune();
       screech.retune();
       thuds.retune();
+      ambience.retune();
     },
     stats: audio.stats,
   },
@@ -1254,6 +1259,10 @@ function frame(timeMs: number) {
   screechInput.slide = slideSpeed(drawnCar);
   screechInput.speed = Math.abs(engineInput.speed);
   screech.update(screechInput, carHeard);
+  ambienceInput.speed = engineInput.speed;
+  ambienceInput.topSpeed = engineInput.topSpeed;
+  ambienceInput.car = carHeard;
+  ambience.update(ambienceInput, ambienceHeard(gameState));
 
   giveUpOnScreen = false;
   if (gameState.kind === 'dailyResults') resultsBoard?.show(gameState.day);

@@ -184,7 +184,7 @@ npm run backend:stop   # stop it
   - [x] Audio setup: audio context started on the first click or keypress, master volume and mute
   - [x] Engine: a looped sound with pitch and volume from speed and throttle
   - [x] Tires and impacts: a screech that fades in with drift, thuds by collision speed
-  - [ ] Ambience: a low city hum
+  - [x] Ambience: a low city hum
   - [ ] Race sounds: countdown, checkpoint, finish
 - [ ] **19. Lobbies**
   - [ ] Minimap scale for large cities: a smaller cell count per block when the map would cover more than about a third of the screen height (10×10 cities on laptop screens)
