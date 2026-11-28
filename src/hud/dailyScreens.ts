@@ -24,7 +24,7 @@ import {
   type ScreenLine,
 } from './menuScreen.ts';
 import { histogramHeight, histogramPanel, NO_RUNS_TEXT, padPanel, playersText, topHeight, topPanel, type Panel } from './resultsBoard.ts';
-import { drawMinimap, type Minimap, type MinimapCar } from './minimap.ts';
+import { drawMinimap, fitMinimap, type Minimap, type MinimapCar } from './minimap.ts';
 import { FRAME_COLOR, timerText } from './raceHud.ts';
 import type { TextGrid } from './textGrid.ts';
 
@@ -152,34 +152,47 @@ function apart(a: { left: number; top: number; width: number; height: number }, 
   return a.left + a.width + MARGIN <= b.left || b.left + b.width + MARGIN <= a.left || a.top + a.height + MARGIN <= b.top || b.top + b.height + MARGIN <= a.top;
 }
 
+function placeStyle(columns: number, rows: number, day: number, route: Route, style: PreRaceStyle): PreRaceLayout | null {
+  const blocks = blocksOf(day, route, style);
+  const gap = style.compact ? 0 : 1;
+  const width = Math.max(...blocks.map(({ rows: lines }) => lines[0].length));
+  const height = blocks.reduce((sum, { rows: lines }) => sum + lines.length, 0) + gap * (blocks.length - 1);
+  if (width + 2 * MARGIN > columns || height + 2 * MARGIN > rows) return null;
+  const top = MARGIN + Math.floor((rows - 2 * MARGIN - height) * ABOVE_STACK);
+  let y = top;
+  const placed = blocks.map((block) => {
+    const at = { left: Math.floor((columns - block.rows[0].length) / 2), top: y, block };
+    y += block.rows.length + gap;
+    return at;
+  });
+  return { top, blocks: placed, width, height, minimap: null };
+}
+
+function textRect(columns: number, layout: PreRaceLayout) {
+  return { left: Math.floor((columns - layout.width) / 2), top: layout.top, width: layout.width, height: layout.height };
+}
+
+// Whether a map panel of this size in the bottom left corner leaves the text its place in the smallest style, the
+// room preRaceLayout needs to show the map at all; true when not even that style fits (nothing is drawn then).
+export function mapFitsPreRace(columns: number, rows: number, day: number, route: Route, map: { width: number; height: number }): boolean {
+  const mapRect = { left: MARGIN, top: rows - MARGIN - map.height, width: map.width, height: map.height };
+  if (mapRect.top < MARGIN || mapRect.left + mapRect.width + MARGIN > columns) return false;
+  const smallest = placeStyle(columns, rows, day, route, PRE_RACE_STYLES[PRE_RACE_STYLES.length - 1]);
+  return !smallest || apart(textRect(columns, smallest), mapRect);
+}
+
 // The text centred near the top, the minimap in the bottom left corner as in the race. The largest style that keeps
 // the minimap clear of the text, else the largest that fits without the minimap; null when nothing fits.
 export function preRaceLayout(columns: number, rows: number, day: number, route: Route, map: { width: number; height: number } | null): PreRaceLayout | null {
-  const place = (style: PreRaceStyle): PreRaceLayout | null => {
-    const blocks = blocksOf(day, route, style);
-    const gap = style.compact ? 0 : 1;
-    const width = Math.max(...blocks.map(({ rows: lines }) => lines[0].length));
-    const height = blocks.reduce((sum, { rows: lines }) => sum + lines.length, 0) + gap * (blocks.length - 1);
-    if (width + 2 * MARGIN > columns || height + 2 * MARGIN > rows) return null;
-    const top = MARGIN + Math.floor((rows - 2 * MARGIN - height) * ABOVE_STACK);
-    let y = top;
-    const placed = blocks.map((block) => {
-      const at = { left: Math.floor((columns - block.rows[0].length) / 2), top: y, block };
-      y += block.rows.length + gap;
-      return at;
-    });
-    return { top, blocks: placed, width, height, minimap: null };
-  };
   const mapRect = map && { left: MARGIN, top: rows - MARGIN - map.height, width: map.width, height: map.height };
   const mapFits = mapRect !== null && mapRect.top >= MARGIN && mapRect.left + mapRect.width + MARGIN <= columns;
   let fallback: PreRaceLayout | null = null;
   for (const style of PRE_RACE_STYLES) {
-    const layout = place(style);
+    const layout = placeStyle(columns, rows, day, route, style);
     if (!layout) continue;
     fallback ??= layout;
     if (!mapFits) return layout;
-    const text = { left: Math.floor((columns - layout.width) / 2), top: layout.top, width: layout.width, height: layout.height };
-    if (apart(text, mapRect)) return { ...layout, minimap: { left: mapRect.left, top: mapRect.top } };
+    if (apart(textRect(columns, layout), mapRect)) return { ...layout, minimap: { left: mapRect.left, top: mapRect.top } };
   }
   return fallback;
 }
@@ -192,8 +205,11 @@ export interface PreRaceScreen {
 }
 
 export function drawPreRaceScreen(grid: TextGrid, { day, route, minimap, tick }: PreRaceScreen): void {
+  const fits = fitMinimap(minimap, grid.rows, grid.columns - 2 * MARGIN, (width, height) =>
+    mapFitsPreRace(grid.columns, grid.rows, day, route, { width, height }),
+  );
   const { width, height } = minimap.layout;
-  const layout = preRaceLayout(grid.columns, grid.rows, day, route, { width, height });
+  const layout = preRaceLayout(grid.columns, grid.rows, day, route, fits ? { width, height } : null);
   if (!layout) return;
   for (const { left, top, block } of layout.blocks) {
     block.rows.forEach((row, y) => {

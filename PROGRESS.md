@@ -392,3 +392,10 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 ## 2026-11-28: step 18 merged; step 19 started
 
 - Step 18 merged as PR #21 (CI green), deployed: backend job 45 s (nothing to push, functions unchanged), site built and published. The live site now has sound. Branch `lobbies` for step 19.
+
+## 2026-11-28: step 19, minimap scale
+
+- `hud/minimap.ts`: `MINIMAP_SCALES` (5x2, 3x1, 2x1, 1x1), `chooseMinimapScale`, `fitMinimap`; `drawHud` and the daily's pre-race screen fit the map before placing the rest; the route overlay, markers and positions go through the layout at every scale. URL parameter `blocks=N` (dev and shots) and three new shots (`minimap-large-city`, `minimap-small-city`, `minimap-large-window`), 55 in all; the 52 older ones byte-identical. 778 tests.
+- Review: `fix`. With no scale inside the height share the code still drew a 1x1 map, which at common sizes (the default city at 640 x 400 with glyph 8, 800 x 600 at 12, a 10x10 city at 1280 x 720 with glyph 14) pushed the timer, gate count and countdown off the screen, and it chose 1x1 where 3x1 is exactly as tall. Positions, 153 routes at four scales, priorities and city changes without a resize were fine.
+- Second builder: inside the share, else the largest that leaves the timer its place, else no map; equal heights prefer the larger scale; the pre-race screen likewise. Against the previous commit over 12 window sizes and glyph sizes 4 to 16: the timer is lost nowhere, the default city keeps a map wherever it had one and gains the timer at 31 sizes where the old big map covered it. Checked by the lead: the large-city shot, 778 tests.
+- Left: three tiny 6x6 free-driving grids (about 70 x 25 cells) lose their map to the timer's reserved place though no timer shows there; 2x1 is never chosen in the sweep.

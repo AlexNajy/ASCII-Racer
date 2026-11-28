@@ -428,6 +428,7 @@ function now(): number {
 }
 // The city is today's daily one, day= another day's, seed= any seed.
 citySettings.seed = urlParams.seed ?? dailyRace(urlParams.day ?? dayNumber(now())).seed;
+if (urlParams.blocks !== null) citySettings.blocksPerSide = urlParams.blocks;
 // Even reaching localStorage can throw; loadSettings and saveSettings catch it. Shots run with the defaults and
 // never write, so every load gives the same picture.
 const storage = () => window.localStorage;

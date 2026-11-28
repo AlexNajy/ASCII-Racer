@@ -7,7 +7,10 @@ import { drawHud } from './hud.ts';
 import {
   BLOCK_COLUMNS,
   BLOCK_ROWS,
+  MINIMAP_MAX_HEIGHT_SHARE,
+  MINIMAP_SCALES,
   carGlyph,
+  chooseMinimapScale,
   createMinimap,
   minimapCell,
   minimapLayout,
@@ -30,6 +33,14 @@ const CITIES: Partial<CitySettings>[] = [
 ];
 
 const ROAD_CHARS = new Set(['-', '|', '+', '=', 'H', '#']);
+
+function cellsText(grid: TextGrid): string {
+  let text = '';
+  for (let y = 0; y < grid.rows; y++) {
+    for (let x = 0; x < grid.columns; x++) text += String.fromCharCode((grid.get(x, y)?.code ?? 32) & 127 || 32);
+  }
+  return text;
+}
 
 function charAt(layout: ReturnType<typeof minimapLayout>, column: number, row: number): string {
   return layout.map[row * layout.columns + column].char;
@@ -217,7 +228,8 @@ describe('drawing through drawHud', () => {
 
   it('draws no map when the grid is too small for it beside the speedometer', () => {
     const minimap = createMinimap(c);
-    const { width, height } = minimap.layout;
+    const smallest = minimapLayout(c, MINIMAP_SCALES[MINIMAP_SCALES.length - 1]);
+    const { width, height } = smallest;
     const speedometer = 15;
     for (const [columns, rows] of [[width + 2 + speedometer, 81], [266, height]]) {
       const grid = new TextGrid(columns, rows);
@@ -226,9 +238,178 @@ describe('drawing through drawHud', () => {
         for (let column = 0; column < 1 + width; column++) expect(grid.get(column, row)?.code).toBe(0);
       }
     }
-    const fits = new TextGrid(width + 3 + speedometer, height + 1);
+    const fits = new TextGrid(width + 3 + speedometer, height + 10);
     drawHud(fits, values(minimap, junction.x, junction.z));
-    expect(fits.get(1, 0)?.code).toBe('+'.charCodeAt(0));
+    expect(fits.get(1, fits.rows - 1 - height)?.code).toBe('+'.charCodeAt(0));
+  });
+
+  it('uses a smaller scale where the full one does not fit', () => {
+    const minimap = createMinimap(c);
+    const grid = new TextGrid(100, 30);
+    drawHud(grid, values(minimap, junction.x, junction.z));
+    expect(minimap.layout.scale).not.toBe(MINIMAP_SCALES[0]);
+    expect(grid.get(1, grid.rows - 1 - minimap.layout.height)?.code).toBe('+'.charCodeAt(0));
+  });
+});
+
+const GRIDS: [number, number][] = [[213, 68], [240, 85], [240, 74], [320, 102], [80, 25], [40, 14]];
+const SIZES = [6, 8, 10];
+
+describe('the minimap scale', () => {
+  const scaleName = (blocks: number, columns: number, rows: number) => {
+    const scale = chooseMinimapScale(blocks, rows, columns - 20);
+    return scale ? `${scale.columns}x${scale.rows}` : 'none';
+  };
+
+  it('keeps 5 x 2 for the default city at 1280 x 720 and shrinks 10 x 10 there', () => {
+    expect(chooseMinimapScale(8, 68, 213 - 20)).toBe(MINIMAP_SCALES[0]);
+    expect(minimapLayout(city()).scale).toBe(MINIMAP_SCALES[0]);
+    expect(scaleName(10, 213, 68)).toBe('3x1');
+  });
+
+  it('is the largest scale within the height share, in the table of sizes and grids', () => {
+    const table: Record<string, string> = {};
+    for (const blocks of SIZES) {
+      for (const [columns, rows] of GRIDS) {
+        const scale = chooseMinimapScale(blocks, rows, columns - 20);
+        table[`${blocks} ${columns}x${rows}`] = scale ? `${scale.columns}x${scale.rows}` : 'none';
+        if (!scale) continue;
+        const index = MINIMAP_SCALES.indexOf(scale);
+        const height = (s: (typeof MINIMAP_SCALES)[number]) => blocks * (s.rows + 1) + 5;
+        if (index > 0 && height(scale) <= MINIMAP_MAX_HEIGHT_SHARE * rows) {
+          expect(height(MINIMAP_SCALES[index - 1]) > MINIMAP_MAX_HEIGHT_SHARE * rows || blocks * (MINIMAP_SCALES[index - 1].columns + 1) + 7 > columns - 20).toBe(true);
+        }
+      }
+    }
+    expect(table['6 213x68']).toBe('5x2');
+    expect(table['8 213x68']).toBe('5x2');
+    expect(table['10 213x68']).toBe('3x1');
+    expect(table['10 240x74']).toBe('3x1');
+    expect(table['10 320x102']).toBe('5x2');
+    expect(table['10 40x14']).toBe('none');
+    expect(scaleName(8, 213, 68)).toBe('5x2');
+  });
+
+  it('takes the largest scale narrow enough when none is within the share', () => {
+    expect(chooseMinimapScale(8, 25, 100)).toBe(MINIMAP_SCALES[0]);
+    expect(chooseMinimapScale(8, 25, 50)).toBe(MINIMAP_SCALES[1]);
+    expect(chooseMinimapScale(8, 25, 35)).toBe(MINIMAP_SCALES[2]);
+    expect(chooseMinimapScale(8, 25, 25)).toBe(MINIMAP_SCALES[3]);
+    expect(chooseMinimapScale(8, 25, 20)).toBeNull();
+  });
+
+  it('skips scales the caller does not allow, prefers the larger of equal heights and gives none when nothing is allowed', () => {
+    const notTall = (_: number, height: number) => height <= 21;
+    expect(chooseMinimapScale(8, 68, 193, notTall)).toBe(MINIMAP_SCALES[1]);
+    expect(chooseMinimapScale(8, 25, 193, notTall)).toBe(MINIMAP_SCALES[1]);
+    expect(chooseMinimapScale(8, 25, 193, () => false)).toBeNull();
+  });
+
+  it('never costs the race timer its place, at the sizes where the smallest scale used to take it', () => {
+    const grids: [number, number, number][] = [
+      [8, 80, 28], [8, 66, 28], [8, 57, 24], [8, 73, 24], [8, 106, 34], [8, 85, 28],
+      [10, 91, 29], [10, 80, 34], [10, 72, 31], [10, 66, 28], [10, 85, 28],
+    ];
+    for (const [blocks, columns, rows] of grids) {
+      const c = city({ blocksPerSide: blocks, seed: 1 });
+      const route = generateRoute(roadGraph(c), 1);
+      const race = { race: { ...createRace(route, 0), phase: 'running' as const }, tick: 400, guidance: null, giveUp: false };
+      const shown = (withMap: boolean) => {
+        const grid = new TextGrid(columns, rows);
+        const minimap = createMinimap(c);
+        drawHud(grid, { speed: 0, topSpeed: 32, minimap: withMap ? { minimap, car: { ...route.pose } } : undefined, race });
+        return { text: cellsText(grid), height: minimap.layout.height };
+      };
+      const label = `${blocks} blocks ${columns} x ${rows}`;
+      expect(shown(false).text, label).toContain('GATE  ');
+      expect(shown(true).text, label).toContain('GATE  ');
+    }
+  });
+
+  it('keeps roads one cell and apart, positions monotonic and clamped, at every scale', () => {
+    for (const blocks of SIZES) {
+      const c = city({ blocksPerSide: blocks, seed: blocks });
+      for (const scale of MINIMAP_SCALES) {
+        const layout = minimapLayout(c, scale);
+        expect(layout.columns).toBe(blocks * (scale.columns + 1) + 1);
+        expect(layout.rows).toBe(blocks * (scale.rows + 1) + 1);
+        expect(new Set(layout.roadColumns).size).toBe(blocks + 1);
+        expect(new Set(layout.roadRows).size).toBe(blocks + 1);
+        for (let i = 1; i <= blocks; i++) {
+          expect(layout.roadColumns[i] - layout.roadColumns[i - 1]).toBeGreaterThan(1);
+          expect(layout.roadRows[i] - layout.roadRows[i - 1]).toBeGreaterThan(1);
+        }
+        for (let row = 0; row < layout.rows; row++) {
+          for (let column = 0; column < layout.columns; column++) {
+            expect(ROAD_CHARS.has(charAt(layout, column, row))).toBe(layout.roadColumns.includes(column) || layout.roadRows.includes(row));
+          }
+        }
+        const { bounds } = c;
+        let last = { column: -1, row: -1 };
+        for (let i = -2; i <= 52; i++) {
+          const t = i / 50;
+          const p = minimapPosition(layout, bounds.minX + (bounds.maxX - bounds.minX) * t, bounds.minZ + (bounds.maxZ - bounds.minZ) * t);
+          expect(p.column).toBeGreaterThanOrEqual(Math.max(0, last.column));
+          expect(p.row).toBeGreaterThanOrEqual(Math.max(0, last.row));
+          expect(p.column).toBeLessThanOrEqual(layout.columns - 1);
+          expect(p.row).toBeLessThanOrEqual(layout.rows - 1);
+          last = p;
+        }
+        for (const junction of c.junctions) {
+          const cell = minimapCell(layout, junction.x, junction.z);
+          expect(layout.roadColumns).toContain(cell.column);
+          expect(layout.roadRows).toContain(cell.row);
+        }
+      }
+    }
+  });
+
+  it('leaves the grid clean when the same state is drawn again, at every scale', () => {
+    const c = city({ blocksPerSide: 10, seed: 3 });
+    const route = generateRoute(roadGraph(c), 1);
+    const values = (minimap: Minimap) => ({
+      speed: 0,
+      topSpeed: 32,
+      minimap: { minimap, car: { ...route.pose } },
+      race: { race: { ...createRace(route, 0), phase: 'running' as const, nextGate: 1 }, tick: 400, guidance: null },
+    });
+    const seen = new Set<string>();
+    for (const [columns, rows] of [[320, 102], [213, 68], [150, 40], [100, 30], [80, 25]]) {
+      const grid = new TextGrid(columns, rows);
+      const minimap = createMinimap(c);
+      drawHud(grid, values(minimap));
+      seen.add(`${minimap.layout.scale.columns}x${minimap.layout.scale.rows}`);
+      grid.dirty = false;
+      drawHud(grid, values(minimap));
+      expect(grid.dirty).toBe(false);
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(3);
+  });
+
+  it('rebuilds cleanly when a resize changes the scale', () => {
+    const c = city({ blocksPerSide: 10, seed: 3 });
+    const route = generateRoute(roadGraph(c), 1);
+    const values = (minimap: Minimap) => ({
+      speed: 0,
+      topSpeed: 32,
+      minimap: { minimap, car: { ...route.pose } },
+      race: { race: { ...createRace(route, 0), phase: 'running' as const }, tick: 400, guidance: null },
+    });
+    const minimap = createMinimap(c);
+    const grid = new TextGrid(320, 102);
+    drawHud(grid, values(minimap));
+    expect(minimap.layout.scale).toBe(MINIMAP_SCALES[0]);
+    grid.resize(213, 68);
+    drawHud(grid, values(minimap));
+    expect(minimap.layout.scale).toBe(MINIMAP_SCALES[1]);
+    const fresh = new TextGrid(213, 68);
+    drawHud(fresh, values(createMinimap(c)));
+    expect(grid.data).toEqual(fresh.data);
+    grid.resize(320, 102);
+    drawHud(grid, values(minimap));
+    const big = new TextGrid(320, 102);
+    drawHud(big, values(createMinimap(c)));
+    expect(grid.data).toEqual(big.data);
   });
 });
 
@@ -264,6 +445,47 @@ describe('the route on the minimap', () => {
         expect(onLine.has(key(minimapCell(layout, x, z)))).toBe(true);
       }
     }
+  });
+
+  it('is unbroken at every scale for routes of 6 x 6, 8 x 8 and 10 x 10 cities', () => {
+    for (const blocks of SIZES) {
+      for (const seed of [1, 2, 3]) {
+        const c = city({ blocksPerSide: blocks, seed });
+        const graph = roadGraph(c);
+        for (const routeSeed of [1, 2, 3]) {
+          const route = generateRoute(graph, routeSeed);
+          for (const scale of MINIMAP_SCALES) {
+            const layout = minimapLayout(c, scale);
+            const all = routeCells(layout, route).flat();
+            for (const cell of all) expect(ROAD_CHARS.has(charAt(layout, cell.column, cell.row))).toBe(true);
+            for (let i = 1; i < all.length; i++) {
+              expect(Math.abs(all[i].column - all[i - 1].column) + Math.abs(all[i].row - all[i - 1].row)).toBeLessThanOrEqual(1);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('gives a shared cell to the next gate, then the finish, the start, the other gates, the route', () => {
+    const c = city({ blocksPerSide: 10, seed: 3 });
+    const route = generateRoute(roadGraph(c), 1);
+    const layout = minimapLayout(c, MINIMAP_SCALES[MINIMAP_SCALES.length - 1]);
+    const cellOf = (p: { x: number; z: number }) => minimapCell(layout, p.x, p.z).row * layout.columns + minimapCell(layout, p.x, p.z).column;
+    const overlay = routeOverlay(layout, { route, nextGate: 0 });
+    expect(overlay.get(cellOf(route.gates[0].point))?.char).toBe('@');
+    expect(overlay.get(cellOf(route.gates[route.gates.length - 1].point))?.char).toBe('F');
+    const away = { x: 1e9, z: 1e9 };
+    const gates = route.gates.map((gate) => ({ ...gate, point: route.start.point }));
+    const withGates = (list: typeof gates) => ({ ...route, gates: list });
+    const last = gates.length - 1;
+    const char = (list: typeof gates, nextGate: number) => routeOverlay(layout, { route: withGates(list), nextGate }).get(cellOf(route.start.point))?.char;
+    expect(char(gates, 0)).toBe('@');
+    expect(char(gates, last)).toBe('F');
+    expect(char(gates.map((gate, i) => (i === 0 ? { ...gate, point: away } : gate)), 0)).toBe('F');
+    expect(char(gates.map((gate, i) => (i === 0 || i === last ? { ...gate, point: away } : gate)), 0)).toBe('S');
+    expect(char(gates.map((gate, i) => (i === 0 || i === last ? { ...gate, point: away } : gate)), last)).toBe('S');
+    expect(routeOverlay(layout, { route, nextGate: 0 })).toEqual(routeOverlay(layout, { route, nextGate: 0 }));
   });
 
   it('marks the next gate, the finish and the start, and dims what is behind the last gate passed', () => {

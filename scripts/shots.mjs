@@ -29,6 +29,7 @@ const EYE = 1.2;
 // entry: the menu entry selected (0 is the first), with state 'results' the finish screen's option, 'dailyresults'
 // its entry (0 share, 1 menu), 'settings' and 'garage' the row.
 // edit: with state 'settings', the nickname being typed.
+// blocks: blocks per side of the city; viewport: [width, height] of the window instead of 1600 × 900.
 // shape, color: the car's body shape and colour instead of the default red coupe.
 // Positions are for the default seed's city (seed 1); with another seed the same spots show something else.
 const SHOTS = [
@@ -83,6 +84,10 @@ const SHOTS = [
   { name: 'race-pickup', camera: null, mode: 'glyphs', tick: 420, drive: true, shape: 'pickup', color: 'teal' },
   // From behind, standing in the countdown: the hatch must read as part of the car.
   { name: 'race-hatchback', camera: null, mode: 'glyphs', tick: 120, shape: 'hatchback', color: 'sky' },
+  // Minimap scales: 10 x 10 blocks at 1280 x 720 (3 x 1 cells per block), 6 x 6 at 1600 x 900, 10 x 10 at 1920 x 1080 (5 x 2).
+  { name: 'minimap-large-city', camera: null, mode: 'glyphs', tick: 300, blocks: 10, viewport: [1280, 720], gate: 1, drive: true },
+  { name: 'minimap-small-city', camera: null, mode: 'glyphs', tick: 300, blocks: 6, gate: 1, drive: true },
+  { name: 'minimap-large-window', camera: null, mode: 'glyphs', tick: 300, blocks: 10, viewport: [1920, 1080], gate: 1, drive: true },
   { name: 'loading', camera: null, mode: 'glyphs', tick: 300, state: 'loading' },
   // Day 329 (seed 424449): 10 gates, 1800 m. The flyover's marker runs the route in about 8 s, so 300 and 420 show
   // it in two places.
@@ -145,7 +150,7 @@ try {
   mkdirSync(outDir, { recursive: true });
 
   for (const shot of chosen) {
-    const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: { width: shot.viewport?.[0] ?? WIDTH, height: shot.viewport?.[1] ?? HEIGHT }, deviceScaleFactor: 1 });
     const errors = [];
     let onError;
     const firstError = new Promise((_, reject) => (onError = reject));
@@ -158,6 +163,7 @@ try {
     const query = new URLSearchParams({ mode: shot.mode, tick: String(shot.tick), state: shot.state ?? 'race' });
     if (shot.day !== undefined) query.set('day', String(shot.day));
     else query.set('seed', String(seed));
+    if (shot.blocks !== undefined) query.set('blocks', String(shot.blocks));
     if (shot.dnf) query.set('dnf', '1');
     if (shot.next !== undefined) query.set('next', String(shot.next));
     if (shot.giveup) query.set('giveup', '1');

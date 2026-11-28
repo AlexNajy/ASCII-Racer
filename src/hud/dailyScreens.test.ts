@@ -95,6 +95,18 @@ describe('pre-race screen', () => {
     expect(preRaceLayout(...DEFAULT_GRID, DAY, route, createMinimap(city).layout)!.blocks[0].block.rows.length).toBe(7);
   });
 
+  it('keeps the largest map that leaves the text its smallest style, never 1 x 1 beside an equally tall 3 x 1', () => {
+    const grid = new TextGrid(106, 38);
+    const minimap = createMinimap(city);
+    drawPreRaceScreen(grid, { day: DAY, route, minimap, tick: 0 });
+    expect(minimap.layout.scale.columns).toBeGreaterThan(1);
+    expect(text(grid)).toContain('F');
+    const tiny = new TextGrid(30, 12);
+    const small = createMinimap(city);
+    drawPreRaceScreen(tiny, { day: DAY, route, minimap: small, tick: 0 });
+    expect(text(tiny)).not.toContain('F');
+  });
+
   it('moves the flyover marker along the minimap and leaves the rest clean', () => {
     const grid = new TextGrid(...SHOT_GRID);
     const minimap = createMinimap(city);

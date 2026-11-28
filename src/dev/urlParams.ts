@@ -11,6 +11,7 @@ import { CAR_COLORS } from '../render/models/palettes.ts';
 // Read once at startup, for repeatable pictures (`npm run shots`). With none of them present nothing changes.
 export interface UrlParams {
   seed: number | null;
+  blocks: number | null; // blocks per side of the city (BLOCKS_MIN to BLOCKS_MAX), the default without it
   day: number | null; // start in this day's daily city instead of today's; seed= wins
   renderMode: RenderMode | null;
   camera: Camera | null; // a fly camera pose, which switches to the fly camera
@@ -65,6 +66,8 @@ export function dailyStorageAllowed(search: string): boolean {
 export const MAX_URL_NEXT = 2 * 86_400; // s; a day, or two when the clock is behind a stored try
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
+export const BLOCKS_MIN = 3; // the dev menu's range
+export const BLOCKS_MAX = 14;
 export const MAX_URL_BOARD = 100_000;
 
 function number(name: string, value: string): number {
@@ -76,6 +79,7 @@ function number(name: string, value: string): number {
 export function parseUrlParams(search: string): UrlParams {
   const query = new URLSearchParams(search);
   const seed = query.get('seed');
+  const blocks = query.get('blocks');
   const day = query.get('day');
   const mode = query.get('mode');
   const camera = query.get('camera');
@@ -115,6 +119,10 @@ export function parseUrlParams(search: string): UrlParams {
   const tickNumber = tick === null ? null : number('tick', tick);
   if (tickNumber !== null && (!Number.isInteger(tickNumber) || tickNumber < 0 || tickNumber > MAX_URL_TICK)) {
     throw new Error(`URL parameter tick: expected a whole number of ticks, 0 to ${MAX_URL_TICK}`);
+  }
+  const blocksNumber = blocks === null ? null : number('blocks', blocks);
+  if (blocksNumber !== null && (!Number.isInteger(blocksNumber) || blocksNumber < BLOCKS_MIN || blocksNumber > BLOCKS_MAX)) {
+    throw new Error(`URL parameter blocks: expected a whole number, ${BLOCKS_MIN} to ${BLOCKS_MAX}`);
   }
   const seedNumber = seed === null ? null : number('seed', seed);
   if (seedNumber !== null && (!Number.isInteger(seedNumber) || seedNumber < 0)) {
@@ -162,6 +170,7 @@ export function parseUrlParams(search: string): UrlParams {
 
   const urlState = state === null ? 'menu' : URL_STATES[state];
   const daily = DAILY_STATES.includes(urlState);
+  if (daily && blocksNumber !== null) throw new Error(`URL parameter state: ${state} uses the daily's city, not blocks=`);
   if (daily && (dayNumber === null || seedNumber !== null)) throw new Error(`URL parameter state: ${state} needs day= and no seed=`);
   if (dnf !== null && (dnf !== '1' || urlState !== 'dailyResults')) throw new Error('URL parameter dnf: only dnf=1, with state=dailyresults');
   const nextNumber = next === null ? null : number('next', next);
@@ -189,6 +198,7 @@ export function parseUrlParams(search: string): UrlParams {
 
   return {
     seed: seedNumber,
+    blocks: blocksNumber,
     day: dayNumber,
     renderMode,
     camera: pose,

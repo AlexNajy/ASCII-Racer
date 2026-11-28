@@ -1,7 +1,7 @@
 import { raceTicks, type Race } from '../game/race.ts';
 import { blockRows } from './blockFont.ts';
 import type { Guidance } from './guidance.ts';
-import { drawMinimap, type Minimap, type MinimapCar } from './minimap.ts';
+import { drawMinimap, fitMinimap, type Minimap, type MinimapCar } from './minimap.ts';
 import {
   ARROW_PANEL_HEIGHT,
   ARROW_PANEL_WIDTH,
@@ -95,7 +95,7 @@ interface Element {
 // The race elements in order; each needs the ones before it, so a grid too small drops the banner first, then
 // the arrow, then the timer. None is placed over the speedometer or the minimap.
 function raceElements(grid: TextGrid, { race, tick, guidance }: RaceHudValues, taken: Rect[]): Element[] {
-  const timer = { left: Math.floor((grid.columns - TIMER_WIDTH) / 2), top: MARGIN, width: TIMER_WIDTH, height: TIMER_HEIGHT };
+  const timer = timerRect(grid);
   const arrow = { left: timer.left + TIMER_WIDTH + MARGIN, top: MARGIN, width: ARROW_PANEL_WIDTH, height: ARROW_PANEL_HEIGHT };
   const banner = { left: Math.floor((grid.columns - BANNER_WIDTH) / 2), top: MARGIN + TIMER_HEIGHT + MARGIN, width: BANNER_WIDTH, height: BANNER_HEIGHT };
   const elements: Element[] = [
@@ -109,6 +109,10 @@ function raceElements(grid: TextGrid, { race, tick, guidance }: RaceHudValues, t
     placed.push(element);
   }
   return placed;
+}
+
+function timerRect(grid: TextGrid): Rect {
+  return { left: Math.floor((grid.columns - TIMER_WIDTH) / 2), top: MARGIN, width: TIMER_WIDTH, height: TIMER_HEIGHT };
 }
 
 function inside(grid: TextGrid, rect: Rect): boolean {
@@ -187,10 +191,15 @@ export function drawHud(grid: TextGrid, { speed, topSpeed, minimap, race }: HudV
   if (left >= 0 && top >= 0) {
     elements.push({ rect: { left, top, width: PANEL_WIDTH, height: PANEL_HEIGHT }, draw: () => drawSpeedometer(grid, left, top, speed, topSpeed) });
     if (minimap) {
-      const { width, height } = minimap.minimap.layout;
-      const mapTop = grid.rows - MARGIN - height;
-      // Only beside the speedometer with a margin between them, never over it.
-      if (mapTop >= 0 && MARGIN + width + MARGIN <= left) {
+      // The map never takes the timer's place (free driving and screens without a timer reserve it too), nor the
+      // speedometer's: only a scale beside the speedometer with a margin between them, and clear of the timer.
+      const timer = timerRect(grid);
+      const keepTimer = inside(grid, timer) && apart(timer, elements[0].rect);
+      const roomFor = (width: number, height: number) =>
+        grid.rows - MARGIN - height >= 0 && (!keepTimer || apart(timer, { left: MARGIN, top: grid.rows - MARGIN - height, width, height }));
+      if (fitMinimap(minimap.minimap, grid.rows, left - 2 * MARGIN, roomFor)) {
+        const { width, height } = minimap.minimap.layout;
+        const mapTop = grid.rows - MARGIN - height;
         const route = race ? { route: race.race.route, nextGate: race.race.nextGate } : null;
         elements.push({ rect: { left: MARGIN, top: mapTop, width, height }, draw: () => drawMinimap(grid, minimap.minimap, MARGIN, mapTop, minimap.car, route) });
       }

@@ -5,7 +5,13 @@ import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, day: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, replay: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', dnf: false, next: null, giveUp: false, board: null, entry: null, edit: null, shape: null, color: null, audioDebug: false, dailyStorage: true });
+    expect(parseUrlParams('')).toEqual({ seed: null, blocks: null, day: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, replay: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', dnf: false, next: null, giveUp: false, board: null, entry: null, edit: null, shape: null, color: null, audioDebug: false, dailyStorage: true });
+  });
+
+  it('reads blocks as a whole number from 3 to 14, never with a daily state', () => {
+    expect(parseUrlParams('?blocks=10').blocks).toBe(10);
+    for (const bad of ['2', '15', '6.5', '', 'x']) expect(() => parseUrlParams(`?blocks=${bad}`), bad).toThrow();
+    expect(() => parseUrlParams('?state=daily&day=3&shot&blocks=6')).toThrow();
   });
 
   it('reads audio=debug and nothing else', () => {

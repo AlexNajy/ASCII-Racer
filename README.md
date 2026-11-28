@@ -187,7 +187,7 @@ npm run backend:stop   # stop it
   - [x] Ambience: a low city hum
   - [x] Race sounds: countdown, checkpoint, finish
 - [ ] **19. Lobbies**
-  - [ ] Minimap scale for large cities: a smaller cell count per block when the map would cover more than about a third of the screen height (10×10 cities on laptop screens)
+  - [x] Minimap scale for large cities: a smaller cell count per block when the map would cover more than about a third of the screen height (10×10 cities on laptop screens)
   - [ ] Create lobby screen: settings, generated city, lobby code
   - [ ] Join lobby screen and lobby presence over Supabase Realtime
   - [ ] WebRTC data channels between players, signalled through the lobby

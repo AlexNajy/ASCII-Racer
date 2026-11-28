@@ -4,7 +4,7 @@ import { createRace } from '../game/race.ts';
 import { roadGraph } from '../game/roadGraph.ts';
 import { generateRoute } from '../game/route.ts';
 import { drawHud, GIVE_UP_MIN_TEXT, GIVE_UP_SHORT_TEXT, GIVE_UP_TEXT, giveUpShown, MS_TO_KMH } from './hud.ts';
-import { minimapLayout, type Minimap } from './minimap.ts';
+import { createMinimap, type Minimap } from './minimap.ts';
 import { TextGrid } from './textGrid.ts';
 
 const PANEL_WIDTH = 15;
@@ -201,7 +201,6 @@ describe('give-up question', () => {
 
   it('is drawn whenever it is asked on any grid that can show the question, and leaves no trace', () => {
     const city = generateCity({ ...DEFAULT_CITY_SETTINGS });
-    const layout = minimapLayout(city);
     const car = { x: 0, z: 0, heading: 0 };
     const drawWithMap = (grid: TextGrid, minimap: Minimap, giveUp: boolean): boolean =>
       drawHud(grid, { speed: 5, topSpeed: 32, minimap: { minimap, car }, race: { race: createRace(route, 0), tick: 30, guidance: null, giveUp } });
@@ -214,7 +213,7 @@ describe('give-up question', () => {
     for (const [columns, rows] of sizes) {
       const label = `${columns} x ${rows}`;
       const grid = new TextGrid(columns, rows);
-      const minimap: Minimap = { layout, drawn: null, route: null, overlay: new Map() };
+      const minimap = createMinimap(city);
       expect(drawWithMap(grid, minimap, false), label).toBe(false);
       const drawn = drawWithMap(grid, minimap, true);
       const shown = text(grid);
@@ -227,7 +226,7 @@ describe('give-up question', () => {
       expect(grid.dirty, label).toBe(false);
       drawWithMap(grid, minimap, false);
       const fresh = new TextGrid(columns, rows);
-      drawWithMap(fresh, { layout, drawn: null, route: null, overlay: new Map() }, false);
+      drawWithMap(fresh, createMinimap(city), false);
       expect(cells(grid), label).toEqual(cells(fresh));
     }
   });

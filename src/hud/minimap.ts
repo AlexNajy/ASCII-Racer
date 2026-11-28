@@ -5,8 +5,21 @@ import type { TextGrid } from './textGrid.ts';
 // The whole city, north (-Z) up, laid out from the road lines themselves: every road line is exactly one cell
 // wide and every block the same number of cells, so roads never vanish or double on the cell lattice.
 // Cells are 1.75× as tall as wide, so a block is 5 × 2 cells: (5 + 1) / (2 + 1) keeps a square city nearly square.
-export const BLOCK_COLUMNS = 5;
-export const BLOCK_ROWS = 2;
+// Bigger cities (or smaller windows) use the next scale down; road lines stay one cell at every scale.
+export interface MinimapScale {
+  columns: number; // cells per block across
+  rows: number; // and down
+}
+export const MINIMAP_SCALES: readonly MinimapScale[] = [
+  { columns: 5, rows: 2 },
+  { columns: 3, rows: 1 },
+  { columns: 2, rows: 1 },
+  { columns: 1, rows: 1 },
+];
+export const BLOCK_COLUMNS = MINIMAP_SCALES[0].columns;
+export const BLOCK_ROWS = MINIMAP_SCALES[0].rows;
+// The largest scale whose framed map is at most this share of the grid's rows is used.
+export const MINIMAP_MAX_HEIGHT_SHARE = 0.45;
 const PADDING_COLUMNS = 2; // between the frame and the map
 const PADDING_ROWS = 1;
 const FRAME_COLOR = 0x5a4a20;
@@ -40,6 +53,7 @@ interface Axis {
 }
 
 export interface MinimapLayout {
+  scale: MinimapScale;
   columns: number; // map size in cells, without frame and padding
   rows: number;
   width: number; // panel size in cells, frame and padding included
@@ -72,16 +86,16 @@ function toCells({ world, cells }: Axis, at: number): number {
   return cells[cells.length - 1];
 }
 
-export function minimapLayout(city: City): MinimapLayout {
+export function minimapLayout(city: City, scale: MinimapScale = MINIMAP_SCALES[0]): MinimapLayout {
   const firstRow = city.blocks.filter((block) => block.row === 0);
   const firstColumn = city.blocks.filter((block) => block.column === 0);
   const blocksPerSide = firstRow.length;
   const blockSize = blocksPerSide > 0 ? firstRow[0].rect.maxX - firstRow[0].rect.minX : 0;
   const { bounds } = city;
-  const x = axis([bounds.minX, bounds.maxX], firstRow.map((block) => block.rect.minX), blockSize, BLOCK_COLUMNS);
-  const z = axis([bounds.minZ, bounds.maxZ], firstColumn.map((block) => block.rect.minZ), blockSize, BLOCK_ROWS);
-  const roadColumns = Array.from({ length: blocksPerSide + 1 }, (_, i) => i * (BLOCK_COLUMNS + 1));
-  const roadRows = Array.from({ length: blocksPerSide + 1 }, (_, i) => i * (BLOCK_ROWS + 1));
+  const x = axis([bounds.minX, bounds.maxX], firstRow.map((block) => block.rect.minX), blockSize, scale.columns);
+  const z = axis([bounds.minZ, bounds.maxZ], firstColumn.map((block) => block.rect.minZ), blockSize, scale.rows);
+  const roadColumns = Array.from({ length: blocksPerSide + 1 }, (_, i) => i * (scale.columns + 1));
+  const roadRows = Array.from({ length: blocksPerSide + 1 }, (_, i) => i * (scale.rows + 1));
   const columns = roadColumns[blocksPerSide] + 1;
   const rows = roadRows[blocksPerSide] + 1;
 
@@ -100,6 +114,7 @@ export function minimapLayout(city: City): MinimapLayout {
     }
   }
   return {
+    scale,
     columns,
     rows,
     width: columns + 2 * PADDING_COLUMNS + 2,
@@ -176,8 +191,9 @@ export function routeOverlay(layout: MinimapLayout, { route, nextGate }: Minimap
   for (const [i, last] of lastOrder) overlay.set(i, { char: ROUTE, color: last < passedOrder ? ROUTE_DRIVEN_COLOR : ROUTE_COLOR });
   const mark = (x: number, z: number, cell: MapCell) => overlay.set(index(minimapCell(layout, x, z)), cell);
   const { gates, start } = route;
-  mark(start.point.x, start.point.z, START);
+  // Cells shared at small scales: the next gate wins, then the finish, the start, the other gates, the route.
   for (let gate = nextGate + 1; gate < gates.length - 1; gate++) mark(gates[gate].point.x, gates[gate].point.z, UPCOMING_GATE);
+  mark(start.point.x, start.point.z, START);
   const finish = gates[gates.length - 1];
   mark(finish.point.x, finish.point.z, FINISH);
   if (nextGate < gates.length - 1) mark(gates[nextGate].point.x, gates[nextGate].point.z, NEXT_GATE);
@@ -187,14 +203,52 @@ export function routeOverlay(layout: MinimapLayout, { route, nextGate }: Minimap
 // The layout plus what was last drawn, so a frame only touches the cells that changed: the cell the car left, the
 // car's cell, and the route's cells when the next gate changes.
 export interface Minimap {
+  city: City;
   layout: MinimapLayout;
-  drawn: { grid: TextGrid; columns: number; rows: number; left: number; top: number; car: { column: number; row: number } | null } | null;
+  drawn: { layout: MinimapLayout; grid: TextGrid; columns: number; rows: number; left: number; top: number; car: { column: number; row: number } | null } | null;
   route: MinimapRoute | null; // what `overlay` was made from
   overlay: Map<number, MapCell>;
 }
 
 export function createMinimap(city: City): Minimap {
-  return { layout: minimapLayout(city), drawn: null, route: null, overlay: new Map() };
+  return { city, layout: minimapLayout(city), drawn: null, route: null, overlay: new Map() };
+}
+
+function panelHeight(blocksPerSide: number, scale: MinimapScale): number {
+  return blocksPerSide * (scale.rows + 1) + 1 + 2 * PADDING_ROWS + 2;
+}
+
+function panelWidth(blocksPerSide: number, scale: MinimapScale): number {
+  return blocksPerSide * (scale.columns + 1) + 1 + 2 * PADDING_COLUMNS + 2;
+}
+
+// The scales that fit `maxWidth` columns and that `allowed` (given the panel's width and height) accepts, largest
+// first; panels of equal height keep the larger scale first. The first of them within MINIMAP_MAX_HEIGHT_SHARE of
+// `rows` wins; when none is, the largest of them (the caller's `allowed` is what keeps the map from costing the
+// race timer or the pre-race text their place); null when there is none, and then no map is drawn.
+export function chooseMinimapScale(
+  blocksPerSide: number,
+  rows: number,
+  maxWidth: number,
+  allowed: (width: number, height: number) => boolean = () => true,
+): MinimapScale | null {
+  const candidates = MINIMAP_SCALES.filter(
+    (scale) => panelWidth(blocksPerSide, scale) <= maxWidth && allowed(panelWidth(blocksPerSide, scale), panelHeight(blocksPerSide, scale)),
+  );
+  return candidates.find((scale) => panelHeight(blocksPerSide, scale) <= MINIMAP_MAX_HEIGHT_SHARE * rows) ?? candidates[0] ?? null;
+}
+
+// Picks the scale for a grid `rows` tall with `maxWidth` columns for the panel and says whether any fits. A changed
+// scale makes a new layout and forgets what was drawn, so the next draw writes the whole panel.
+export function fitMinimap(minimap: Minimap, rows: number, maxWidth: number, allowed?: (width: number, height: number) => boolean): boolean {
+  const scale = chooseMinimapScale(minimap.city.blocks.filter((block) => block.row === 0).length, rows, maxWidth, allowed);
+  if (!scale) return false;
+  if (scale === minimap.layout.scale) return true;
+  minimap.layout = minimapLayout(minimap.city, scale);
+  minimap.drawn = null;
+  minimap.route = null;
+  minimap.overlay = new Map();
+  return true;
 }
 
 export interface MinimapCar {
@@ -213,6 +267,7 @@ export function drawMinimap(grid: TextGrid, minimap: Minimap, left: number, top:
   const drawn = minimap.drawn;
   const intact =
     drawn !== null &&
+    drawn.layout === layout &&
     drawn.grid === grid &&
     drawn.columns === grid.columns &&
     drawn.rows === grid.rows &&
@@ -244,5 +299,5 @@ export function drawMinimap(grid: TextGrid, minimap: Minimap, left: number, top:
   const previous = intact && drawn ? drawn.car : null;
   if (previous && (previous.column !== cell.column || previous.row !== cell.row)) putMap(previous.column, previous.row);
   grid.put(mapLeft + cell.column, mapTop + cell.row, carGlyph(car.heading), CAR_COLOR, true);
-  minimap.drawn = { grid, columns: grid.columns, rows: grid.rows, left, top, car: cell };
+  minimap.drawn = { layout, grid, columns: grid.columns, rows: grid.rows, left, top, car: cell };
 }
