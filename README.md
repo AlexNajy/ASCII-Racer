@@ -28,7 +28,7 @@ npm run backend:stop   # stop it
 - Menu and finish screen: `Up` / `Down` or `W` / `S` to choose (wraps round), `Enter` to pick; or point at an entry and click
 - Settings: `Up` / `Down` or `W` / `S` to choose, `Left` / `Right` or `A` / `D` to change volume and glyph size, `Enter` to switch mute and fullscreen or to type a nickname (`Enter` saves, `Esc` cancels); clicks work too (on the volume bar, on the glyph size's `<` `>`); saved in the browser. Its key list is `src/app/keys.ts`, the same as this list
 - Garage: `Up` / `Down` or `W` / `S` to choose shape or colour, `Left` / `Right` or `A` / `D` to change it (wraps round), or click its `<` `>`; the car turns on a lit spot and shows each change at once; saved in the browser and used in every race
-- Daily: one race a day, the same for everyone, one try; the pre-race screen shows the day and the route (`Enter` starts, `Esc` goes back without using the try); afterwards the daily entry shows the time (or did not finish) and the countdown to the next one
+- Daily: one race a day, the same for everyone, one try; the pre-race screen shows the day and the route (`Enter` starts, `Esc` goes back without using the try); afterwards the daily entry shows the time (or did not finish), with the game's server your rank, how many you beat, the curve of everyone's times with your bar marked and the top times, and the countdown to the next one
 - Unlimited: a new random city and route each time; after the finish, `again` (same route), `next` (new city and route) or `menu`
 - `Esc`: back to the menu (and releases the mouse); in the daily race it first asks, `Enter` gives up the try, `Esc` again keeps driving
 - `W` / `S` or arrow keys: throttle / brake, `A` / `D`: steer, `Space`: drift
@@ -178,7 +178,7 @@ npm run backend:stop   # stop it
   - [x] Deploy action for migrations and functions, skipped when the secrets are missing
   - [x] Client: sign in, start attempt, send run, handle offline and errors
   - [x] Results data: one database function giving a day's count, the player's rank, the top times and the histogram, only to a player whose try is used
-  - [ ] Results screen: rank, percentile, top times, bell curve histogram in glyphs with the player marked
+  - [x] Results screen: rank, percentile, top times, bell curve histogram in glyphs with the player marked
   - [ ] Share text copied to the clipboard
 - [ ] **18. Sound**: Web Audio API, no libraries, no sound files; reads the simulation state, never feeds back into it
   - [ ] Audio setup: audio context started on the first click or keypress, master volume and mute

@@ -27,6 +27,7 @@ export interface UrlParams {
   dnf: boolean; // with state=dailyresults: the try did not finish (else gate=<gate count> finishes it)
   next: number | null; // with a daily state: seconds to the next daily on the pinned clock
   giveUp: boolean; // with state=dailyrace: Esc has asked whether to give up
+  board: number | null; // with state=dailyresults: a made-up board of this many finished runs, the player's among them when finished
   entry: number | null; // the menu entry (with state=results the finish screen's option, state=settings or garage the row) selected at the start, 0 first
   edit: string | null; // with state=settings: the nickname being typed, as if typed so far
   shape: CarShape | null; // the car's body shape instead of the stored one
@@ -52,7 +53,7 @@ const DAILY_STATES: readonly UrlState[] = ['preRace', 'dailyRace', 'dailyResults
 // Parameters that change what a race does or which clock it reads (shot and tick pin the clock), or that show a
 // daily screen without its stored try. With any of them present the daily's try lives in memory only, so nothing
 // practised or made up on such a load is ever kept.
-export const DAILY_STORAGE_BLOCKERS = ['gate', 'car', 'tick', 'shot', 'drive', 'dnf', 'giveup', 'next'] as const;
+export const DAILY_STORAGE_BLOCKERS = ['gate', 'car', 'tick', 'shot', 'drive', 'dnf', 'giveup', 'next', 'board'] as const;
 const DAILY_URL_STATES = Object.keys(URL_STATES).filter((name) => DAILY_STATES.includes(URL_STATES[name]));
 
 export function dailyStorageAllowed(search: string): boolean {
@@ -63,6 +64,7 @@ export function dailyStorageAllowed(search: string): boolean {
 export const MAX_URL_NEXT = 2 * 86_400; // s; a day, or two when the clock is behind a stored try
 
 export const MAX_URL_TICK = 216000; // one hour of ticks
+export const MAX_URL_BOARD = 100_000;
 
 function number(name: string, value: string): number {
   const parsed = Number(value);
@@ -90,6 +92,7 @@ export function parseUrlParams(search: string): UrlParams {
   const dnf = query.get('dnf');
   const next = query.get('next');
   const giveUp = query.get('giveup');
+  const board = query.get('board');
 
   let renderMode: RenderMode | null = null;
   if (mode !== null) {
@@ -164,6 +167,10 @@ export function parseUrlParams(search: string): UrlParams {
     throw new Error(`URL parameter next: needs a daily state and a whole number of seconds, 0 to ${MAX_URL_NEXT}`);
   }
   if (giveUp !== null && (giveUp !== '1' || urlState !== 'dailyRace')) throw new Error('URL parameter giveup: only giveup=1, with state=dailyrace');
+  const boardNumber = board === null ? null : number('board', board);
+  if (boardNumber !== null && (urlState !== 'dailyResults' || !Number.isInteger(boardNumber) || boardNumber < 0 || boardNumber > MAX_URL_BOARD)) {
+    throw new Error(`URL parameter board: needs state=dailyresults and a whole number of runs, 0 to ${MAX_URL_BOARD}`);
+  }
 
   // The daily states are for pictures: on a normal load they would race a day's route or show a result without its
   // stored try, so they are ignored there and the game opens on the menu.
@@ -194,6 +201,7 @@ export function parseUrlParams(search: string): UrlParams {
     dnf: !ignored && dnf === '1',
     next: ignored ? null : nextNumber,
     giveUp: !ignored && giveUp === '1',
+    board: ignored ? null : boardNumber,
     entry: entryNumber,
     edit,
     shape: carShape,

@@ -26,7 +26,9 @@ import { createWorld, regenerateCity as regenerateWorldCity, startRace, stepWorl
 import { DAILY_EPOCH, dailyCitySettings, dailyRace, dayNumber, MS_PER_DAY } from './game/daily.ts';
 import { carSettingsFor, cityRoute, enterState, randomCitySeed, seedRoute, unlimitedRoute } from './app/flow.ts';
 import { dailyEntry, recordOnChange, resultsOfRecord, startDaily } from './app/dailyFlow.ts';
-import { backendConfig, createDailyBackend } from './app/dailyBackend.ts';
+import { backendConfig, createDailyBackend, ResultsBoard, runNickname } from './app/dailyBackend.ts';
+import { sampleBoard } from './dev/sampleBoard.ts';
+import type { DailyResults } from './app/dailyResults.ts';
 import { browserBackend } from './app/dailyBackendBrowser.ts';
 import {
   dailyTry,
@@ -442,16 +444,30 @@ function latestDaily() {
 latestDaily();
 // The daily's server, only in a build that has one and on a load that may store the try: nothing else signs in or
 // sends anything. supabase-js loads the first time the daily is opened.
-const dailyBackend = createDailyBackend(backendConfig(import.meta.env, urlParams.dailyStorage), (config) => ({
-  ...browserBackend(config),
+const backendSettings = backendConfig(import.meta.env, urlParams.dailyStorage);
+const backendBrowser = backendSettings && browserBackend(backendSettings);
+const dailyBackend = createDailyBackend(backendSettings, () => ({
+  ...backendBrowser!,
   record: knownDaily,
   write: (record) => {
     storeDaily(record);
     if (gameState.kind === 'dailyResults') changeState(resultsOfRecord(gameState, dailyRecord));
+    if (record.sent?.status === 'stored') resultsBoard?.stored(record.day);
   },
   nickname: () => playerSettings.nickname,
   log: (message) => console.log(message),
 }));
+// The daily results' leaderboard, fetched while the results are open; a board that changes redraws the whole text
+// layer, as its layout may differ.
+const resultsBoard =
+  backendBrowser &&
+  new ResultsBoard({
+    fetch: (day) => backendBrowser.results(day),
+    timer: backendBrowser.timer,
+    changed: () => {
+      if (urlParams.hud !== 'test') hud.clear();
+    },
+  });
 // shape= and color= pick the car as the garage would (saved with the next change unless under shot).
 if (urlParams.shape) playerSettings = { ...playerSettings, carShape: urlParams.shape };
 if (urlParams.color) playerSettings = { ...playerSettings, carColor: urlParams.color };
@@ -918,9 +934,17 @@ function enter(state: GameState): GameState {
   latestDaily();
   return dailyEntry(today, dailyRecord, dailyCityBuilt);
 }
+// board= on a shot: a made-up day of that many runs, the player's among them when finished.
+let shotBoard: { ticks: number | null; board: DailyResults } | null = null;
+function boardOf(state: Extract<GameState, { kind: 'dailyResults' }>): DailyResults | null {
+  if (urlParams.board === null) return resultsBoard?.results(state.day) ?? null;
+  if (shotBoard?.ticks !== state.ticks) shotBoard = { ticks: state.ticks, board: sampleBoard(state.day, urlParams.board, state.ticks, runNickname(playerSettings.nickname)) };
+  return shotBoard.board;
+}
 function dailyResultsShown(state: Extract<GameState, { kind: 'dailyResults' }>) {
   const leaderboard = dailyBackend ? dailyBackend.status(dailyRecord, state.day) : 'unavailable';
-  return { day: state.day, ticks: state.ticks, untilNext: millisecondsToDay(state.day + 1, now()), leaderboard };
+  const untilNext = millisecondsToDay(state.day + 1, now());
+  return { day: state.day, ticks: state.ticks, untilNext, leaderboard, board: boardOf(state), nickname: runNickname(playerSettings.nickname) };
 }
 function moveMenuSelection(step: number) {
   if (listShown() && !devMenu.isOpen()) changeState(moveSelection(gameState, step));
@@ -1154,6 +1178,8 @@ function frame(timeMs: number) {
     fovBoost = updateChaseCamera(camera, chase, drawnCar, world.carSettings, chaseSettings, world.colliders, dt);
   }
   giveUpOnScreen = false;
+  if (gameState.kind === 'dailyResults') resultsBoard?.show(gameState.day);
+  else resultsBoard?.hide();
   if (urlParams.hud !== 'test') {
     if (settings.movement !== Movement.Car) {
       hud.clear();

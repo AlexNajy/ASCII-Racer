@@ -5,7 +5,7 @@ import { CELL_WIDTH_MAX, CELL_WIDTH_MIN } from './menu.ts';
 
 describe('parseUrlParams', () => {
   it('is a no-op without parameters', () => {
-    expect(parseUrlParams('')).toEqual({ seed: null, day: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, replay: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', dnf: false, next: null, giveUp: false, entry: null, edit: null, shape: null, color: null, dailyStorage: true });
+    expect(parseUrlParams('')).toEqual({ seed: null, day: null, renderMode: null, camera: null, tick: null, shot: false, drive: false, replay: false, hud: null, cellWidth: null, race: true, gate: null, car: null, state: 'menu', dnf: false, next: null, giveUp: false, board: null, entry: null, edit: null, shape: null, color: null, dailyStorage: true });
   });
 
   it('reads replay=1 and nothing else as replaying', () => {
@@ -75,6 +75,7 @@ describe('parseUrlParams', () => {
       '?state=dailyrace&day=3&giveup=1&shot',
       '?state=daily&day=3&next=10&shot',
       '?cell=8&gate=0',
+      '?state=dailyresults&day=3&board=300&shot',
     ]) {
       expect(dailyStorageAllowed(query), query).toBe(false);
     }
@@ -126,6 +127,15 @@ describe('parseUrlParams', () => {
       '?state=daily&day=3&next=172801',
     ]) {
       expect(() => parseUrlParams(bad)).toThrow();
+    }
+  });
+
+  it('reads a made-up board only with the daily results', () => {
+    expect(parseUrlParams('?state=dailyresults&day=3&board=300&shot').board).toBe(300);
+    expect(parseUrlParams('?state=dailyresults&day=3&board=0&dnf=1&shot').board).toBe(0);
+    expect(parseUrlParams('?state=dailyresults&day=3&board=300').board).toBeNull();
+    for (const bad of ['?board=3', '?state=race&board=3', '?state=dailyresults&day=3&board=-1', '?state=dailyresults&day=3&board=1.5', '?state=dailyresults&day=3&board=100001']) {
+      expect(() => parseUrlParams(bad), bad).toThrow();
     }
   });
 

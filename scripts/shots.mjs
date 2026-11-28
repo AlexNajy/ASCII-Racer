@@ -25,6 +25,7 @@ const EYE = 1.2;
 // day: the daily's day for its states, in place of the seed (its city is the day's).
 // dnf: with 'dailyresults', the try did not finish; next: seconds to the next daily on the pinned clock;
 // giveup: with 'dailyrace', Esc has asked whether to give up.
+// board: with 'dailyresults', a made-up leaderboard of that many finished runs.
 // entry: the menu entry selected (0 is the first), with state 'results' the finish screen's option, 'settings' and
 // 'garage' the row.
 // edit: with state 'settings', the nickname being typed.
@@ -90,6 +91,14 @@ const SHOTS = [
   { name: 'daily-finished', camera: null, mode: 'glyphs', tick: 600, gate: 10, state: 'dailyresults', day: 329 },
   { name: 'daily-dnf', camera: null, mode: 'glyphs', tick: 5400, state: 'dailyresults', day: 329, dnf: true },
   { name: 'daily-ready', camera: null, mode: 'glyphs', tick: 5400, state: 'dailyresults', day: 329, dnf: true, next: 0 },
+  // board: a made-up day of that many finished runs (82 s ± 7 with a slow tail), the player's among them when
+  // finished; the time is the held tick minus the 180 ticks of countdown, so 5080 is 1:21.666 and 3600 0:57.000.
+  { name: 'daily-board', camera: null, mode: 'glyphs', tick: 5080, gate: 10, state: 'dailyresults', day: 329, board: 300 },
+  { name: 'daily-board-dnf', camera: null, mode: 'glyphs', tick: 5400, state: 'dailyresults', day: 329, dnf: true, board: 300 },
+  { name: 'daily-board-first', camera: null, mode: 'glyphs', tick: 3600, gate: 10, state: 'dailyresults', day: 329, board: 300 },
+  { name: 'daily-board-tiny', camera: null, mode: 'glyphs', tick: 5080, gate: 10, state: 'dailyresults', day: 329, board: 3 },
+  { name: 'daily-board-empty', camera: null, mode: 'glyphs', tick: 5400, state: 'dailyresults', day: 329, dnf: true, board: 0 },
+  { name: 'daily-board-glyph16', camera: null, mode: 'glyphs', tick: 5080, gate: 10, state: 'dailyresults', day: 329, board: 300, cell: 16 },
   { name: 'daily-giveup', camera: null, mode: 'glyphs', tick: 420, drive: true, state: 'dailyrace', day: 329, giveup: true },
 ];
 
@@ -150,6 +159,7 @@ try {
     if (shot.dnf) query.set('dnf', '1');
     if (shot.next !== undefined) query.set('next', String(shot.next));
     if (shot.giveup) query.set('giveup', '1');
+    if (shot.board !== undefined) query.set('board', String(shot.board));
     if (shot.camera) query.set('camera', shot.camera);
     if (shot.drive) query.set('drive', '1');
     if (shot.race === false) query.set('race', '0');

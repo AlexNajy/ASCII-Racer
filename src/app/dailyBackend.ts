@@ -1,5 +1,6 @@
 import { SIMULATION_VERSION } from '../game/version.ts';
 import type { DailyRecord, DailySent } from './dailyRecord.ts';
+import { parseDailyResults, type DailyResults } from './dailyResults.ts';
 import { validNickname } from './nickname.ts';
 import { DEFAULT_PLAYER_SETTINGS } from './settings.ts';
 
@@ -281,4 +282,92 @@ export class DailyBackend {
 // Nothing of the backend exists without a configuration: no deps are made, nothing is loaded or sent.
 export function createDailyBackend(config: BackendConfig | null, deps: (config: BackendConfig) => DailyBackendDeps): DailyBackend | null {
   return config ? new DailyBackend(deps(config)) : null;
+}
+
+// The daily results screen's board: fetched when the screen opens for a day, again as soon as the player's run is
+// stored, and every RESULTS_REFRESH_MS while it stays open. A failure or an answer that isn't a board leaves what is
+// shown and waits for the next refresh; an answer for another day, after leaving, or older than one already taken is
+// dropped. Kept in memory only, the last day's, so reopening that day shows it while fetching again.
+export const RESULTS_REFRESH_MS = 60_000;
+
+export interface ResultsBoardDeps {
+  fetch(day: number): Promise<unknown>; // the answer of daily_results; rejects (or gives null) when there is none
+  timer: Timer;
+  changed(): void; // the board shown changed
+}
+
+export class ResultsBoard {
+  private readonly deps: ResultsBoardDeps;
+  private shown: number | null = null; // the day whose screen is open
+  private day: number | null = null; // the day of `board`
+  private board: DailyResults | null = null;
+  private boardText = 'null';
+  private sent = 0; // requests made
+  private taken = 0; // the request whose answer is shown
+  private opened = 0; // times the screen was opened
+  private cancelRefresh: (() => void) | null = null;
+
+  constructor(deps: ResultsBoardDeps) {
+    this.deps = deps;
+  }
+
+  // The results screen is open for `day`; nothing when it already was.
+  show(day: number): void {
+    if (this.shown === day) return;
+    this.hide();
+    this.shown = day;
+    this.opened++;
+    if (this.day !== day) {
+      const had = this.board !== null;
+      this.day = day;
+      this.board = null;
+      this.boardText = 'null';
+      if (had) this.deps.changed();
+    }
+    this.request();
+  }
+
+  // The screen is left: no more requests, answers still on their way are dropped.
+  hide(): void {
+    this.shown = null;
+    this.cancelRefresh?.();
+    this.cancelRefresh = null;
+  }
+
+  // The player's run of `day` was stored: its rank is on the board now.
+  stored(day: number): void {
+    if (this.shown === day) this.request();
+  }
+
+  results(day: number): DailyResults | null {
+    return this.day === day ? this.board : null;
+  }
+
+  private request(): void {
+    const day = this.shown;
+    if (day === null) return;
+    this.cancelRefresh?.();
+    this.cancelRefresh = this.deps.timer.set(() => {
+      this.cancelRefresh = null;
+      this.request();
+    }, RESULTS_REFRESH_MS);
+    const id = ++this.sent;
+    const opened = this.opened;
+    this.deps.fetch(day).then(
+      (answer) => this.take(day, opened, id, answer),
+      () => undefined,
+    );
+  }
+
+  private take(day: number, opened: number, id: number, answer: unknown): void {
+    if (this.shown !== day || this.opened !== opened || id < this.taken) return;
+    const board = parseDailyResults(answer);
+    if (!board) return;
+    this.taken = id;
+    const text = JSON.stringify(board);
+    if (text === this.boardText) return;
+    this.board = board;
+    this.boardText = text;
+    this.deps.changed();
+  }
 }

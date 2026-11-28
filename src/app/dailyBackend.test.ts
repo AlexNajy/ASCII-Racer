@@ -6,6 +6,8 @@ import {
   backendConfig,
   createDailyBackend,
   DailyBackend,
+  ResultsBoard,
+  RESULTS_REFRESH_MS,
   RETRY_DELAYS_MS,
   runNickname,
   submitOutcome,
@@ -474,5 +476,185 @@ describe('sending the daily run', () => {
     expect(backend.status({ ...FINISHED, sent: { status: 'refused', reason: 'versionMismatch' } }, DAY)).toBe('updateNeeded');
     expect(backend.status({ ...FINISHED, sent: { status: 'refused', reason: 'tooLate' } }, DAY)).toBe('unavailable');
     expect(backend.status(FINISHED, DAY)).toBe('unavailable'); // nothing on its way
+  });
+});
+
+// A day's board as daily_results answers it: `count` runs, the caller's of `ownTicks` among them when given.
+function answer(count: number, ownTicks: number | null = null): Record<string, unknown> {
+  const times = Array.from({ length: count }, (_, i) => 4000 + 60 * i);
+  if (ownTicks !== null) times[count - 1] = ownTicks;
+  times.sort((a, b) => a - b);
+  const from = times[0];
+  const to = Math.max(times[Math.ceil((95 * count) / 100) - 1], from + 48);
+  const counts = new Array<number>(48).fill(0);
+  for (const t of times) counts[Math.min(47, Math.floor(((t - from) * 48) / (to - from)))]++;
+  const rank = (t: number) => 1 + times.filter((other) => other < t).length;
+  let ownShown = false;
+  return {
+    count,
+    own: ownTicks === null ? null : { ticks: ownTicks, rank: rank(ownTicks), slower: times.filter((t) => t > ownTicks).length },
+    top: times.slice(0, 10).map((t) => {
+      const own = t === ownTicks && !ownShown;
+      ownShown ||= own;
+      return { rank: rank(t), nickname: own ? 'racer one' : 'someone', ticks: t, own };
+    }),
+    histogram: count === 0 ? null : { from, to, counts },
+  };
+}
+
+// A board with fakes: each fetch waits until answered by hand, a timer that runs only when told.
+function boardHarness() {
+  const requests: { day: number; resolve: (value: unknown) => void; reject: (error: unknown) => void }[] = [];
+  const timers: { callback: () => void; ms: number; cancelled: boolean }[] = [];
+  let changes = 0;
+  const board = new ResultsBoard({
+    fetch: (day) => new Promise((resolve, reject) => requests.push({ day, resolve, reject })),
+    timer: {
+      set(callback, ms) {
+        const timer = { callback, ms, cancelled: false };
+        timers.push(timer);
+        return () => (timer.cancelled = true);
+      },
+    },
+    changed: () => changes++,
+  });
+  return {
+    board,
+    requests,
+    changes: () => changes,
+    pending: () => timers.filter(({ cancelled }) => !cancelled),
+    async answer(index: number, value: unknown) {
+      requests[index].resolve(value);
+      await settle();
+    },
+    async fail(index: number) {
+      requests[index].reject(new TypeError('Failed to fetch'));
+      await settle();
+    },
+    async tick() {
+      const next = timers.find(({ cancelled }) => !cancelled)!;
+      next.cancelled = true;
+      next.callback();
+      await settle();
+      return next.ms;
+    },
+  };
+}
+
+describe("the results screen's board", () => {
+  it('fetches on opening, shows the answer and refreshes every minute while open', async () => {
+    const h = boardHarness();
+    h.board.show(DAY);
+    h.board.show(DAY);
+    expect(h.requests.map(({ day }) => day)).toEqual([DAY]);
+    expect(h.board.results(DAY)).toBeNull();
+    await h.answer(0, answer(30, 4100));
+    expect(h.board.results(DAY)?.own?.ticks).toBe(4100);
+    expect(h.board.results(DAY - 1)).toBeNull();
+    expect(h.changes()).toBe(1);
+    expect(await h.tick()).toBe(RESULTS_REFRESH_MS);
+    expect(h.requests).toHaveLength(2);
+    await h.answer(1, answer(31, 4100));
+    expect(h.board.results(DAY)?.count).toBe(31);
+    expect(h.changes()).toBe(2);
+    expect(h.pending()).toHaveLength(1);
+  });
+
+  it('redraws nothing when a refresh brings the same board', async () => {
+    const h = boardHarness();
+    h.board.show(DAY);
+    await h.answer(0, answer(30, 4100));
+    await h.tick();
+    await h.answer(1, answer(30, 4100));
+    expect(h.changes()).toBe(1);
+  });
+
+  it('fetches again as soon as the run is stored, so the rank shows', async () => {
+    const h = boardHarness();
+    h.board.show(DAY);
+    await h.answer(0, answer(30));
+    expect(h.board.results(DAY)?.own).toBeNull();
+    h.board.stored(DAY - 1);
+    expect(h.requests).toHaveLength(1);
+    h.board.stored(DAY);
+    expect(h.requests).toHaveLength(2);
+    await h.answer(1, answer(31, 4100));
+    expect(h.board.results(DAY)?.own?.rank).toBe(3);
+    expect(h.pending()).toHaveLength(1); // the refresh starts over, one at a time
+  });
+
+  it('stops on leaving and drops an answer that comes in after', async () => {
+    const h = boardHarness();
+    h.board.show(DAY);
+    h.board.hide();
+    expect(h.pending()).toHaveLength(0);
+    await h.answer(0, answer(30, 4100));
+    expect(h.board.results(DAY)).toBeNull();
+    expect(h.changes()).toBe(0);
+    h.board.stored(DAY);
+    expect(h.requests).toHaveLength(1);
+  });
+
+  it('drops an answer to a request made before leaving, even when the same day is open again', async () => {
+    const h = boardHarness();
+    h.board.show(DAY);
+    h.board.hide();
+    h.board.show(DAY);
+    await h.answer(0, answer(30, 4100));
+    expect(h.board.results(DAY)).toBeNull();
+    await h.answer(1, answer(31, 4100));
+    expect(h.board.results(DAY)?.count).toBe(31);
+  });
+
+  it("drops a late answer for another day, and an older answer after a newer one", async () => {
+    const h = boardHarness();
+    h.board.show(DAY);
+    h.board.show(DAY + 1);
+    await h.answer(0, answer(30, 4100));
+    expect(h.board.results(DAY)).toBeNull();
+    expect(h.board.results(DAY + 1)).toBeNull();
+    h.board.stored(DAY + 1);
+    await h.answer(2, answer(40, 4100));
+    await h.answer(1, answer(35));
+    expect(h.board.results(DAY + 1)?.count).toBe(40);
+  });
+
+  it('keeps the board shown when a refresh fails or answers null or nonsense, and tries again at the next refresh', async () => {
+    const h = boardHarness();
+    h.board.show(DAY);
+    await h.fail(0);
+    expect(h.board.results(DAY)).toBeNull();
+    expect(h.pending()).toHaveLength(1);
+    await h.tick();
+    await h.answer(1, answer(30, 4100));
+    for (const [index, bad] of [null, { count: 'many' }, undefined].entries()) {
+      await h.tick();
+      await h.answer(2 + index, bad);
+      expect(h.board.results(DAY)?.count).toBe(30);
+    }
+    await h.tick();
+    await h.fail(5);
+    expect(h.board.results(DAY)?.count).toBe(30);
+    expect(h.changes()).toBe(1);
+    expect(h.pending()).toHaveLength(1);
+  });
+
+  it("shows the last day's board again on reopening while fetching anew, and forgets it for another day", async () => {
+    const h = boardHarness();
+    h.board.show(DAY);
+    await h.answer(0, answer(30, 4100));
+    h.board.hide();
+    h.board.show(DAY);
+    expect(h.board.results(DAY)?.count).toBe(30);
+    expect(h.requests).toHaveLength(2);
+    h.board.hide();
+    h.board.show(DAY + 1);
+    expect(h.board.results(DAY)).toBeNull();
+    expect(h.changes()).toBe(2);
+  });
+
+  it('fetches nothing without a backend or on a load that keeps the try in memory', () => {
+    expect(backendConfig({}, true)).toBeNull();
+    expect(backendConfig(ENV, false)).toBeNull();
   });
 });

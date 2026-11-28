@@ -28,6 +28,7 @@ export interface BrowserBackend {
   timer: Timer;
   client(): Promise<SupabaseClient>; // for reading the leaderboard as the signed-in player
   userId(): Promise<string | null>;
+  results(day: number): Promise<unknown>; // daily_results as the signed-in player, null when there was no answer in time
 }
 
 export function browserBackend(config: BackendConfig): BrowserBackend {
@@ -101,6 +102,15 @@ export function browserBackend(config: BackendConfig): BrowserBackend {
     auth: { token, refresh },
     timer,
     client,
+    // Bounded as a whole: the sign-in, the library's loading and the call itself.
+    results(day) {
+      const call = async () => {
+        if (!(await token())) return null;
+        const { data, error } = await (await client()).rpc('daily_results', { run_day: day });
+        return error ? null : (data as unknown);
+      };
+      return withDeadline<unknown>(call(), AUTH_TIMEOUT_MS + REQUEST_TIMEOUT_MS, null, timer);
+    },
     async userId() {
       const { data } = await (await client()).auth.getSession();
       return data.session?.user.id ?? null;

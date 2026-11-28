@@ -1,7 +1,28 @@
 import type { LeaderboardStatus } from '../app/dailyBackend.ts';
 import { TICKS_PER_SECOND } from '../game/clock.ts';
 import type { Route } from '../game/route.ts';
-import { drawListScreen, listScreenLayout, MARGIN, SELECTED_COLOR, titleRows, type ListScreen, type MenuLayout } from './menuScreen.ts';
+import { percentFaster, type DailyResults } from '../app/dailyResults.ts';
+import {
+  COMPACT_PADDING,
+  COMPACT_TITLE_GAP,
+  drawEntryList,
+  drawLines,
+  drawListScreen,
+  ENTRY_PADDING,
+  innerWidth,
+  LINE_PADDING,
+  listScreenLayout,
+  MARGIN,
+  SELECTED_COLOR,
+  TITLE_BACKING_ROWS,
+  TITLE_GAP,
+  titleRows,
+  type ListEntry,
+  type ListScreen,
+  type MenuLayout,
+  type ScreenLine,
+} from './menuScreen.ts';
+import { histogramHeight, histogramPanel, NO_RUNS_TEXT, padPanel, playersText, topHeight, topPanel, type Panel } from './resultsBoard.ts';
 import { drawMinimap, type Minimap, type MinimapCar } from './minimap.ts';
 import { FRAME_COLOR, timerText } from './raceHud.ts';
 import type { TextGrid } from './textGrid.ts';
@@ -210,41 +231,223 @@ export const LEADERBOARD_STATUS: Record<LeaderboardStatus, { text: string; color
 };
 const STATUS_WIDTH = Math.max(...Object.values(LEADERBOARD_STATUS).map(({ text }) => text.length));
 
+function centredIn(text: string, width: number): string {
+  const left = Math.floor((width - text.length) / 2);
+  return (' '.repeat(left) + text).padEnd(width, ' ');
+}
+
 export function leaderboardLine(status: LeaderboardStatus): { text: string; color: number } {
   const { text, color } = LEADERBOARD_STATUS[status];
-  const left = Math.floor((STATUS_WIDTH - text.length) / 2);
-  return { text: (' '.repeat(left) + text).padEnd(STATUS_WIDTH, ' '), color };
+  return { text: centredIn(text, STATUS_WIDTH), color };
 }
 const DID_NOT_FINISH = 'DID NOT FINISH';
 
 // The daily results: the time (or did not finish) where the menu has its title, the day, the leaderboard line and
-// the countdown under it, and one entry: `menu`, or `play` once the next daily is ready.
+// the countdown under it, and one entry: `menu`, or `play` once the next daily is ready. With a board from the
+// server, the rank and percentile take the leaderboard line's place and the histogram and the top times go between
+// the lines and the entries.
 export interface DailyResultsScreen {
   day: number;
   ticks: number | null; // null: did not finish
   untilNext: number; // ms to the next daily, 0 or less once it has begun
   leaderboard?: LeaderboardStatus; // unavailable when not given
+  board?: DailyResults | null; // none: the plain screen
+  nickname?: string; // the player's, for their own row when it isn't among the top times
+}
+
+function entriesOf(untilNext: number): ListEntry[] {
+  return [{ label: untilNext > 0 ? 'menu' : 'play', enabled: true }];
+}
+
+function countdownLine(untilNext: number): ScreenLine {
+  return { text: countdownText(untilNext), color: untilNext > 0 ? TEXT_COLOR : ROUTE_COLOR };
+}
+
+function titleOf(ticks: number | null): Pick<ListScreen, 'title' | 'smallTitle' | 'titleColor'> {
+  const time = ticks === null ? null : timerText(ticks);
+  return { title: time ?? DID_NOT_FINISH, smallTitle: time ?? DID_NOT_FINISH.toLowerCase(), titleColor: time ? TIME_COLOR : DID_NOT_FINISH_COLOR };
 }
 
 function dailyResultsScreen({ day, ticks, untilNext, leaderboard = 'unavailable' }: DailyResultsScreen): ListScreen {
-  const time = ticks === null ? null : timerText(ticks);
   return {
-    title: time ?? DID_NOT_FINISH,
-    smallTitle: time ?? DID_NOT_FINISH.toLowerCase(),
-    titleColor: time ? TIME_COLOR : DID_NOT_FINISH_COLOR,
-    lines: [
-      { text: dayText(day), color: DAY_COLOR },
-      leaderboardLine(leaderboard),
-      { text: countdownText(untilNext), color: untilNext > 0 ? TEXT_COLOR : ROUTE_COLOR },
-    ],
-    entries: [{ label: untilNext > 0 ? 'menu' : 'play', enabled: true }],
+    ...titleOf(ticks),
+    lines: [{ text: dayText(day), color: DAY_COLOR }, leaderboardLine(leaderboard), countdownLine(untilNext)],
+    entries: entriesOf(untilNext),
   };
 }
 
-export function dailyResultsLayout(columns: number, rows: number, screen: DailyResultsScreen): MenuLayout | null {
-  return listScreenLayout(dailyResultsScreen(screen), columns, rows);
+const RANK_COLOR = 0xffd070;
+export const FIRST_TEXT = 'the first to finish today';
+const NOT_RECORDED_TEXT = 'run not recorded';
+
+export function rankText(board: DailyResults): string | null {
+  return board.own ? `#${board.own.rank} of ${board.count}` : null;
+}
+
+export function percentText(board: DailyResults): string | null {
+  if (!board.own) return null;
+  const percent = percentFaster(board);
+  return percent === null ? FIRST_TEXT : `faster than ${percent}% of players`;
+}
+
+// Where the player stands, in one line or two (`split`): rank and percentile; without an own run what became of it
+// (did not finish: nothing, the histogram's heading counts the players), or in the lines alone the player count.
+function standingLines(screen: DailyResultsScreen, board: DailyResults, split: boolean, alone: boolean): ScreenLine[] {
+  const rank = rankText(board);
+  const percent = percentText(board);
+  if (rank && percent) return split ? [{ text: rank, color: RANK_COLOR }, { text: percent, color: RANK_COLOR }] : [{ text: `${rank}   ${percent}`, color: RANK_COLOR }];
+  const lines: ScreenLine[] = [];
+  if (screen.ticks !== null) {
+    const status = screen.leaderboard ?? 'unavailable';
+    const { text, color } = status === 'unavailable' ? { text: NOT_RECORDED_TEXT, color: DIM_COLOR } : LEADERBOARD_STATUS[status];
+    lines.push({ text: centredIn(text, STATUS_WIDTH), color });
+  }
+  if (alone) lines.push({ text: board.count === 0 ? NO_RUNS_TEXT : `${playersText(board.count)} today`, color: TEXT_COLOR });
+  return lines;
+}
+
+// Largest first: the first that fits is used, else the plain screen. Panels: side by side, one over the other, the
+// histogram alone, or none (rank and percentile in the lines).
+export interface BoardStyle {
+  title: [number, number]; // block font scale; 0 one line
+  panels: 'side' | 'stacked' | 'histogram' | 'none';
+  bucketColumns: number; // columns per bucket
+  barRows: number;
+  topRows: number;
+  compact: boolean;
+}
+const BOARD_STYLES: BoardStyle[] = [
+  { title: [3, 2], panels: 'side', bucketColumns: 3, barRows: 16, topRows: 10, compact: false },
+  { title: [3, 2], panels: 'side', bucketColumns: 2, barRows: 12, topRows: 10, compact: false },
+  { title: [2, 1], panels: 'side', bucketColumns: 2, barRows: 10, topRows: 10, compact: false },
+  { title: [2, 1], panels: 'side', bucketColumns: 1, barRows: 8, topRows: 10, compact: false },
+  { title: [2, 1], panels: 'side', bucketColumns: 1, barRows: 6, topRows: 5, compact: false },
+  { title: [0, 0], panels: 'side', bucketColumns: 1, barRows: 6, topRows: 5, compact: false },
+  { title: [0, 0], panels: 'side', bucketColumns: 1, barRows: 4, topRows: 5, compact: false },
+  { title: [0, 0], panels: 'stacked', bucketColumns: 1, barRows: 6, topRows: 5, compact: false },
+  { title: [0, 0], panels: 'histogram', bucketColumns: 1, barRows: 6, topRows: 0, compact: false },
+  { title: [0, 0], panels: 'side', bucketColumns: 1, barRows: 4, topRows: 3, compact: true },
+  { title: [0, 0], panels: 'histogram', bucketColumns: 1, barRows: 4, topRows: 0, compact: true },
+  { title: [0, 0], panels: 'histogram', bucketColumns: 0.5, barRows: 3, topRows: 0, compact: true },
+  { title: [0, 0], panels: 'none', bucketColumns: 0, barRows: 0, topRows: 0, compact: false },
+  { title: [0, 0], panels: 'none', bucketColumns: 0, barRows: 0, topRows: 0, compact: true },
+];
+// A day without runs: nothing to draw in the panels, the lines say so.
+const EMPTY_BOARD_STYLES: BoardStyle[] = [
+  { title: [3, 2], panels: 'none', bucketColumns: 0, barRows: 0, topRows: 0, compact: false },
+  { title: [2, 1], panels: 'none', bucketColumns: 0, barRows: 0, topRows: 0, compact: false },
+  ...BOARD_STYLES.filter(({ panels }) => panels === 'none'),
+];
+const PANEL_GAP = 2; // columns between panels side by side
+const ENTRY_ROOM = 2; // entries the list has room for (menu, and share to come)
+const BOARD_ABOVE = 0.3; // share of the free rows above the title
+
+export interface PlacedPanel {
+  left: number;
+  top: number;
+  panel: Panel;
+}
+
+export interface DailyResultsLayout extends MenuLayout {
+  style: BoardStyle | null; // null for the plain screen
+  lines: ScreenLine[]; // the board's; the plain screen draws its own
+  panels: PlacedPanel[];
+}
+
+function boardLayout(columns: number, rows: number, screen: DailyResultsScreen, board: DailyResults): DailyResultsLayout | null {
+  const entries = entriesOf(screen.untilNext);
+  for (const style of board.count === 0 ? EMPTY_BOARD_STYLES : BOARD_STYLES) {
+    const { compact } = style;
+    const backing = compact ? 0 : TITLE_BACKING_ROWS;
+    const title = titleRows(titleOf(screen.ticks), ...style.title, backing);
+    const lines = [{ text: dayText(screen.day), color: DAY_COLOR }, ...standingLines(screen, board, style.panels === 'none' || compact, style.panels === 'none'), countdownLine(screen.untilNext)];
+    // At least as wide as the plain screen's, so the countdown turning into `new daily ready` changes no other cell.
+    const linesWidth = Math.max(STATUS_WIDTH, ...lines.map(({ text }) => text.length)) + 2 * LINE_PADDING;
+    const linesHeight = lines.length + 2 * backing;
+    const histogram = style.panels === 'none' ? null : histogramPanel(board, style);
+    const top = style.panels === 'side' || style.panels === 'stacked' ? topPanel(board, screen.nickname ?? '', style) : null;
+    // Side by side the panels are as tall as the taller one could be.
+    const panelRows: Panel[][] = [];
+    if (histogram && top && style.panels === 'side') {
+      const height = Math.max(histogramHeight(style), topHeight(style));
+      panelRows.push([padPanel(histogram, height), padPanel(top, height)]);
+    } else {
+      if (histogram) panelRows.push([histogram]);
+      if (top) panelRows.push([top]);
+    }
+    const rowWidth = (panels: Panel[]) => panels.reduce((sum, { width }) => sum + width, 0) + PANEL_GAP * (panels.length - 1);
+    const padding = compact ? COMPACT_PADDING : ENTRY_PADDING;
+    const listWidth = innerWidth(entries, padding) + 2;
+    const blankRows = compact ? 0 : 1;
+    const spacing = compact ? 1 : 2;
+    const listHeight = (room: number) => 2 + 2 * blankRows + (room - 1) * spacing + 1;
+    const gap = 1;
+    const titleGap = compact ? COMPACT_TITLE_GAP : TITLE_GAP;
+    const panelsHeight = panelRows.reduce((sum, panels) => sum + panels[0].rows.length + gap, 0);
+    const height = title.length + titleGap + linesHeight + gap + panelsHeight + listHeight(Math.max(entries.length, ENTRY_ROOM));
+    const width = Math.max(title[0].length, linesWidth, listWidth, ...panelRows.map(rowWidth));
+    if (width + 2 * MARGIN > columns || height + 2 * MARGIN > rows) continue;
+    const titleTop = MARGIN + Math.floor((rows - 2 * MARGIN - height) * BOARD_ABOVE);
+    const linesTop = titleTop + title.length + titleGap;
+    let y = linesTop + linesHeight + gap;
+    const panels: PlacedPanel[] = [];
+    for (const row of panelRows) {
+      let x = Math.floor((columns - rowWidth(row)) / 2);
+      for (const panel of row) {
+        panels.push({ left: x, top: y, panel });
+        x += panel.width + PANEL_GAP;
+      }
+      y += row[0].rows.length + gap;
+    }
+    const listTop = y;
+    return {
+      style,
+      lines,
+      panels,
+      title,
+      titleLeft: Math.floor((columns - title[0].length) / 2),
+      titleTop,
+      linesLeft: Math.floor((columns - linesWidth) / 2),
+      linesTop,
+      linesWidth,
+      lineRows: lines.map((_, i) => linesTop + backing + i),
+      linesHeight,
+      listLeft: Math.floor((columns - listWidth) / 2),
+      listTop,
+      listWidth,
+      listHeight: listHeight(entries.length),
+      padding,
+      entryRows: entries.map((_, i) => listTop + 1 + blankRows + i * spacing),
+    };
+  }
+  return null;
+}
+
+// The board's layout when there is a board and a style fits, else the plain screen's; null when nothing fits.
+export function dailyResultsLayout(columns: number, rows: number, screen: DailyResultsScreen): DailyResultsLayout | null {
+  const withBoard = screen.board ? boardLayout(columns, rows, screen, screen.board) : null;
+  if (withBoard) return withBoard;
+  const layout = listScreenLayout(dailyResultsScreen(screen), columns, rows);
+  return layout && { ...layout, style: null, lines: [], panels: [] };
 }
 
 export function drawDailyResultsScreen(grid: TextGrid, screen: DailyResultsScreen): void {
-  drawListScreen(grid, dailyResultsScreen(screen), 0);
+  const layout = screen.board ? boardLayout(grid.columns, grid.rows, screen, screen.board) : null;
+  if (!layout) {
+    drawListScreen(grid, dailyResultsScreen(screen), 0);
+    return;
+  }
+  const { titleColor } = titleOf(screen.ticks);
+  layout.title.forEach((row, y) => grid.write(layout.titleLeft, layout.titleTop + y, row, { color: titleColor, background: true }));
+  drawLines(grid, layout, layout.lines);
+  for (const { left, top, panel } of layout.panels) {
+    panel.rows.forEach((row, y) => {
+      let x = left;
+      for (const { text, color } of row) {
+        grid.write(x, top + y, text, { color, background: true });
+        x += text.length;
+      }
+    });
+  }
+  drawEntryList(grid, layout, entriesOf(screen.untilNext), 0);
 }

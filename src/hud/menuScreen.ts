@@ -37,14 +37,14 @@ export const MARGIN = 1; // cells kept free at the grid's edges
 export const MARKER_LEFT = '>';
 export const MARKER_RIGHT = '<';
 export const ENTRY_PADDING = 3; // cells between the frame and a marker
-const LINE_PADDING = 2; // solid cells each side of the longest line
+export const LINE_PADDING = 2; // solid cells each side of the longest line
 
 function labelWidth(entries: readonly ListEntry[]): number {
   return Math.max(...entries.map((entry) => entry.label.length));
 }
 
 // A marker and a space each side of the label.
-function innerWidth(entries: readonly ListEntry[], padding: number): number {
+export function innerWidth(entries: readonly ListEntry[], padding: number): number {
   return 2 * padding + 2 * 2 + labelWidth(entries);
 }
 
@@ -154,7 +154,7 @@ export function menuLayout(columns: number, rows: number): MenuLayout | null {
 }
 
 // The entry whose row inside the list's frame holds the cell, or null.
-export function menuEntryAt(layout: MenuLayout, column: number, row: number): number | null {
+export function menuEntryAt(layout: Pick<MenuLayout, 'listLeft' | 'listWidth' | 'entryRows'>, column: number, row: number): number | null {
   if (column <= layout.listLeft || column >= layout.listLeft + layout.listWidth - 1) return null;
   const index = layout.entryRows.indexOf(row);
   return index < 0 ? null : index;
@@ -180,19 +180,21 @@ function drawEntry(
   grid.write(left + padding + 2 + label.length, row, pad, { color, background: true });
 }
 
-export function drawListScreen(grid: TextGrid, screen: ListScreen, selected: number): void {
-  const layout = listScreenLayout(screen, grid.columns, grid.rows);
-  if (!layout) return;
-  const { title, titleLeft, titleTop, listLeft, listTop, listWidth, listHeight, padding, entryRows } = layout;
-  const inner = listWidth - 2;
-  title.forEach((row, y) => grid.write(titleLeft, titleTop + y, row, { color: screen.titleColor, background: true }));
+// The lines' solid block: every row of it once, each line centred.
+export function drawLines(grid: TextGrid, layout: MenuLayout, lines: readonly ScreenLine[] | undefined): void {
   const { linesLeft, linesTop, linesWidth, lineRows, linesHeight } = layout;
   for (let y = 0; y < linesHeight; y++) {
-    const line = screen.lines?.[lineRows.indexOf(linesTop + y)];
+    const line = lines?.[lineRows.indexOf(linesTop + y)];
     const left = line ? Math.floor((linesWidth - line.text.length) / 2) : linesWidth;
     const text = line ? ' '.repeat(left) + line.text.padEnd(linesWidth - left, ' ') : ' '.repeat(linesWidth);
     grid.write(linesLeft, linesTop + y, text, { color: line?.color ?? FRAME_COLOR, background: true });
   }
+}
+
+// The framed list of entries, the selected one between markers.
+export function drawEntryList(grid: TextGrid, layout: MenuLayout, entries: readonly ListEntry[], selected: number): void {
+  const { listLeft, listTop, listWidth, listHeight, padding, entryRows } = layout;
+  const inner = listWidth - 2;
   // Not grid.box: that would write the entry rows twice, and the grid would come out dirty every call.
   const edge = `+${'-'.repeat(inner)}+`;
   for (let y = 0; y < listHeight; y++) {
@@ -204,9 +206,18 @@ export function drawListScreen(grid: TextGrid, screen: ListScreen, selected: num
     const index = entryRows.indexOf(row);
     grid.put(listLeft, row, '|', FRAME_COLOR, true);
     if (index < 0) grid.write(listLeft + 1, row, ' '.repeat(inner), { color: FRAME_COLOR, background: true });
-    else drawEntry(grid, listLeft + 1, row, screen.entries, index, index === selected, padding);
+    else drawEntry(grid, listLeft + 1, row, entries, index, index === selected, padding);
     grid.put(listLeft + listWidth - 1, row, '|', FRAME_COLOR, true);
   }
+}
+
+export function drawListScreen(grid: TextGrid, screen: ListScreen, selected: number): void {
+  const layout = listScreenLayout(screen, grid.columns, grid.rows);
+  if (!layout) return;
+  const { title, titleLeft, titleTop } = layout;
+  title.forEach((row, y) => grid.write(titleLeft, titleTop + y, row, { color: screen.titleColor, background: true }));
+  drawLines(grid, layout, screen.lines);
+  drawEntryList(grid, layout, screen.entries, selected);
 }
 
 export function drawMenuScreen(grid: TextGrid, selected: number): void {
