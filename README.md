@@ -180,12 +180,12 @@ npm run backend:stop   # stop it
   - [x] Results data: one database function giving a day's count, the player's rank, the top times and the histogram, only to a player whose try is used
   - [x] Results screen: rank, percentile, top times, bell curve histogram in glyphs with the player marked
   - [x] Share text copied to the clipboard
-- [ ] **18. Sound**: Web Audio API, no libraries, no sound files; reads the simulation state, never feeds back into it
+- [x] **18. Sound**: Web Audio API, no libraries, no sound files; reads the simulation state, never feeds back into it
   - [x] Audio setup: audio context started on the first click or keypress, master volume and mute
   - [x] Engine: a looped sound with pitch and volume from speed and throttle
   - [x] Tires and impacts: a screech that fades in with drift, thuds by collision speed
   - [x] Ambience: a low city hum
-  - [ ] Race sounds: countdown, checkpoint, finish
+  - [x] Race sounds: countdown, checkpoint, finish
 - [ ] **19. Lobbies**
   - [ ] Minimap scale for large cities: a smaller cell count per block when the map would cover more than about a third of the screen height (10×10 cities on laptop screens)
   - [ ] Create lobby screen: settings, generated city, lobby code

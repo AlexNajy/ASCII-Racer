@@ -45,7 +45,14 @@ export class FakeNode implements NodeLike {
 
 export class FakeContext implements ContextLike {
   state = 'running';
-  currentTime = 0;
+  time = 1;
+  held = false; // a clock that has not started: reads 0 whatever `time` is
+  get currentTime() {
+    return this.held ? 0 : this.time;
+  }
+  set currentTime(value: number) {
+    this.time = value;
+  }
   sampleRate = 48000;
   resumes = 0;
   destination = new FakeNode();

@@ -166,7 +166,7 @@ describe('createThuds', () => {
     expect(thuds.hit(22, 1, 0, true)).toBe(false);
     // Hits on alternating walls a gap apart, none ending: the cap stops the stack.
     for (let i = 1; i < 10; i++) {
-      context.currentTime = i * tuning.impacts.minGapSeconds * 1.01;
+      context.currentTime = 1 + i * tuning.impacts.minGapSeconds * 1.01;
       thuds.hit(20, i % 2, 1 - (i % 2), true);
     }
     expect(thuds.playing()).toBe(tuning.impacts.maxPlaying);
@@ -181,7 +181,7 @@ describe('createThuds', () => {
     audio.start();
     const offsets = new Set<number>();
     for (let i = 0; i < 20; i++) {
-      context.currentTime = i;
+      context.currentTime = i + 1;
       expect(thuds.hit(12, 0, 1, true)).toBe(true);
       const source = context.sources[context.sources.length - 1];
       offsets.add(source.offset);

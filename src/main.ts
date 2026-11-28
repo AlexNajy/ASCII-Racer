@@ -4,6 +4,7 @@ import { browserContextFactory, createAudio, installGestureStart, installVisibil
 import { ambienceHeard, createAmbience } from './audio/ambience.ts';
 import { createEngine, engineHeard, engineSpeed } from './audio/engine.ts';
 import { createThuds } from './audio/impacts.ts';
+import { createRaceCues, createRaceSounds, observeRace, takeCue } from './audio/raceSounds.ts';
 import { createScreech } from './audio/tyres.ts';
 import { createAudioTuning } from './audio/tuning.ts';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
@@ -492,6 +493,9 @@ const engine = createEngine(audio, audioTuning);
 const screech = createScreech(audio, audioTuning);
 const thuds = createThuds(audio, audioTuning);
 const ambience = createAmbience(audio, audioTuning);
+const raceSounds = createRaceSounds(audio, audioTuning);
+const raceCues = createRaceCues();
+const raceSoundLog: { kind: string; time: number; tick: number }[] = []; // audio=debug only
 // Filled in place every frame, so driving the sounds allocates nothing.
 const engineInput = { speed: 0, topSpeed: 0, throttle: 0, brake: 0 };
 const screechInput = { slide: 0, speed: 0 };
@@ -504,6 +508,7 @@ if (urlParams.audioDebug) {
     engine: () => ({ ...engine.targets(), ...engineInput }),
     screech: () => ({ ...screech.targets(), ...screechInput }),
     ambience: () => ({ ...ambience.targets(), ...ambienceInput }),
+    raceSounds: () => ({ playing: raceSounds.playing(), played: raceSounds.played(), log: raceSoundLog.splice(0) }),
     thuds: () => ({ playing: thuds.playing(), played: thuds.played(), impacts: impactLog.splice(0) }),
     tuning: audioTuning,
   };
@@ -888,6 +893,7 @@ const devMenu = createDevMenu(
       ambience.retune();
     },
     stats: audio.stats,
+    play: (kind) => raceSounds.play(kind),
   },
 );
 
@@ -1196,6 +1202,7 @@ function frame(timeMs: number) {
     carInput = settings.movement === Movement.Car && gameState.kind === 'race' ? readCarInput() : NO_INPUT;
     const reading = world.race?.phase === 'running' ? world.race : null;
     const { impact, race: raceEvent } = stepWorld(world, carInput);
+    observeRace(raceCues, world.race, world.tick, raceEvent);
     if (reading) {
       if (reading !== recordedRace) recorder.reset();
       recordedRace = reading;
@@ -1224,6 +1231,13 @@ function frame(timeMs: number) {
     const next = afterTick(gameState, world.race, world.tick);
     if (next !== gameState) setGameState(next);
   });
+  // Nothing is kept for later: a cue while the context is not running or the tab is hidden is dropped.
+  observeRace(raceCues, world.race, world.tick, null);
+  const cue = takeCue(raceCues);
+  if (cue && !document.hidden) {
+    const time = raceSounds.play(cue);
+    if (time !== null && urlParams.audioDebug && raceSoundLog.length < 1000) raceSoundLog.push({ kind: cue, time, tick: world.tick });
+  }
   const { hardest } = frameImpact;
   if (hardest) thuds.hit(hardest.speed, hardest.normalX, hardest.normalZ, engineHeard(gameState, world.race !== null));
   updateParticles(particles, dt);

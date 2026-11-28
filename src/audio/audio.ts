@@ -126,7 +126,9 @@ export interface Audio {
   // Creates a node counted in the stats; release it with `released` when it is disconnected for good.
   counted<T extends NodeLike>(node: T): T;
   released(count?: number): void;
-  context(): ContextLike | null; // only when running
+  // Only when running and its clock has started: Chrome reports running at construction while currentTime is still 0
+  // until the output device starts, and anything scheduled then would play bunched. Set levels use the raw context.
+  context(): ContextLike | null;
   blip(): void;
   // While the tab is hidden the frame loop stops, so continuous sounds would hold their last note: the master fades out.
   setHidden(hidden: boolean): void;
@@ -215,7 +217,7 @@ export function createAudio(makeContext: (() => ContextLike) | null, tuning: Aud
     released(count = 1) {
       nodes -= count;
     },
-    context: () => (ctx && ctx.state === 'running' ? ctx : null),
+    context: () => (ctx && ctx.state === 'running' && ctx.currentTime > 0 ? ctx : null),
     blip() {
       const context = self.context();
       const out = bus('interface');

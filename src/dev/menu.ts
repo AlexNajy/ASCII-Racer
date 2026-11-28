@@ -2,6 +2,7 @@ import type { CarSettings } from '../game/car.ts';
 import type { ChaseCameraSettings } from '../game/chaseCamera.ts';
 import type { CitySettings } from '../game/city.ts';
 import type { AudioStats } from '../audio/audio.ts';
+import { RACE_SOUND_KINDS, type RaceSoundKind } from '../audio/raceSounds.ts';
 import type { AudioTuning } from '../audio/tuning.ts';
 import type { ScatterSettings } from '../render/materials.ts';
 import type { SkySettings } from '../render/sky.ts';
@@ -79,6 +80,7 @@ export interface SoundDev {
   tuning: AudioTuning;
   onChange(): void;
   stats(): AudioStats;
+  play(kind: RaceSoundKind): unknown;
 }
 
 export interface DevMenu {
@@ -417,6 +419,35 @@ export function createDevMenu(
   impactSlider('same wall (dot)', 'sameWallDot', -1, 1, 0.05);
   impactSlider('always plays above (× last)', 'harderRatio', 1, 4, 0.05);
   impactSlider('high-pass (Hz)', 'highpassHertz', 10, 400, 1);
+
+  const race = soundTuning.race;
+  const raceSlider = (label: string, key: keyof typeof race, min: number, max: number, step: number) =>
+    slider(soundPage, `Race ${label}`, race[key], min, max, step, (value) => (race[key] = value));
+  const playRow = document.createElement('div');
+  for (const kind of RACE_SOUND_KINDS) {
+    const button = document.createElement('button');
+    button.textContent = `play ${kind}`;
+    button.addEventListener('click', () => sound.play(kind));
+    playRow.append(button);
+  }
+  soundPage.append(playRow);
+  raceSlider('gain', 'gain', 0, 2, 0.01);
+  raceSlider('base note (Hz)', 'baseHertz', 200, 1500, 5);
+  raceSlider('octave harmonic', 'harmonicMix', 0, 1, 0.01);
+  raceSlider('attack (s)', 'attackSeconds', 0.001, 0.05, 0.001);
+  raceSlider('beep length (s)', 'beepSeconds', 0.03, 0.6, 0.01);
+  raceSlider('beep level', 'beepLevel', 0, 1, 0.01);
+  raceSlider('go octaves above beep', 'goOctaves', 0, 2, 0.05);
+  raceSlider('go length (s)', 'goSeconds', 0.05, 1.5, 0.01);
+  raceSlider('go level', 'goLevel', 0, 1, 0.01);
+  raceSlider('checkpoint rise (ratio)', 'checkpointRise', 1, 2, 0.01);
+  raceSlider('checkpoint gap (s)', 'checkpointGap', 0, 0.3, 0.005);
+  raceSlider('checkpoint note length (s)', 'checkpointSeconds', 0.03, 0.6, 0.01);
+  raceSlider('checkpoint level', 'checkpointLevel', 0, 1, 0.01);
+  raceSlider('finish gap (s)', 'finishGap', 0.03, 0.4, 0.005);
+  raceSlider('finish note length (s)', 'finishSeconds', 0.05, 0.8, 0.01);
+  raceSlider('finish last note length (s)', 'finishLastSeconds', 0.1, 1.5, 0.01);
+  raceSlider('finish level', 'finishLevel', 0, 1, 0.01);
 
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,

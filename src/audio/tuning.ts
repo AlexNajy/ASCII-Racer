@@ -98,6 +98,27 @@ export interface AmbienceTuning {
   highpassHertz: number; // nothing below this reaches the bus
 }
 
+// The race sounds' numbers (audio/raceSounds.ts). Levels are peak gains of a note before the bus.
+export interface RaceSoundTuning {
+  gain: number; // all four sounds
+  baseHertz: number; // the countdown beep; every other note is a ratio of it
+  harmonicMix: number; // gain of the sine an octave above each note, against its 1
+  attackSeconds: number;
+  beepSeconds: number; // length to -60 dB
+  beepLevel: number;
+  goOctaves: number; // the go note is this many octaves above the beep
+  goSeconds: number;
+  goLevel: number;
+  checkpointRise: number; // the checkpoint's second note over its first, as a frequency ratio
+  checkpointGap: number; // seconds between its two notes
+  checkpointSeconds: number; // each note's length
+  checkpointLevel: number;
+  finishGap: number; // seconds between the finish figure's notes
+  finishSeconds: number; // each of the first notes' length
+  finishLastSeconds: number; // the last note's length
+  finishLevel: number;
+}
+
 // Numbers to tune by ear; the dev menu's Sound page edits this object and the audio module reads it on `retune`.
 export interface AudioTuning {
   volumeCurve: number; // master gain = (volume / steps) ^ this, so each step sounds like the one before
@@ -109,6 +130,7 @@ export interface AudioTuning {
   tyres: TyreTuning;
   impacts: ImpactTuning;
   ambience: AmbienceTuning;
+  race: RaceSoundTuning;
 }
 
 export const DEFAULT_ENGINE_TUNING: Readonly<EngineTuning> = {
@@ -205,6 +227,26 @@ export const DEFAULT_AMBIENCE_TUNING: Readonly<AmbienceTuning> = {
   highpassHertz: 40,
 };
 
+export const DEFAULT_RACE_SOUND_TUNING: Readonly<RaceSoundTuning> = {
+  gain: 1,
+  baseHertz: 660,
+  harmonicMix: 0.3,
+  attackSeconds: 0.008,
+  beepSeconds: 0.16,
+  beepLevel: 0.17,
+  goOctaves: 1,
+  goSeconds: 0.55,
+  goLevel: 0.22,
+  checkpointRise: 1.5,
+  checkpointGap: 0.075,
+  checkpointSeconds: 0.18,
+  checkpointLevel: 0.17,
+  finishGap: 0.15,
+  finishSeconds: 0.3,
+  finishLastSeconds: 0.6,
+  finishLevel: 0.2,
+};
+
 export const DEFAULT_AUDIO_TUNING: Readonly<AudioTuning> = {
   volumeCurve: 1.5,
   topGain: 1,
@@ -215,10 +257,11 @@ export const DEFAULT_AUDIO_TUNING: Readonly<AudioTuning> = {
   tyres: DEFAULT_TYRE_TUNING,
   impacts: DEFAULT_IMPACT_TUNING,
   ambience: DEFAULT_AMBIENCE_TUNING,
+  race: DEFAULT_RACE_SOUND_TUNING,
 };
 
 export function createAudioTuning(): AudioTuning {
-  const { engine, tyres, impacts, ambience } = DEFAULT_AUDIO_TUNING;
+  const { engine, tyres, impacts, ambience, race } = DEFAULT_AUDIO_TUNING;
   return {
     ...DEFAULT_AUDIO_TUNING,
     busGains: { ...DEFAULT_AUDIO_TUNING.busGains },
@@ -226,5 +269,6 @@ export function createAudioTuning(): AudioTuning {
     tyres: { ...tyres },
     impacts: { ...impacts },
     ambience: { ...ambience },
+    race: { ...race },
   };
 }
