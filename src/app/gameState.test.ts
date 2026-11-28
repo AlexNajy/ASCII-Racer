@@ -26,12 +26,17 @@ import {
   race,
   RESULTS_AFTER_TICKS,
   SETTINGS,
+  CREATE_LOBBY,
+  hostLobby,
+  loadingLobby,
   RESULTS_OPTIONS,
   selectEntry,
   type GameState,
 } from './gameState.ts';
 import { entryEnabled, FIRST_ENTRY, MENU_ENTRIES, screenEntry } from './mainMenu.ts';
 import { SETTINGS_ROWS } from './settingsMenu.ts';
+import { createLobbyScreen, LOBBY_ROWS } from './createLobbyMenu.ts';
+import { defaultLobbySettings } from '../game/lobbySettings.ts';
 
 const route = generateRoute(roadGraph(generateCity({ ...DEFAULT_CITY_SETTINGS })), 1);
 const other = generateRoute(roadGraph(generateCity({ ...DEFAULT_CITY_SETTINGS, seed: 2 })), 2);
@@ -149,7 +154,7 @@ describe('game state', () => {
     expect(FIRST_ENTRY).toBe(0);
     expect(MENU).toEqual({ kind: 'menu', selected: 0 });
     expect(UNLIMITED_MENU).toEqual({ kind: 'menu', selected: 1 });
-    expect(MENU_ENTRIES.map((_, i) => entryEnabled(i))).toEqual([true, true, false, false, true, true]);
+    expect(MENU_ENTRIES.map((_, i) => entryEnabled(i))).toEqual([true, true, false, true, true, true]);
   });
 
   it('moves the selection up and down, wrapping round at both ends', () => {
@@ -335,5 +340,67 @@ describe('daily game state', () => {
     expect(moveSelection(shown, -1)).toBe(shown);
     expect(selectEntry(shown, 1)).toBe(shown);
     expect(pressEnter(shown)).toEqual(MENU);
+  });
+});
+
+describe('lobby states', () => {
+  const entry = MENU_ENTRIES.findIndex((e) => e.label === 'create lobby');
+  const draft = { ...createLobbyScreen().draft, size: 'large' as const };
+  const lobby = hostLobby('ABC234', defaultLobbySettings(77));
+
+  it('opens the create lobby screen from its entry, and Escape goes back to it selected', () => {
+    expect(entryEnabled(entry)).toBe(true);
+    expect(screenEntry('createLobby')).toBe(entry);
+    const opened = pressEnter({ kind: 'menu', selected: entry });
+    expect(opened).toBe(CREATE_LOBBY);
+    expect(opened).toEqual({ kind: 'createLobby', selected: 0, draft: createLobbyScreen().draft, editing: null });
+    expect(pressEscape(opened)).toEqual({ kind: 'menu', selected: entry });
+    expect(pressEnter(opened)).toBe(opened); // its keys are createLobbyKey's
+    expect(afterTick(opened, null, 1000)).toBe(opened);
+  });
+
+  it('keeps join lobby dimmed', () => {
+    const join = MENU_ENTRIES.findIndex((e) => e.label === 'join lobby');
+    expect(entryEnabled(join)).toBe(false);
+    const dimmed: GameState = { kind: 'menu', selected: join };
+    expect(pressEnter(dimmed)).toBe(dimmed);
+  });
+
+  it('drops a seed being typed on Escape before leaving', () => {
+    const typing: GameState = { kind: 'createLobby', ...createLobbyScreen(), editing: { text: '12', invalid: false } };
+    expect(pressEscape(typing)).toEqual({ kind: 'createLobby', ...createLobbyScreen(), editing: null });
+  });
+
+  it('moves and points at the rows, wrapping round, but not while typing', () => {
+    const at = (selected: number): GameState => ({ kind: 'createLobby', ...createLobbyScreen(undefined, selected) });
+    const last = LOBBY_ROWS.length - 1;
+    expect(moveSelection(at(0), 1)).toEqual(at(1));
+    expect(moveSelection(at(0), -1)).toEqual(at(last));
+    expect(moveSelection(at(last), 1)).toEqual(at(0));
+    expect(selectEntry(at(0), 3)).toEqual(at(3));
+    const same = at(2);
+    expect(selectEntry(same, 2)).toBe(same);
+    expect(selectEntry(same, LOBBY_ROWS.length)).toBe(same);
+    const typing: GameState = { kind: 'createLobby', ...createLobbyScreen(), editing: { text: '1', invalid: false } };
+    expect(moveSelection(typing, 1)).toBe(typing);
+    expect(selectEntry(typing, 2)).toBe(typing);
+  });
+
+  it('loads the lobby city and then hosts it; the loading line ignores Enter and Escape', () => {
+    const building = loadingLobby(draft);
+    expect(building).toEqual({ kind: 'loading', mode: 'lobby', draft });
+    expect(pressEnter(building)).toBe(building);
+    expect(pressEscape(building)).toBe(building);
+    expect(loaded(building, null)).toEqual({ kind: 'menu', selected: screenEntry('createLobby') });
+    expect(lobby).toEqual({ kind: 'lobby', role: 'host', code: 'ABC234', settings: defaultLobbySettings(77) });
+  });
+
+  it('closes the lobby on Escape, back to the create lobby entry, and never asks', () => {
+    expect(pressEscape(lobby)).toEqual({ kind: 'menu', selected: entry });
+    expect(pressEscape(lobby, false)).toEqual({ kind: 'menu', selected: entry });
+    expect(pressEnter(lobby)).toBe(lobby);
+    expect(afterTick(lobby, null, 100000)).toBe(lobby);
+    expect(moveSelection(lobby, 1)).toBe(lobby);
+    expect(selectEntry(lobby, 1)).toBe(lobby);
   });
 });

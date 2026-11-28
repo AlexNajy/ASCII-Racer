@@ -2,6 +2,8 @@ import { raceTicks, type Race } from '../game/race.ts';
 import type { Route } from '../game/route.ts';
 import { FINISH_SHOWN_TICKS } from '../hud/raceHud.ts';
 import { FIRST_ENTRY, isMenuScreen, MENU_ENTRIES, screenEntry, wrapEntry, type MenuScreen } from './mainMenu.ts';
+import type { LobbySettings } from '../game/lobbySettings.ts';
+import { createLobbyScreen, selectLobbyRow, wrapLobbyRow, type CreateLobbyScreen, type LobbyDraft } from './createLobbyMenu.ts';
 import { GARAGE_ROWS, wrapGarageRow } from './garageMenu.ts';
 import { selectSettingsRow, wrapSettingsRow, type SettingsScreen } from './settingsMenu.ts';
 
@@ -28,7 +30,11 @@ export type GameState =
   | { kind: 'dailyResults'; day: number; ticks: number | null; selected: number }
   | ({ kind: 'settings' } & SettingsScreen)
   | { kind: 'garage'; selected: number } // index into GARAGE_ROWS
+  | ({ kind: 'createLobby' } & CreateLobbyScreen)
+  // The host in the lobby's city, driving freely. `code` and `settings` are what other players are told.
+  | { kind: 'lobby'; role: 'host'; code: string; settings: LobbySettings }
   | { kind: 'loading'; mode: 'unlimited' } // a new city and route being made for an unlimited race
+  | { kind: 'loading'; mode: 'lobby'; draft: LobbyDraft } // the lobby's city being built; a random seed is picked then
   | { kind: 'loading'; mode: 'daily'; day: number; route: Route }; // the day's city being built for its route
 
 export type GameStateKind = GameState['kind'];
@@ -40,7 +46,8 @@ export const RESULTS_AFTER_TICKS = FINISH_SHOWN_TICKS;
 export const MENU: GameState = { kind: 'menu', selected: FIRST_ENTRY };
 export const SETTINGS: GameState = { kind: 'settings', selected: 0, editing: null };
 export const GARAGE: GameState = { kind: 'garage', selected: 0 };
-const SCREEN_STATES: Record<MenuScreen, GameState> = { garage: GARAGE, settings: SETTINGS };
+export const CREATE_LOBBY: GameState = { kind: 'createLobby', ...createLobbyScreen() };
+const SCREEN_STATES: Record<MenuScreen, GameState> = { garage: GARAGE, settings: SETTINGS, createLobby: CREATE_LOBBY };
 
 // The menu with the entry of a screen or race mode selected, for coming back from it.
 export function menuAt(entry: MenuScreen | RaceMode): GameState {
@@ -78,6 +85,14 @@ export function loading(mode: 'unlimited'): GameState {
   return { kind: 'loading', mode };
 }
 
+export function loadingLobby(draft: LobbyDraft): GameState {
+  return { kind: 'loading', mode: 'lobby', draft };
+}
+
+export function hostLobby(code: string, settings: LobbySettings): GameState {
+  return { kind: 'lobby', role: 'host', code, settings };
+}
+
 export function loadingDaily(day: number, route: Route): GameState {
   return { kind: 'loading', mode: 'daily', day, route };
 }
@@ -86,6 +101,7 @@ export function loadingDaily(day: number, route: Route): GameState {
 // found.
 export function loaded(state: GameState, route: Route | null): GameState {
   if (state.kind !== 'loading') return state;
+  if (state.mode === 'lobby') return menuAt('createLobby'); // a lobby needs no route: hostLobby is its way out of loading
   if (state.mode === 'daily') return route ? preRace(state.day, route) : MENU;
   return route ? race(state.mode, route) : menuAt('unlimited');
 }
@@ -102,6 +118,7 @@ function optionCount(state: GameState): number {
 export function moveSelection(state: GameState, step: number): GameState {
   if (state.kind === 'menu') return selectEntry(state, wrapEntry(state.selected + step));
   if (state.kind === 'garage') return selectEntry(state, wrapGarageRow(state.selected + step));
+  if (state.kind === 'createLobby') return state.editing || step === 0 ? state : { ...state, selected: wrapLobbyRow(state.selected + step) };
   if (state.kind === 'settings') {
     if (state.editing || step === 0) return state;
     return { ...state, selected: wrapSettingsRow(state.selected + step) };
@@ -113,6 +130,10 @@ export function moveSelection(state: GameState, step: number): GameState {
 
 // The pointer over an entry selects it; the same state back when nothing changes.
 export function selectEntry(state: GameState, index: number): GameState {
+  if (state.kind === 'createLobby') {
+    const screen = selectLobbyRow(state, index);
+    return screen === state ? state : { ...state, ...screen };
+  }
   if (state.kind === 'settings') {
     const screen = selectSettingsRow(state, index);
     return screen === state ? state : { ...state, ...screen };
@@ -155,6 +176,8 @@ export function pressEnter(state: GameState, canAsk = true): GameState {
       return state.mode === 'daily' && state.givingUp && canAsk ? giveUp(state) : state;
     case 'garage': // Left and Right change the car, Enter nothing
     case 'settings': // its keys are settingsKey's
+    case 'createLobby': // its keys are createLobbyKey's
+    case 'lobby':
     case 'loading':
       return state;
     case 'results': {
@@ -168,7 +191,7 @@ export function pressEnter(state: GameState, canAsk = true): GameState {
 }
 
 // Back to the menu, with the entry the screen came from selected; from the garage and the settings with their entry
-// selected again; a nickname being typed is only dropped. In the daily race Esc asks first and a second Esc keeps
+// selected again; a nickname or seed being typed is only dropped. In the daily race Esc asks first and a second Esc keeps
 // driving (Enter gives up), and it doesn't ask when the question can't be shown (`canAsk`); after its finish it goes
 // straight to the results. Ignored while a city loads.
 export function pressEscape(state: GameState, canAsk = true): GameState {
@@ -180,6 +203,10 @@ export function pressEscape(state: GameState, canAsk = true): GameState {
       return menuAt('garage');
     case 'settings':
       return state.editing ? { ...state, editing: null } : menuAt('settings');
+    case 'createLobby':
+      return state.editing ? { ...state, editing: null } : menuAt('createLobby');
+    case 'lobby': // the lobby closes; no question asked yet
+      return menuAt('createLobby');
     case 'race':
       if (state.mode === 'unlimited') return menuAt('unlimited');
       if (state.finished !== null) return dailyResults(state.day, state.finished);

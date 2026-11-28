@@ -1,6 +1,7 @@
 import { raceTicks, type Race } from '../game/race.ts';
 import { blockRows } from './blockFont.ts';
 import type { Guidance } from './guidance.ts';
+import { drawLobbyPanel, lobbyPanelSize, type LobbyHudValues } from './lobbyHud.ts';
 import { drawMinimap, fitMinimap, type Minimap, type MinimapCar } from './minimap.ts';
 import {
   ARROW_PANEL_HEIGHT,
@@ -44,6 +45,7 @@ export interface HudValues {
   topSpeed: number; // m/s, the full mark of the bar
   minimap?: { minimap: Minimap; car: MinimapCar };
   race?: RaceHudValues;
+  lobby?: LobbyHudValues; // top left, dropped when it doesn't fit clear of the other elements
 }
 
 export interface RaceHudValues {
@@ -184,7 +186,7 @@ function blankExcept(grid: TextGrid, rect: Rect, kept: Rect): void {
 }
 
 // True when the give-up question is on the grid after this call.
-export function drawHud(grid: TextGrid, { speed, topSpeed, minimap, race }: HudValues): boolean {
+export function drawHud(grid: TextGrid, { speed, topSpeed, minimap, race, lobby }: HudValues): boolean {
   const left = grid.columns - MARGIN - PANEL_WIDTH;
   const top = grid.rows - MARGIN - PANEL_HEIGHT;
   const elements: Element[] = [];
@@ -205,6 +207,10 @@ export function drawHud(grid: TextGrid, { speed, topSpeed, minimap, race }: HudV
       }
     }
     if (race) elements.push(...raceElements(grid, race, elements.map(({ rect }) => rect)));
+    if (lobby) {
+      const rect = { left: MARGIN, top: MARGIN, ...lobbyPanelSize(lobby) };
+      if (inside(grid, rect) && elements.every((other) => apart(rect, other.rect))) elements.push({ rect, draw: () => drawLobbyPanel(grid, rect.left, rect.top, lobby) });
+    }
   }
   const question = race?.giveUp === undefined ? null : questionPlace(grid, elements.map(({ rect }) => rect));
   const asked = race?.giveUp === true;

@@ -85,11 +85,12 @@ export function engineSound(input: EngineInput, tuning: EngineTuning, out: Engin
 }
 
 // The engine is heard whenever the player's car is drawn in the world: the daily's pre-race screen, the race (its
-// countdown too), and behind the results while a race is left. The garage's car is a preview and stays silent.
+// countdown too), the lobby, and behind the results while a race is left. The garage's car is a preview and stays silent.
 export function engineHeard(state: GameState, raceLeft: boolean): boolean {
   switch (state.kind) {
     case 'preRace':
     case 'race':
+    case 'lobby':
     case 'results':
       return true;
     case 'dailyResults':

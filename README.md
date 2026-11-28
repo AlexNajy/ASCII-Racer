@@ -27,6 +27,7 @@ npm run backend:stop   # stop it
 
 - Menu and finish screen: `Up` / `Down` or `W` / `S` to choose (wraps round), `Enter` to pick; or point at an entry and click
 - Settings: `Up` / `Down` or `W` / `S` to choose, `Left` / `Right` or `A` / `D` to change volume and glyph size, `Enter` to switch mute and fullscreen or to type a nickname (`Enter` saves, `Esc` cancels); clicks work too (on the volume bar, on the glyph size's `<` `>`); saved in the browser. Its key list is `src/app/keys.ts`, the same as this list
+- Create lobby (from the menu): `Up` / `Down` or `W` / `S` to choose a row, `Left` / `Right` or `A` / `D` (or a click on `<` `>`) to change city size, downtown, avenues and route length, `Enter` (or a click) on `seed` to type digits (`Enter` saves, empty means random, `Esc` cancels), `Enter` on `create` builds the city and opens the lobby with its code; `Esc` in the lobby closes it
 - Garage: `Up` / `Down` or `W` / `S` to choose shape or colour, `Left` / `Right` or `A` / `D` to change it (wraps round), or click its `<` `>`; the car turns on a lit spot and shows each change at once; saved in the browser and used in every race
 - Daily: one race a day, the same for everyone, one try; the pre-race screen shows the day and the route (`Enter` starts, `Esc` goes back without using the try); afterwards the daily entry shows the time (or did not finish), with the game's server your rank, how many you beat, the curve of everyone's times with your bar marked and the top times, and the countdown to the next one; `share` (Enter or a click) copies a short text with the day, your time, how many you beat and a one-line curve with your bar marked, `Up`/`Down` choose between it and the menu
 - Unlimited: a new random city and route each time; after the finish, `again` (same route), `next` (new city and route) or `menu`
@@ -188,7 +189,7 @@ npm run backend:stop   # stop it
   - [x] Race sounds: countdown, checkpoint, finish
 - [ ] **19. Lobbies**
   - [x] Minimap scale for large cities: a smaller cell count per block when the map would cover more than about a third of the screen height (10×10 cities on laptop screens)
-  - [ ] Create lobby screen: settings, generated city, lobby code
+  - [x] Create lobby screen: settings, generated city, lobby code
   - [ ] Join lobby screen and lobby presence over Supabase Realtime
   - [ ] WebRTC data channels between players, signalled through the lobby
   - [ ] Other players' cars: garage look and nickname, driven from their inputs

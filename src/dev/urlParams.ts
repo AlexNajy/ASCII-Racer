@@ -1,5 +1,6 @@
 import { CELL_WIDTH_MAX, CELL_WIDTH_MIN, RenderMode } from './menu.ts';
 import { RESULTS_OPTIONS, type GameStateKind } from '../app/gameState.ts';
+import { LOBBY_ROWS, SEED_DIGITS } from '../app/createLobbyMenu.ts';
 import { GARAGE_ROWS } from '../app/garageMenu.ts';
 import { MENU_ENTRIES } from '../app/mainMenu.ts';
 import { NICKNAME_MAX, nicknameCharacter } from '../app/settings.ts';
@@ -30,7 +31,7 @@ export interface UrlParams {
   giveUp: boolean; // with state=dailyrace: Esc has asked whether to give up
   board: number | null; // with state=dailyresults: a made-up board of this many finished runs, the player's among them when finished
   entry: number | null; // the menu entry (with state=results the finish screen's option, state=settings or garage the row) selected at the start, 0 first
-  edit: string | null; // with state=settings: the nickname being typed, as if typed so far
+  edit: string | null; // with state=settings: the nickname being typed, as if typed so far; with state=createlobby: the seed's digits
   shape: CarShape | null; // the car's body shape instead of the stored one
   color: string | null; // the car's colour (a CAR_COLORS id) instead of the stored one
   audioDebug: boolean; // audio=debug: window.audioDebug.stats() reads the audio graph (state, master gain, nodes, level)
@@ -49,6 +50,8 @@ const URL_STATES: Record<string, UrlState> = {
   settings: 'settings',
   garage: 'garage',
   loading: 'loading',
+  createlobby: 'createLobby',
+  lobby: 'lobby',
 };
 const DAILY_STATES: readonly UrlState[] = ['preRace', 'dailyRace', 'dailyResults'];
 
@@ -159,13 +162,15 @@ export function parseUrlParams(search: string): UrlParams {
 
   const entryNumber = entry === null ? null : number('entry', entry);
   const entries =
-    state === 'results' ? RESULTS_OPTIONS.length : state === 'dailyresults' ? 2 : state === 'settings' ? SETTINGS_ROWS.length : state === 'garage' ? GARAGE_ROWS.length : MENU_ENTRIES.length;
+    state === 'results' ? RESULTS_OPTIONS.length : state === 'dailyresults' ? 2 : state === 'settings' ? SETTINGS_ROWS.length : state === 'garage' ? GARAGE_ROWS.length : state === 'createlobby' ? LOBBY_ROWS.length : MENU_ENTRIES.length;
   if (entryNumber !== null && (!Number.isInteger(entryNumber) || entryNumber < 0 || entryNumber >= entries)) {
     throw new Error(`URL parameter entry: expected a whole number, 0 to ${entries - 1}`);
   }
 
-  if (edit !== null && (state !== 'settings' || edit.length > NICKNAME_MAX || ![...edit].every(nicknameCharacter))) {
-    throw new Error(`URL parameter edit: needs state=settings and up to ${NICKNAME_MAX} letters, digits or spaces`);
+  if (edit !== null && state === 'createlobby') {
+    if (edit.length > SEED_DIGITS || !/^[0-9]*$/.test(edit)) throw new Error(`URL parameter edit: with state=createlobby up to ${SEED_DIGITS} digits`);
+  } else if (edit !== null && (state !== 'settings' || edit.length > NICKNAME_MAX || ![...edit].every(nicknameCharacter))) {
+    throw new Error(`URL parameter edit: needs state=settings and up to ${NICKNAME_MAX} letters, digits or spaces, or state=createlobby and digits`);
   }
 
   const urlState = state === null ? 'menu' : URL_STATES[state];

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { dailyRacing, GARAGE, loading, MENU, preRace, race, SETTINGS, type GameState } from '../app/gameState.ts';
+import { createLobbyScreen } from '../app/createLobbyMenu.ts';
+import { CREATE_LOBBY, dailyRacing, GARAGE, hostLobby, loading, loadingLobby, MENU, preRace, race, SETTINGS, type GameState } from '../app/gameState.ts';
+import { defaultLobbySettings } from '../game/lobbySettings.ts';
 import type { Route } from '../game/route.ts';
 import { createAudio } from './audio.ts';
 import { createEngine, engineGear, engineHeard, engineSound, engineSpeed, REVERSE_GEAR, type EngineInput } from './engine.ts';
@@ -202,11 +204,12 @@ describe('engineHeard', () => {
     expect(engineHeard(race('unlimited', route), true)).toBe(true);
     expect(engineHeard(race('unlimited', null), false)).toBe(true);
     expect(engineHeard(dailyRacing(1, route), true)).toBe(true);
+    expect(engineHeard(hostLobby('ABC234', defaultLobbySettings(1)), false)).toBe(true);
     expect(engineHeard({ kind: 'results', mode: 'unlimited', route, ticks: 10, selected: 0 }, true)).toBe(true);
     expect(engineHeard({ kind: 'dailyResults', day: 1, ticks: 10, selected: 0 }, true)).toBe(true);
   });
   it('is silent on the menu screens, loading and in the garage', () => {
-    const silent: GameState[] = [MENU, SETTINGS, GARAGE, loading('unlimited'), { kind: 'dailyResults', day: 1, ticks: null, selected: 0 }];
+    const silent: GameState[] = [MENU, SETTINGS, GARAGE, CREATE_LOBBY, loadingLobby(createLobbyScreen().draft), loading('unlimited'), { kind: 'dailyResults', day: 1, ticks: null, selected: 0 }];
     for (const state of silent) expect(engineHeard(state, false)).toBe(false);
   });
 });

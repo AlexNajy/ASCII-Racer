@@ -51,14 +51,19 @@ export function unlimitedRoute(pickSeed: () => number, routeFor: (seed: number) 
   return null;
 }
 
-// The daily is driven with these whatever the dev menu holds, so its run replays the same on a server.
+// The daily and the lobbies are driven with these whatever the dev menu holds, so every player's car handles alike
+// (the daily's run replays the same on a server).
 export const DAILY_CAR_SETTINGS: Readonly<CarSettings> = Object.freeze({ ...DEFAULT_CAR_SETTINGS });
 
-// The car settings the world drives with in a state: the daily's own in every daily screen, else the dev menu's.
+// The car settings the world drives with in a state: the fixed ones in every daily screen and in the lobby, else the
+// dev menu's.
 export function carSettingsFor(state: GameState, devSettings: CarSettings): CarSettings {
-  const daily =
-    state.kind === 'preRace' || state.kind === 'dailyResults' || ((state.kind === 'race' || state.kind === 'loading') && state.mode === 'daily');
-  return daily ? DAILY_CAR_SETTINGS : devSettings;
+  const fixed =
+    state.kind === 'preRace' ||
+    state.kind === 'dailyResults' ||
+    state.kind === 'lobby' ||
+    ((state.kind === 'race' || state.kind === 'loading') && (state.mode === 'daily' || state.mode === 'lobby'));
+  return fixed ? DAILY_CAR_SETTINGS : devSettings;
 }
 
 // The menu stands the car on the middle junction with no race; the pre-race screen stands it on the route's start
@@ -81,6 +86,12 @@ export function enterState(world: World, next: GameState, previous: GameState): 
     case 'loading':
       clearRace(world);
       return;
+    case 'lobby': {
+      clearRace(world);
+      const { x, z } = startJunction(world.city);
+      standCar(world, x, z, START_HEADING);
+      return;
+    }
     case 'race':
       if (next.route && previous.kind !== 'race') startRace(world, next.route);
       return;
@@ -90,6 +101,7 @@ export function enterState(world: World, next: GameState, previous: GameState): 
     case 'results':
     case 'garage': // reached from the menu, the car stays where the menu stood it; the garage turns its own
     case 'settings':
+    case 'createLobby':
       return;
   }
 }

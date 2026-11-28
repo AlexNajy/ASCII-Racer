@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dailyRacing, GARAGE, loading, MENU, preRace, race, SETTINGS, type GameState } from '../app/gameState.ts';
+import { CREATE_LOBBY, dailyRacing, GARAGE, hostLobby, loading, MENU, preRace, race, SETTINGS, type GameState } from '../app/gameState.ts';
+import { defaultLobbySettings } from '../game/lobbySettings.ts';
 import type { Route } from '../game/route.ts';
 import { ambienceHeard, ambienceSound, createAmbience } from './ambience.ts';
 import { createAudio } from './audio.ts';
@@ -22,6 +23,8 @@ describe('ambienceHeard', () => {
       { kind: 'dailyResults', day: 1, ticks: 10, selected: 0 },
       { kind: 'dailyResults', day: 1, ticks: null, selected: 0 },
       loading('unlimited'),
+      CREATE_LOBBY,
+      hostLobby('ABC234', defaultLobbySettings(1)),
     ];
     for (const state of states) expect(ambienceHeard(state)).toBe(true);
   });

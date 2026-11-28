@@ -20,15 +20,15 @@ const EYE = 1.2;
 // headlights) is in the fly camera's pictures too, so every shot from before races existed has it.
 // gate: the race's next gate, so a later gate shows lit; the number of gates finishes the race at the held tick.
 // car: 'x,z,quarterTurns' puts the car there once the race has started (quarter turns left of north).
-// state: the game state the shot starts in ('menu', 'race', 'results', 'settings', 'garage', 'loading', which holds
-// the loading line, and the daily's 'daily' (pre-race), 'dailyrace', 'dailyresults'); 'race' when not given.
+// state: the game state the shot starts in ('menu', 'race', 'results', 'settings', 'garage', 'createlobby', 'lobby'
+// (its code is fixed under shot), 'loading', which holds the loading line, and the daily's 'daily' (pre-race), 'dailyrace', 'dailyresults'); 'race' when not given.
 // day: the daily's day for its states, in place of the seed (its city is the day's).
 // dnf: with 'dailyresults', the try did not finish; next: seconds to the next daily on the pinned clock;
 // giveup: with 'dailyrace', Esc has asked whether to give up.
 // board: with 'dailyresults', a made-up leaderboard of that many finished runs.
 // entry: the menu entry selected (0 is the first), with state 'results' the finish screen's option, 'dailyresults'
-// its entry (0 share, 1 menu), 'settings' and 'garage' the row.
-// edit: with state 'settings', the nickname being typed.
+// its entry (0 share, 1 menu), 'settings', 'garage' and 'createlobby' the row.
+// edit: with state 'settings', the nickname being typed; with 'createlobby', the seed's digits.
 // blocks: blocks per side of the city; viewport: [width, height] of the window instead of 1600 × 900.
 // shape, color: the car's body shape and colour instead of the default red coupe.
 // Positions are for the default seed's city (seed 1); with another seed the same spots show something else.
@@ -88,6 +88,11 @@ const SHOTS = [
   { name: 'minimap-large-city', camera: null, mode: 'glyphs', tick: 300, blocks: 10, viewport: [1280, 720], gate: 1, drive: true },
   { name: 'minimap-small-city', camera: null, mode: 'glyphs', tick: 300, blocks: 6, gate: 1, drive: true },
   { name: 'minimap-large-window', camera: null, mode: 'glyphs', tick: 300, blocks: 10, viewport: [1920, 1080], gate: 1, drive: true },
+  { name: 'create-lobby', camera: null, mode: 'glyphs', tick: 5400, state: 'createlobby', entry: 1 },
+  { name: 'create-lobby-seed', camera: null, mode: 'glyphs', tick: 5400, state: 'createlobby', edit: '48213' },
+  { name: 'create-lobby-glyph16', camera: null, mode: 'glyphs', tick: 5400, state: 'createlobby', entry: 5, cell: 16, viewport: [640, 400] },
+  { name: 'lobby-large-city', camera: null, mode: 'glyphs', tick: 300, state: 'lobby', blocks: 10, drive: true },
+  { name: 'lobby-small-city', camera: null, mode: 'glyphs', tick: 300, state: 'lobby', blocks: 6, drive: true },
   { name: 'loading', camera: null, mode: 'glyphs', tick: 300, state: 'loading' },
   // Day 329 (seed 424449): 10 gates, 1800 m. The flyover's marker runs the route in about 8 s, so 300 and 420 show
   // it in two places.

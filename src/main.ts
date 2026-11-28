@@ -58,6 +58,8 @@ import {
   FIRST_OPTION,
   GARAGE,
   giveUp,
+  hostLobby,
+  loadingLobby,
   MENU,
   menuAt,
   moveSelection,
@@ -74,6 +76,16 @@ import {
   selectEntry,
   type GameState,
 } from './app/gameState.ts';
+import {
+  createLobbyClick,
+  createLobbyKey,
+  createLobbyScreen,
+  lobbySettingsOf,
+  type CreateLobbyChange,
+  type LobbyDraft,
+} from './app/createLobbyMenu.ts';
+import { defaultLobbySettings, DEFAULT_LOBBY_CHOICES, lobbyCitySettings, LOBBY_BLOCKS, LOBBY_SIZES, type LobbySettings } from './game/lobbySettings.ts';
+import { randomLobbyCode } from './game/lobbyCode.ts';
 import { cycleChoice, GARAGE_ROWS, garageClick, type GarageChange } from './app/garageMenu.ts';
 import { pointerCell } from './app/pointer.ts';
 import { DEFAULT_PLAYER_SETTINGS, loadSettings, saveSettings, serialiseSettings, type PlayerSettings } from './app/settings.ts';
@@ -108,6 +120,7 @@ import { drawGarageScreen, garageLayout, garageRowAt } from './hud/garageScreen.
 import { drawLoadingScreen } from './hud/loadingScreen.ts';
 import { drawMenuScreen, menuEntryAt, menuLayout } from './hud/menuScreen.ts';
 import { dailyResultsLayout, drawDailyResultsScreen, drawPreRaceScreen } from './hud/dailyScreens.ts';
+import { createLobbyLayout, createLobbyRowAt, drawCreateLobbyScreen } from './hud/createLobbyScreen.ts';
 import { drawSettingsScreen, settingsLayout, settingsRowAt } from './hud/settingsScreen.ts';
 import { drawTestCard } from './hud/testCard.ts';
 import { printableRows, TextGrid } from './hud/textGrid.ts';
@@ -722,6 +735,9 @@ await new Promise<void>((resolve) =>
   }),
 );
 
+const SHOT_LOBBY_CODE = 'SHW242';
+// The last create lobby settings of this session; reopening the screen shows them.
+let lobbyDraft: LobbyDraft = createLobbyScreen().draft;
 const world = createWorld(citySettings, carSettings);
 // What the built city was made from, to tell whether the daily's city is the one loaded.
 let builtCity = JSON.stringify(citySettings);
@@ -750,6 +766,15 @@ if (urlParams.state === 'race' || urlParams.state === 'results') {
   gameState = { kind: 'settings', selected: urlParams.entry ?? 0, editing };
 } else if (urlParams.state === 'garage') {
   gameState = selectEntry(GARAGE, urlParams.entry ?? 0);
+} else if (urlParams.state === 'createLobby') {
+  const editing = urlParams.edit === null ? null : { text: urlParams.edit, invalid: false };
+  gameState = { kind: 'createLobby', ...createLobbyScreen(undefined, urlParams.entry ?? 0), editing };
+} else if (urlParams.state === 'lobby') {
+  // A shot's lobby is whatever city seed= and blocks= built, with a fixed code.
+  const size = LOBBY_SIZES.find((name) => LOBBY_BLOCKS[name] === citySettings.blocksPerSide) ?? DEFAULT_LOBBY_CHOICES.size;
+  gameState = hostLobby(urlParams.shot ? SHOT_LOBBY_CODE : randomLobbyCode(randomUnit), { ...defaultLobbySettings(Math.max(1, citySettings.seed)), size });
+  enterState(world, gameState, MENU);
+  world.carSettings = carSettingsFor(gameState, carSettings);
 } else if (urlParams.state === 'loading') {
   gameState = loading('unlimited');
 } else if (urlParams.entry !== null) {
@@ -772,7 +797,7 @@ placeUrlCar(world);
 const urlChangedRace = urlParams.gate !== null || urlParams.car ? world.race : null;
 // A held tick: the world is stepped there once and the clock never runs, so every frame is the same picture.
 const heldTick = urlParams.tick;
-const heldInput = urlParams.drive && gameState.kind === 'race' ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
+const heldInput = urlParams.drive && (gameState.kind === 'race' || gameState.kind === 'lobby') ? { ...NO_INPUT, throttle: 1 } : NO_INPUT;
 for (let i = 0; i < (heldTick ?? 0); i++) stepWorld(world, heldInput);
 if (finishAtStart && world.race) {
   world.race.nextGate = world.race.route.gates.length;
@@ -835,6 +860,11 @@ function newUnlimitedRoute(): Route | null {
   return route;
 }
 
+// App flow, not simulation: lobby codes come from the browser's random source.
+function randomUnit(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
+}
+
 function dailyCityBuilt(seed: number): boolean {
   return builtCity === JSON.stringify(dailyCitySettings(seed));
 }
@@ -849,6 +879,10 @@ function finishLoading() {
     if (gameState.mode === 'daily') {
       loadCity(dailyCitySettings(gameState.route.seed));
       setGameState(loaded(gameState, gameState.route));
+    } else if (gameState.mode === 'lobby') {
+      const settings: LobbySettings = lobbySettingsOf(gameState.draft, gameState.draft.seed ?? randomCitySeed());
+      loadCity(lobbyCitySettings(settings));
+      setGameState(hostLobby(randomLobbyCode(randomUnit), settings));
     } else {
       setGameState(loaded(gameState, newUnlimitedRoute()));
     }
@@ -961,11 +995,11 @@ function setGameState(entered: GameState) {
 // The menu, the finish screen, the garage and the settings are lists chosen from with the keys and the mouse, which
 // is never captured there.
 function hasList(state: GameState): boolean {
-  return state.kind === 'menu' || state.kind === 'results' || state.kind === 'settings' || state.kind === 'garage' || state.kind === 'dailyResults';
+  return state.kind === 'menu' || state.kind === 'createLobby' || state.kind === 'results' || state.kind === 'settings' || state.kind === 'garage' || state.kind === 'dailyResults';
 }
 // The menu's flight, behind the menu, the settings and the daily results when no race is left to watch.
 function menuFlight(): boolean {
-  return gameState.kind === 'menu' || gameState.kind === 'settings' || (gameState.kind === 'dailyResults' && !world.race);
+  return gameState.kind === 'menu' || gameState.kind === 'settings' || gameState.kind === 'createLobby' || (gameState.kind === 'dailyResults' && !world.race);
 }
 // Only on screen in the car movement; the fly camera hides the text layer.
 function listShown(): boolean {
@@ -973,6 +1007,7 @@ function listShown(): boolean {
 }
 function changeState(next: GameState) {
   if (next === gameState) return;
+  if (next.kind === 'createLobby') lobbyDraft = next.draft;
   // A new selection only redraws the two entry rows; the daily's give-up question only its line.
   if (next.kind === gameState.kind && (hasList(next) || next.kind === 'race')) gameState = next;
   else setGameState(next);
@@ -989,7 +1024,10 @@ function enter(state: GameState): GameState {
     latestDaily();
     return startDaily(state, dailyRecord, today, dailyCityBuilt);
   }
-  if (!opensDaily(state, today)) return pressEnter(state, giveUpOnScreen);
+  if (!opensDaily(state, today)) {
+    const next = pressEnter(state, giveUpOnScreen);
+    return next.kind === 'createLobby' && state.kind === 'menu' ? { ...next, draft: { ...lobbyDraft } } : next;
+  }
   latestDaily();
   return dailyEntry(today, dailyRecord, dailyCityBuilt);
 }
@@ -1046,6 +1084,11 @@ function settingUnder(event: MouseEvent) {
   const cell = cellUnder(event);
   return layout && cell ? settingsRowAt(layout, cell.column, cell.row) : null;
 }
+function lobbyRowUnder(event: MouseEvent) {
+  const layout = createLobbyLayout(hud.columns, hud.rows);
+  const cell = cellUnder(event);
+  return layout && cell ? createLobbyRowAt(layout, cell.column, cell.row) : null;
+}
 function garageRowUnder(event: MouseEvent) {
   const layout = garageLayout(hud.columns, hud.rows);
   const cell = cellUnder(event);
@@ -1058,7 +1101,9 @@ canvas.addEventListener('mousemove', (event) => {
       ? (settingUnder(event)?.index ?? null)
       : gameState.kind === 'garage'
         ? (garageRowUnder(event)?.index ?? null)
-        : menuEntryUnder(event);
+        : gameState.kind === 'createLobby'
+          ? (lobbyRowUnder(event)?.index ?? null)
+          : menuEntryUnder(event);
   if (entry !== null) changeState(selectEntry(gameState, entry));
 });
 // The one click path: in the menu, the finish screen and the settings a click picks an entry and never captures the
@@ -1068,6 +1113,11 @@ trackMouse(canvas, (event) => {
   if (gameState.kind === 'settings') {
     const setting = settingUnder(event);
     if (setting) applySettingsChange(settingsClick(gameState, shownPlayerSettings(), setting.index, setting.offset));
+    return false;
+  }
+  if (gameState.kind === 'createLobby') {
+    const row = lobbyRowUnder(event);
+    if (row) applyCreateLobbyChange(createLobbyClick(gameState, row.index, row.offset));
     return false;
   }
   if (gameState.kind === 'garage') {
@@ -1140,12 +1190,19 @@ function applySettingsChange({ screen, settings: next, toggleFullscreen: fullscr
   if (shouldBlip(previous, next, audioTuning)) audio.blip();
   changeState(leave ? pressEscape(gameState) : { ...gameState, ...screen });
 }
-// Ahead of every other key handler: on the settings screen its keys act only here, and while the nickname is typed
-// no other key does anything (Cmd and Ctrl combinations still reach the browser).
+function applyCreateLobbyChange({ screen, leave, create }: CreateLobbyChange) {
+  if (gameState.kind !== 'createLobby') return;
+  if (leave) return changeState(pressEscape(gameState));
+  const next = { ...gameState, ...screen };
+  if (create) return changeState(loadingLobby(next.draft));
+  changeState(next);
+}
+// Ahead of every other key handler: on the settings and create lobby screens their keys act only here, and while
+// the nickname or seed is typed no other key does anything (Cmd and Ctrl combinations still reach the browser).
 window.addEventListener(
   'keydown',
   (event) => {
-    if (gameState.kind !== 'settings' || !listShown() || devMenu.isOpen()) return;
+    if ((gameState.kind !== 'settings' && gameState.kind !== 'createLobby') || !listShown() || devMenu.isOpen()) return;
     const editing = gameState.editing !== null;
     const outcome = modifiedKeyOutcome(editing, event);
     if (outcome === 'browser') return;
@@ -1154,7 +1211,8 @@ window.addEventListener(
     event.preventDefault();
     event.stopImmediatePropagation();
     if (!key || (event.repeat && (key === 'enter' || key === 'escape'))) return;
-    applySettingsChange(settingsKey(gameState, shownPlayerSettings(), key));
+    if (gameState.kind === 'createLobby') applyCreateLobbyChange(createLobbyKey(gameState, key));
+    else applySettingsChange(settingsKey(gameState, shownPlayerSettings(), key));
   },
   { capture: true },
 );
@@ -1200,7 +1258,7 @@ function frame(timeMs: number) {
   previousTimeMs = Math.max(previousTimeMs, timeMs);
   const frameImpact: { hardest: Impact | null } = { hardest: null };
   if (heldTick === null) advanceClock(clock, dt, () => {
-    carInput = settings.movement === Movement.Car && gameState.kind === 'race' ? readCarInput() : NO_INPUT;
+    carInput = settings.movement === Movement.Car && (gameState.kind === 'race' || gameState.kind === 'lobby') ? readCarInput() : NO_INPUT;
     const reading = world.race?.phase === 'running' ? world.race : null;
     const { impact, race: raceEvent } = stepWorld(world, carInput);
     observeRace(raceCues, world.race, world.tick, raceEvent);
@@ -1264,7 +1322,7 @@ function frame(timeMs: number) {
     fovBoost = updateChaseCamera(camera, chase, drawnCar, world.carSettings, chaseSettings, world.colliders, dt);
   }
   // The countdown holds the car and reads no input, so the engine idles through it.
-  const pedalsRead = gameState.kind === 'race' && world.race?.phase !== 'countdown';
+  const pedalsRead = (gameState.kind === 'race' || gameState.kind === 'lobby') && world.race?.phase !== 'countdown';
   engineInput.speed = engineSpeed(drawnCar);
   engineInput.topSpeed = world.carSettings.topSpeed;
   engineInput.throttle = pedalsRead ? carInput.throttle : 0;
@@ -1297,6 +1355,8 @@ function frame(timeMs: number) {
       drawDailyResultsScreen(hud, dailyResultsShown(gameState), gameState.selected);
     } else if (gameState.kind === 'garage') {
       drawGarageScreen(hud, { selected: gameState.selected, settings: playerSettings });
+    } else if (gameState.kind === 'createLobby') {
+      drawCreateLobbyScreen(hud, gameState);
     } else if (gameState.kind === 'settings') {
       drawSettingsScreen(hud, { screen: gameState, settings: shownPlayerSettings(), fullscreen: isFullscreen() });
     } else {
@@ -1304,6 +1364,7 @@ function frame(timeMs: number) {
         speed: Math.hypot(drawnCar.velocityX, drawnCar.velocityZ),
         topSpeed: world.carSettings.topSpeed,
         minimap: { minimap, car: drawnCar },
+        lobby: gameState.kind === 'lobby' ? { code: gameState.code, players: 1 } : undefined,
         race: world.race
           ? {
               race: world.race,

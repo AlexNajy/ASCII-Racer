@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CAR_SETTINGS } from '../game/car.ts';
 import { NO_INPUT } from '../game/carInput.ts';
 import { DEFAULT_CITY_SETTINGS } from '../game/city.ts';
+import { createLobbyScreen } from './createLobbyMenu.ts';
+import { defaultLobbySettings } from '../game/lobbySettings.ts';
 import { goTick } from '../game/race.ts';
 import { RouteError } from '../game/route.ts';
 import { createWorld, START_HEADING, startJunction, stepWorld } from '../game/world.ts';
@@ -19,9 +21,12 @@ import {
 import {
   dailyRacing,
   dailyResults,
+  CREATE_LOBBY,
   FIRST_OPTION,
   GARAGE,
+  hostLobby,
   loaded,
+  loadingLobby,
   loading,
   loadingDaily,
   MENU,
@@ -134,8 +139,39 @@ describe('daily car settings', () => {
     const route = cityRoute(world)!;
     const daily: GameState[] = [preRace(DAY, route), dailyRacing(DAY, route), dailyResults(DAY, null), loadingDaily(DAY, route)];
     for (const state of daily) expect(carSettingsFor(state, edited)).toBe(DAILY_CAR_SETTINGS);
-    const others: GameState[] = [MENU, race('unlimited', route), loading('unlimited'), SETTINGS, GARAGE];
+    const others: GameState[] = [MENU, race('unlimited', route), loading('unlimited'), SETTINGS, GARAGE, CREATE_LOBBY];
     for (const state of others) expect(carSettingsFor(state, edited)).toBe(edited);
+  });
+
+  it('drive the lobby and its loading the same way', () => {
+    const edited = { ...DEFAULT_CAR_SETTINGS, topSpeed: DEFAULT_CAR_SETTINGS.topSpeed * 3 };
+    for (const state of [hostLobby('ABC234', defaultLobbySettings(5)), loadingLobby(createLobbyScreen().draft)]) {
+      expect(carSettingsFor(state, edited)).toBe(DAILY_CAR_SETTINGS);
+    }
+  });
+});
+
+describe('lobby state flow', () => {
+  it('stands the car on the middle junction with no race, free to drive, when the lobby opens', () => {
+    const world = createWorld({ ...DEFAULT_CITY_SETTINGS }, { ...DEFAULT_CAR_SETTINGS }, false);
+    const route = cityRoute(world)!;
+    enterState(world, race('unlimited', route), MENU);
+    for (let i = 0; i < 400; i++) stepWorld(world, NO_INPUT);
+    enterState(world, hostLobby('ABC234', defaultLobbySettings(1)), loadingLobby(createLobbyScreen().draft));
+    const { x, z } = startJunction(world.city);
+    expect(world.race).toBeNull();
+    expect(world.car).toMatchObject({ x, z, heading: START_HEADING });
+    expect(world.previousCar).toEqual(world.car);
+    for (let i = 0; i < 60; i++) stepWorld(world, { throttle: 1, brake: 0, steer: 0, drift: 0 });
+    expect(world.car.velocityX ** 2 + world.car.velocityZ ** 2).toBeGreaterThan(1);
+  });
+
+  it('leaves the world alone on the create lobby screen', () => {
+    const world = createWorld({ ...DEFAULT_CITY_SETTINGS }, { ...DEFAULT_CAR_SETTINGS }, false);
+    for (let i = 0; i < 50; i++) stepWorld(world, { throttle: 1, brake: 0, steer: 0, drift: 0 });
+    const car = { ...world.car };
+    enterState(world, CREATE_LOBBY, MENU);
+    expect(world.car).toEqual(car);
   });
 });
 

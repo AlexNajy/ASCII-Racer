@@ -174,6 +174,17 @@ describe('parseUrlParams', () => {
     }
   });
 
+  it('starts on the create lobby screen with a row selected and a seed being typed, or in a lobby', () => {
+    expect(parseUrlParams('?state=createlobby').state).toBe('createLobby');
+    expect(parseUrlParams('?state=createlobby&entry=5').entry).toBe(5);
+    expect(() => parseUrlParams('?state=createlobby&entry=6')).toThrow();
+    expect(parseUrlParams('?state=createlobby&edit=48213').edit).toBe('48213');
+    for (const bad of ['?state=createlobby&edit=abc', '?state=createlobby&edit=12345678', '?state=createlobby&edit=-4']) {
+      expect(() => parseUrlParams(bad)).toThrow();
+    }
+    expect(parseUrlParams('?state=lobby&seed=3&blocks=10')).toMatchObject({ state: 'lobby', seed: 3, blocks: 10 });
+  });
+
   it('starts in the garage with a row selected, and picks the car', () => {
     expect(parseUrlParams('?state=garage').state).toBe('garage');
     expect(parseUrlParams('?state=garage&entry=1').entry).toBe(1);
