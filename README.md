@@ -173,7 +173,7 @@ npm run db:stop   # stop it
   - [x] Name: the game is called driftle wherever a player sees it (menu title, page title, README heading; one constant for the share text and the release step to use)
   - [x] Simulation version constant, bumped by any change to simulation or generation (a test fails when the reference run changes without it)
   - [x] Daily flow without a backend: pre-race screen, one try kept in the browser, results with time, countdown to the next day
-  - [ ] Supabase project files: migrations for attempts and runs with row level security, anonymous sign-ins, local config
+  - [x] Supabase project files: migrations for attempts and runs with row level security, anonymous sign-ins, local config
   - [ ] Edge Functions: start an attempt, check a run by replaying its inputs with the game's own simulation, tested with Deno
   - [ ] Deploy action for migrations and functions, skipped when the secrets are missing
   - [ ] Client: sign in, start attempt, send run, handle offline and errors

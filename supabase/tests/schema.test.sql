@@ -1,7 +1,7 @@
 -- Keys, constraints and cascades, written as the service role like the Edge Functions will.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(41);
 
 insert into auth.users (id, is_anonymous) values
   ('00000000-0000-0000-0000-00000000000a', true),
@@ -61,6 +61,12 @@ insert into run_cases values
   (100, 'a  b', 1, false, 'nickname with a double space'),
   (100, 'a_b', 1, false, 'nickname with an underscore'),
   (100, 'zoë', 1, false, 'nickname with a non-ASCII letter'),
+  (100, E'abc\n', 1, false, 'nickname with a trailing newline'),
+  (100, E'ab\nc', 1, false, 'nickname with an embedded newline'),
+  (100, E'ab\tc', 1, false, 'nickname with a tab'),
+  (100, 'abc٣', 1, false, 'nickname with a non-ASCII digit'),
+  (100, 'ａbc', 1, false, 'nickname with a full-width letter'),
+  (100, 'abcß', 1, false, 'nickname with sharp s'),
   (100, 'A b 1', 1, true, 'nickname A b 1'),
   (100, 'anon', 0, false, 'simulation version 0'),
   (100, 'anon', -1, false, 'simulation version -1');
@@ -93,6 +99,7 @@ select is(pg_temp.try_log(repeat('A', 48004)), true, 'a log of MAX_LOG_TEXT char
 select is(pg_temp.try_log(repeat('A', 48005)), false, 'a log of MAX_LOG_TEXT + 1 characters');
 select is(pg_temp.try_log('AQ-_'), true, 'a log in the base64url alphabet');
 select is(pg_temp.try_log('AQ=='), false, 'a log with padding');
+select is(pg_temp.try_log(E'AQ\n'), false, 'a log with a trailing newline');
 select throws_ok(
   $$insert into public.run_logs (user_id, day, log) values ('00000000-0000-0000-0000-00000000000b', 10, 'AQ')$$,
   '23503', null, 'a log without its run'

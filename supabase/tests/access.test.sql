@@ -2,7 +2,7 @@
 -- anonymous sign-in), switched with the JWT claims PostgREST sets.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(45);
+select plan(58);
 
 -- a: the player under test, b and c: other players
 insert into auth.users (id, is_anonymous) values
@@ -34,6 +34,32 @@ select is(
 select is(
   (select count(*) from pg_policies where schemaname = 'public' and tablename = 'run_logs'),
   0::bigint, 'no policy on run_logs'
+);
+
+-- Exact table privileges (owner aside): TRUNCATE is the one write row level security does not stop.
+create function pg_temp.privs(tbl text, grantee_name text) returns text language sql as $$
+  select coalesce(string_agg(a.privilege_type, ',' order by a.privilege_type), '')
+  from pg_class c
+  cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+  where c.oid = ('public.' || tbl)::regclass
+    and a.grantee = case when grantee_name = 'public' then 0 else (select oid from pg_roles where rolname = grantee_name) end
+$$;
+
+select is(pg_temp.privs(t, 'anon'), '', 'anon has no privilege on ' || t) from unnest(array['attempts', 'runs', 'run_logs']) t;
+select is(pg_temp.privs(t, 'public'), '', 'public has no privilege on ' || t) from unnest(array['attempts', 'runs', 'run_logs']) t;
+select is(pg_temp.privs('attempts', 'authenticated'), 'SELECT', 'authenticated: exactly SELECT on attempts');
+select is(pg_temp.privs('runs', 'authenticated'), 'SELECT', 'authenticated: exactly SELECT on runs');
+select is(pg_temp.privs('run_logs', 'authenticated'), '', 'authenticated: nothing on run_logs');
+-- The migration grants these four; the local default privileges give service_role more, which is fine.
+select ok(
+  string_to_array(pg_temp.privs(t, 'service_role'), ',') @> array['DELETE', 'INSERT', 'SELECT', 'UPDATE'],
+  'service_role: select, insert, update, delete on ' || t
+) from unnest(array['attempts', 'runs', 'run_logs']) t;
+select is(
+  (select count(*) from pg_attribute
+   where attrelid in ('public.attempts'::regclass, 'public.runs'::regclass, 'public.run_logs'::regclass)
+     and attacl is not null),
+  0::bigint, 'no column level privileges'
 );
 
 -- anon
