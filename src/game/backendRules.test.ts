@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CAP_PERCENTILE, RESULT_BUCKETS, TOP_ROWS } from '../app/dailyResults';
 import { NICKNAME_MAX, NICKNAME_MIN, validNickname } from '../app/settings';
 import { MAX_LOG_TEXT, MAX_RUN_TICKS } from './inputLog';
 
@@ -43,5 +44,16 @@ describe('database rules copied from the game', () => {
       const inDatabase = text.length >= NICKNAME_MIN && text.length <= NICKNAME_MAX && pattern.test(text);
       expect(inDatabase, JSON.stringify(text)).toBe(validNickname(text));
     }
+  });
+
+  it('daily_results constants match dailyResults.ts', () => {
+    const constant = (name: string) => {
+      const match = new RegExp(`${name} constant integer := (\\d+);`).exec(sql);
+      if (!match) throw new Error(`migration has no constant ${name}`);
+      return Number(match[1]);
+    };
+    expect(constant('top_rows')).toBe(TOP_ROWS);
+    expect(constant('buckets')).toBe(RESULT_BUCKETS);
+    expect(constant('cap_percentile')).toBe(CAP_PERCENTILE);
   });
 });

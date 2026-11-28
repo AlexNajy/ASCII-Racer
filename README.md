@@ -177,7 +177,7 @@ npm run backend:stop   # stop it
   - [x] Edge Functions: start an attempt, check a run by replaying its inputs with the game's own simulation, tested with Deno
   - [x] Deploy action for migrations and functions, skipped when the secrets are missing
   - [x] Client: sign in, start attempt, send run, handle offline and errors
-  - [ ] Results data: one database function giving a day's count, the player's rank, the top times and the histogram, only to a player whose try is used
+  - [x] Results data: one database function giving a day's count, the player's rank, the top times and the histogram, only to a player whose try is used
   - [ ] Results screen: rank, percentile, top times, bell curve histogram in glyphs with the player marked
   - [ ] Share text copied to the clipboard
 - [ ] **18. Sound**: Web Audio API, no libraries, no sound files; reads the simulation state, never feeds back into it

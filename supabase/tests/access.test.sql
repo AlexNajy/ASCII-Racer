@@ -2,7 +2,7 @@
 -- anonymous sign-in), switched with the JWT claims PostgREST sets.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(63);
+select plan(68);
 
 -- a: the player under test, b and c: other players
 insert into auth.users (id, is_anonymous) values
@@ -80,10 +80,22 @@ select is(
   'service_role: exactly EXECUTE on store_run'
 );
 select is(
+  pg_temp.fprivs('public.daily_results(integer)', r), '',
+  r || ' has no privilege on daily_results'
+) from unnest(array['public', 'anon', 'service_role']) r;
+select is(
+  pg_temp.fprivs('public.daily_results(integer)', 'authenticated'), 'EXECUTE',
+  'authenticated: exactly EXECUTE on daily_results'
+);
+select is(
   (select count(*) from pg_proc
-   where pronamespace = 'public'::regnamespace
-     and (has_function_privilege('anon', oid, 'execute') or has_function_privilege('authenticated', oid, 'execute'))),
-  0::bigint, 'no function in public is executable by anon or authenticated'
+   where pronamespace = 'public'::regnamespace and has_function_privilege('anon', oid, 'execute')),
+  0::bigint, 'no function in public is executable by anon'
+);
+select is(
+  (select array_agg(oid::regprocedure::text) from pg_proc
+   where pronamespace = 'public'::regnamespace and has_function_privilege('authenticated', oid, 'execute')),
+  array['daily_results(integer)'], 'daily_results is the only function in public authenticated can execute'
 );
 
 -- anon
