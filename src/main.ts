@@ -2,6 +2,8 @@ import './style.css';
 import { parseUrlParams } from './dev/urlParams.ts';
 import { browserContextFactory, createAudio, installGestureStart, installVisibility, shouldBlip } from './audio/audio.ts';
 import { createEngine, engineHeard, engineSpeed } from './audio/engine.ts';
+import { createThuds } from './audio/impacts.ts';
+import { createScreech } from './audio/tyres.ts';
 import { createAudioTuning } from './audio/tuning.ts';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, capFrameSeconds, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
@@ -486,13 +488,19 @@ audio.setLevels(playerSettings.volume, playerSettings.muted);
 if (!urlParams.shot) installGestureStart(window, audio);
 installVisibility(document, audio);
 const engine = createEngine(audio, audioTuning);
-// Filled in place every frame, so driving the engine allocates nothing.
+const screech = createScreech(audio, audioTuning);
+const thuds = createThuds(audio, audioTuning);
+// Filled in place every frame, so driving the sounds allocates nothing.
 const engineInput = { speed: 0, topSpeed: 0, throttle: 0, brake: 0 };
+const screechInput = { slide: 0, speed: 0 };
+const impactLog: number[] = []; // audio=debug only: every tick's impact speed
 if (urlParams.audioDebug) {
   (window as unknown as { audioDebug: object }).audioDebug = {
     stats: audio.stats,
     waveform: audio.waveform,
     engine: () => ({ ...engine.targets(), ...engineInput }),
+    screech: () => ({ ...screech.targets(), ...screechInput }),
+    thuds: () => ({ playing: thuds.playing(), played: thuds.played(), impacts: impactLog.splice(0) }),
     tuning: audioTuning,
   };
 }
@@ -871,6 +879,8 @@ const devMenu = createDevMenu(
     onChange: () => {
       audio.retune();
       engine.retune();
+      screech.retune();
+      thuds.retune();
     },
     stats: audio.stats,
   },
@@ -1176,6 +1186,7 @@ function frame(timeMs: number) {
   framesDrawn++;
   const dt = heldTick === null ? capFrameSeconds(Math.max(0, timeMs - previousTimeMs) / 1000) : 0;
   previousTimeMs = Math.max(previousTimeMs, timeMs);
+  const frameImpact: { hardest: Impact | null } = { hardest: null };
   if (heldTick === null) advanceClock(clock, dt, () => {
     carInput = settings.movement === Movement.Car && gameState.kind === 'race' ? readCarInput() : NO_INPUT;
     const reading = world.race?.phase === 'running' ? world.race : null;
@@ -1199,11 +1210,17 @@ function frame(timeMs: number) {
       const car = { ...world.car };
       setTimeout(() => checkReplay(finished, car));
     }
-    if (impact) crashDebris(impact);
+    if (impact) {
+      crashDebris(impact);
+      if (!frameImpact.hardest || impact.speed > frameImpact.hardest.speed) frameImpact.hardest = impact;
+      if (urlParams.audioDebug && impactLog.length < 1000) impactLog.push(impact.speed);
+    }
     driftParticles();
     const next = afterTick(gameState, world.race, world.tick);
     if (next !== gameState) setGameState(next);
   });
+  const { hardest } = frameImpact;
+  if (hardest) thuds.hit(hardest.speed, hardest.normalX, hardest.normalZ, engineHeard(gameState, world.race !== null));
   updateParticles(particles, dt);
   // Drawn between the last two ticks by the time left over, so motion is smooth on any refresh rate.
   const { car } = world;
@@ -1232,7 +1249,11 @@ function frame(timeMs: number) {
   engineInput.topSpeed = world.carSettings.topSpeed;
   engineInput.throttle = pedalsRead ? carInput.throttle : 0;
   engineInput.brake = pedalsRead ? carInput.brake : 0;
-  engine.update(engineInput, engineHeard(gameState, world.race !== null));
+  const carHeard = engineHeard(gameState, world.race !== null);
+  engine.update(engineInput, carHeard);
+  screechInput.slide = slideSpeed(drawnCar);
+  screechInput.speed = Math.abs(engineInput.speed);
+  screech.update(screechInput, carHeard);
 
   giveUpOnScreen = false;
   if (gameState.kind === 'dailyResults') resultsBoard?.show(gameState.day);

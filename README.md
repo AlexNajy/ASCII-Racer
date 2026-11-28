@@ -183,7 +183,7 @@ npm run backend:stop   # stop it
 - [ ] **18. Sound**: Web Audio API, no libraries, no sound files; reads the simulation state, never feeds back into it
   - [x] Audio setup: audio context started on the first click or keypress, master volume and mute
   - [x] Engine: a looped sound with pitch and volume from speed and throttle
-  - [ ] Tires and impacts: a screech that fades in with drift, thuds by collision speed
+  - [x] Tires and impacts: a screech that fades in with drift, thuds by collision speed
   - [ ] Ambience: a low city hum
   - [ ] Race sounds: countdown, checkpoint, finish
 - [ ] **19. Lobbies**

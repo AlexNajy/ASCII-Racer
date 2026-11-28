@@ -1,3 +1,5 @@
+import { DRIFT_SLIDE_SPEED } from '../render/drift.ts';
+
 // The engine's numbers (audio/engine.ts). Hertz are the engine's firing frequency, the note heard.
 export interface EngineTuning {
   idleHertz: number; // standing, no throttle
@@ -31,6 +33,51 @@ export interface EngineTuning {
   gain: number; // the whole engine's output gain
 }
 
+// The tyre screech's numbers (audio/tyres.ts). Slide is the car's sideways speed, m/s.
+export interface TyreTuning {
+  slideStart: number; // silent at or below this slide, where the drift sparks start
+  slideFull: number; // full level from this slide on
+  fadeCurve: number; // level = share of the range ^ this, so it creeps in
+  hertz: number; // the main peak at slideStart
+  pitchRise: number; // added to every peak at slideFull, as a share of the note
+  spread: number; // the second peak at this multiple of the main one, slightly off so the two beat
+  spreadMix: number; // its gain against the main peak's 1
+  harmonicMix: number; // gain of a peak an octave above the main one
+  q: number; // the peaks' Q: high is a whistle, low is hiss
+  wobbleCents: number; // depth of the pitch wobble
+  wobbleHertz: number;
+  attackSeconds: number; // time constant of the level rising
+  releaseSeconds: number; // and falling
+  highpassHertz: number; // nothing below this reaches the bus
+  gain: number; // the whole screech's output gain at full level (narrow band noise is quiet)
+}
+
+// The impact thud's numbers (audio/impacts.ts). Speed is the impact's speed into the wall, m/s.
+export interface ImpactTuning {
+  minSpeed: number; // no thud below this
+  fullSpeed: number; // full level and brightness from this on
+  minLevel: number; // level at minSpeed, rising to 1 at fullSpeed
+  levelCurve: number; // level rises with share of the range ^ this
+  bodyStartHertz: number; // the body's pitch at the hit, at fullSpeed (minSpeed starts bodyStartSoft lower)
+  bodyStartSoft: number; // share of the start pitch lost on the softest hit
+  bodyEndHertz: number; // where the body's pitch drops to
+  pitchSeconds: number; // how long the drop takes
+  bodySeconds: number; // the body's length to -60 dB
+  crunchMix: number; // the crunch's gain against the body's 1, at fullSpeed
+  crunchSoftMix: number; // its share at minSpeed
+  crunchLowHertz: number; // the crunch's band-pass centre at minSpeed
+  crunchHighHertz: number; // at fullSpeed
+  crunchSeconds: number; // the crunch's length to -60 dB
+  minGapSeconds: number; // no thud this soon after the last
+  maxPlaying: number; // thuds sounding at once
+  maskSeconds: number; // a thud masks softer hits after it, fading with this time constant (0: no masking)
+  maskRatio: number; // a hit on the same wall must beat the last thud's speed times this, faded
+  sameWallDot: number; // two normals with a dot product above this are the same wall
+  harderRatio: number; // a hit this many times the last thud's speed always plays, past the gap, cap and mask
+  highpassHertz: number;
+  gain: number; // the thud's output gain at full level
+}
+
 // Numbers to tune by ear; the dev menu's Sound page edits this object and the audio module reads it on `retune`.
 export interface AudioTuning {
   volumeCurve: number; // master gain = (volume / steps) ^ this, so each step sounds like the one before
@@ -39,6 +86,8 @@ export interface AudioTuning {
   blipGain: number; // peak gain of the settings screen's blip
   blipHertz: number;
   engine: EngineTuning;
+  tyres: TyreTuning;
+  impacts: ImpactTuning;
 }
 
 export const DEFAULT_ENGINE_TUNING: Readonly<EngineTuning> = {
@@ -73,6 +122,49 @@ export const DEFAULT_ENGINE_TUNING: Readonly<EngineTuning> = {
   gain: 0.3,
 };
 
+export const DEFAULT_TYRE_TUNING: Readonly<TyreTuning> = {
+  slideStart: DRIFT_SLIDE_SPEED,
+  slideFull: 9,
+  fadeCurve: 1.5,
+  hertz: 1300,
+  pitchRise: 0.25,
+  spread: 1.045,
+  spreadMix: 0.7,
+  harmonicMix: 0.35,
+  q: 19,
+  wobbleCents: 35,
+  wobbleHertz: 6.5,
+  attackSeconds: 0.05,
+  releaseSeconds: 0.1,
+  highpassHertz: 200,
+  gain: 0.9,
+};
+
+export const DEFAULT_IMPACT_TUNING: Readonly<ImpactTuning> = {
+  minSpeed: 2, // under the debris threshold (3 m/s), so every hit that throws debris thuds
+  fullSpeed: 16,
+  minLevel: 0.25,
+  levelCurve: 1,
+  bodyStartHertz: 320,
+  bodyStartSoft: 0.25,
+  bodyEndHertz: 60,
+  pitchSeconds: 0.12,
+  bodySeconds: 0.32,
+  crunchMix: 1,
+  crunchSoftMix: 0.5,
+  crunchLowHertz: 700,
+  crunchHighHertz: 2800,
+  crunchSeconds: 0.12,
+  minGapSeconds: 0.08,
+  maxPlaying: 3,
+  maskSeconds: 0.5,
+  maskRatio: 1.15,
+  sameWallDot: 0.7,
+  harderRatio: 1.5,
+  highpassHertz: 40,
+  gain: 0.3,
+};
+
 export const DEFAULT_AUDIO_TUNING: Readonly<AudioTuning> = {
   volumeCurve: 1.5,
   topGain: 1,
@@ -80,13 +172,17 @@ export const DEFAULT_AUDIO_TUNING: Readonly<AudioTuning> = {
   blipGain: 0.12,
   blipHertz: 880,
   engine: DEFAULT_ENGINE_TUNING,
+  tyres: DEFAULT_TYRE_TUNING,
+  impacts: DEFAULT_IMPACT_TUNING,
 };
 
 export function createAudioTuning(): AudioTuning {
-  const { engine } = DEFAULT_AUDIO_TUNING;
+  const { engine, tyres, impacts } = DEFAULT_AUDIO_TUNING;
   return {
     ...DEFAULT_AUDIO_TUNING,
     busGains: { ...DEFAULT_AUDIO_TUNING.busGains },
     engine: { ...engine, gearTops: [...engine.gearTops] },
+    tyres: { ...tyres },
+    impacts: { ...impacts },
   };
 }

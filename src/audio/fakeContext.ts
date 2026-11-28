@@ -25,6 +25,9 @@ export function param(): ParamLike {
     linearRampToValueAtTime(value) {
       self.value = value;
     },
+    exponentialRampToValueAtTime(value) {
+      self.value = value;
+    },
   };
   return self;
 }
@@ -49,7 +52,7 @@ export class FakeContext implements ContextLike {
   oscillators: (FakeNode & OscillatorLike)[] = [];
   gains: (FakeNode & GainLike)[] = [];
   filters: (FakeNode & FilterLike)[] = [];
-  sources: (FakeNode & BufferSourceLike & { started: boolean })[] = [];
+  sources: (FakeNode & BufferSourceLike & { started: boolean; stopped: boolean; offset: number })[] = [];
   resume() {
     this.resumes++;
     this.state = 'running';
@@ -82,7 +85,7 @@ export class FakeContext implements ContextLike {
     return node;
   }
   createBiquadFilter() {
-    const node = Object.assign(new FakeNode(), { type: '', frequency: param(), Q: param() });
+    const node = Object.assign(new FakeNode(), { type: '', frequency: param(), detune: param(), Q: param() });
     this.filters.push(node);
     return node;
   }
@@ -95,8 +98,14 @@ export class FakeContext implements ContextLike {
       buffer: null as BufferLike | null,
       loop: false,
       started: false,
-      start: () => {
+      stopped: false,
+      offset: 0,
+      start: (_when: number, offset = 0) => {
         node.started = true;
+        node.offset = offset;
+      },
+      stop: () => {
+        node.stopped = true;
       },
     });
     this.sources.push(node);

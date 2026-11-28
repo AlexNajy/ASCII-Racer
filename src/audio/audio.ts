@@ -1,4 +1,5 @@
 import type { PlayerSettings } from '../app/settings.ts';
+import { createRandom } from '../math/random.ts';
 import { masterGain } from './gain.ts';
 import type { AudioTuning } from './tuning.ts';
 
@@ -12,6 +13,7 @@ export interface ParamLike {
   setTargetAtTime(target: number, startTime: number, timeConstant: number): unknown;
   setValueAtTime(value: number, startTime: number): unknown;
   linearRampToValueAtTime(value: number, endTime: number): unknown;
+  exponentialRampToValueAtTime(value: number, endTime: number): unknown;
 }
 export interface NodeLike {
   connect(destination: NodeLike | ParamLike): unknown;
@@ -42,6 +44,7 @@ export interface OscillatorLike extends NodeLike {
 export interface FilterLike extends NodeLike {
   type: string;
   frequency: ParamLike;
+  detune: ParamLike;
   Q: ParamLike;
 }
 export interface BufferLike {
@@ -50,7 +53,8 @@ export interface BufferLike {
 export interface BufferSourceLike extends NodeLike {
   buffer: BufferLike | null;
   loop: boolean;
-  start(when: number): void;
+  start(when: number, offset?: number): void;
+  stop(when: number): void;
 }
 export interface ContextLike {
   readonly state: string;
@@ -90,6 +94,16 @@ export function browserContextFactory(): (() => ContextLike) | null {
   if (typeof AudioContext === 'undefined') return null;
   // The DOM types and ContextLike differ only in how loosely they type connect and onended.
   return () => new AudioContext() as unknown as ContextLike;
+}
+
+// Seeded white noise, the same every run, for sounds to play or loop.
+export function noiseBuffer(context: ContextLike, seconds: number, seed: number): BufferLike {
+  const length = Math.max(1, Math.round(context.sampleRate * seconds));
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  const random = createRandom(seed);
+  for (let i = 0; i < length; i++) data[i] = random() * 2 - 1;
+  return buffer;
 }
 
 function decibels(amplitude: number): number {

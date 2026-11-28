@@ -355,6 +355,49 @@ export function createDevMenu(
   engineSlider('idle wobble (cents)', 'wobbleCents', 0, 100, 1);
   engineSlider('wobble fade (share of revs)', 'wobbleFade', 0.01, 1, 0.01);
   engineSlider('wobble rate (Hz)', 'wobbleHertz', 0.5, 20, 0.5);
+  const tyres = soundTuning.tyres;
+  const tyreSlider = (label: string, key: keyof typeof tyres, min: number, max: number, step: number) =>
+    slider(soundPage, `Screech ${label}`, tyres[key], min, max, step, (value) => ((tyres[key] = value), retune()));
+  tyreSlider('gain', 'gain', 0, 30, 0.1);
+  tyreSlider('starts at slide (m/s)', 'slideStart', 0, 10, 0.1);
+  tyreSlider('full at slide (m/s)', 'slideFull', 0.5, 25, 0.1);
+  tyreSlider('fade-in curve (power)', 'fadeCurve', 0.25, 4, 0.05);
+  tyreSlider('pitch (Hz)', 'hertz', 300, 5000, 10);
+  tyreSlider('pitch rise (share)', 'pitchRise', 0, 1, 0.01);
+  tyreSlider('second peak (× pitch)', 'spread', 1, 1.5, 0.005);
+  tyreSlider('second peak mix', 'spreadMix', 0, 2, 0.01);
+  tyreSlider('octave peak mix', 'harmonicMix', 0, 2, 0.01);
+  tyreSlider('peak Q', 'q', 1, 100, 0.5);
+  tyreSlider('wobble (cents)', 'wobbleCents', 0, 200, 1);
+  tyreSlider('wobble rate (Hz)', 'wobbleHertz', 0.5, 30, 0.5);
+  tyreSlider('attack (s)', 'attackSeconds', 0.005, 0.5, 0.005);
+  tyreSlider('release (s)', 'releaseSeconds', 0.005, 1, 0.005);
+  tyreSlider('high-pass (Hz)', 'highpassHertz', 10, 1000, 5);
+  const impacts = soundTuning.impacts;
+  const impactSlider = (label: string, key: keyof typeof impacts, min: number, max: number, step: number) =>
+    slider(soundPage, `Thud ${label}`, impacts[key], min, max, step, (value) => ((impacts[key] = value), retune()));
+  impactSlider('gain', 'gain', 0, 1.5, 0.01);
+  impactSlider('min speed (m/s)', 'minSpeed', 0, 10, 0.1);
+  impactSlider('full speed (m/s)', 'fullSpeed', 1, 40, 0.5);
+  impactSlider('level at min speed', 'minLevel', 0, 1, 0.01);
+  impactSlider('level curve (power)', 'levelCurve', 0.25, 4, 0.05);
+  impactSlider('body start (Hz)', 'bodyStartHertz', 40, 1000, 5);
+  impactSlider('body start lost on soft hits (share)', 'bodyStartSoft', 0, 0.9, 0.01);
+  impactSlider('body end (Hz)', 'bodyEndHertz', 20, 300, 1);
+  impactSlider('pitch drop (s)', 'pitchSeconds', 0.01, 0.6, 0.01);
+  impactSlider('body length (s)', 'bodySeconds', 0.02, 1, 0.01);
+  impactSlider('crunch mix', 'crunchMix', 0, 3, 0.01);
+  impactSlider('crunch share on soft hits', 'crunchSoftMix', 0, 1, 0.01);
+  impactSlider('crunch low (Hz)', 'crunchLowHertz', 100, 5000, 10);
+  impactSlider('crunch high (Hz)', 'crunchHighHertz', 100, 10000, 10);
+  impactSlider('crunch length (s)', 'crunchSeconds', 0.01, 0.5, 0.01);
+  impactSlider('min gap (s)', 'minGapSeconds', 0, 0.5, 0.01);
+  impactSlider('max at once', 'maxPlaying', 1, 8, 1);
+  impactSlider('mask fade (s)', 'maskSeconds', 0, 2, 0.01);
+  impactSlider('mask ratio', 'maskRatio', 0, 3, 0.05);
+  impactSlider('same wall (dot)', 'sameWallDot', -1, 1, 0.05);
+  impactSlider('always plays above (× last)', 'harderRatio', 1, 4, 0.05);
+  impactSlider('high-pass (Hz)', 'highpassHertz', 10, 400, 1);
 
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,
