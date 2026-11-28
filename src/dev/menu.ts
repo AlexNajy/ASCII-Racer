@@ -1,6 +1,8 @@
 import type { CarSettings } from '../game/car.ts';
 import type { ChaseCameraSettings } from '../game/chaseCamera.ts';
 import type { CitySettings } from '../game/city.ts';
+import type { AudioStats } from '../audio/audio.ts';
+import type { AudioTuning } from '../audio/tuning.ts';
 import type { ScatterSettings } from '../render/materials.ts';
 import type { SkySettings } from '../render/sky.ts';
 
@@ -8,6 +10,7 @@ import type { SkySettings } from '../render/sky.ts';
 export const CELL_WIDTH_MIN = 4;
 export const CELL_WIDTH_MAX = 16;
 export const DEFAULT_CELL_WIDTH = 6;
+const SOUND_REFRESH_MS = 100;
 
 export const RenderMode = {
   Glyphs: 0,
@@ -72,6 +75,12 @@ export type NumberSetting =
   | 'supersample'
   | 'coverageDimming';
 
+export interface SoundDev {
+  tuning: AudioTuning;
+  onChange(): void;
+  stats(): AudioStats;
+}
+
 export interface DevMenu {
   setInfo(text: string): void;
   isOpen(): boolean;
@@ -90,6 +99,7 @@ export function createDevMenu(
   onCityChange: () => void,
   onSkyChange: () => void,
   onToggle: (open: boolean) => void,
+  sound: SoundDev,
 ): DevMenu {
   const panel = document.createElement('div');
   panel.id = 'dev-menu';
@@ -239,6 +249,7 @@ export function createDevMenu(
   const skyPage = page('Sky');
   const animationPage = page('Animation');
   const scatterPage = page('Scatter');
+  const soundPage = page('Sound');
 
   settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
   settingSlider(viewPage, 'Cell width', 'cellWidth', CELL_WIDTH_MIN, CELL_WIDTH_MAX, 1);
@@ -289,6 +300,26 @@ export function createDevMenu(
   skySlider(skyPage, 'Lowest star (y)', 'starMinY', 0, 0.9, 0.01);
   skySlider(skyPage, 'Min brightness', 'starMinBrightness', 0, 1, 0.01);
   skySlider(skyPage, 'Brightness power', 'starBrightnessPower', 0.5, 10, 0.1);
+
+  const soundInfo = document.createElement('div');
+  soundInfo.style.whiteSpace = 'pre';
+  soundPage.append(soundInfo);
+  window.setInterval(() => {
+    if (panel.hidden || soundPage.hidden) return;
+    const { state, masterGain, nodes, rmsDb, peakDb } = sound.stats();
+    soundInfo.textContent =
+      `context ${state}\nmaster gain ${masterGain.toFixed(3)}\nnodes ${nodes}\n` +
+      `level rms ${rmsDb.toFixed(1)} dB  peak ${peakDb.toFixed(1)} dB`;
+  }, SOUND_REFRESH_MS);
+  const soundTuning = sound.tuning;
+  const retune = () => sound.onChange();
+  slider(soundPage, 'Volume curve (power)', soundTuning.volumeCurve, 0.5, 3, 0.05, (value) => ((soundTuning.volumeCurve = value), retune()));
+  slider(soundPage, 'Top gain', soundTuning.topGain, 0, 1, 0.01, (value) => ((soundTuning.topGain = value), retune()));
+  for (const name of Object.keys(soundTuning.busGains)) {
+    slider(soundPage, `${name} bus gain`, soundTuning.busGains[name], 0, 2, 0.01, (value) => ((soundTuning.busGains[name] = value), retune()));
+  }
+  slider(soundPage, 'Blip gain', soundTuning.blipGain, 0, 0.5, 0.01, (value) => (soundTuning.blipGain = value));
+  slider(soundPage, 'Blip pitch (Hz)', soundTuning.blipHertz, 200, 2000, 10, (value) => (soundTuning.blipHertz = value));
 
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,

@@ -1,5 +1,7 @@
 import './style.css';
 import { parseUrlParams } from './dev/urlParams.ts';
+import { browserContextFactory, createAudio, installGestureStart, shouldBlip } from './audio/audio.ts';
+import { createAudioTuning } from './audio/tuning.ts';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, capFrameSeconds, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
 import { blendCars, CAR_WIDTH, createCar, DEFAULT_CAR_SETTINGS, type Car, type CarSettings, type Impact } from './game/car.ts';
@@ -476,6 +478,13 @@ const resultsBoard =
 if (urlParams.shape) playerSettings = { ...playerSettings, carShape: urlParams.shape };
 if (urlParams.color) playerSettings = { ...playerSettings, carColor: urlParams.color };
 
+// No context under shot or tick, so those runs never differ.
+const audioTuning = createAudioTuning();
+const audio = createAudio(urlParams.shot ? null : browserContextFactory(), audioTuning);
+audio.setLevels(playerSettings.volume, playerSettings.muted);
+if (!urlParams.shot) installGestureStart(window, audio);
+if (urlParams.audioDebug) (window as unknown as { audioDebug: { stats: typeof audio.stats } }).audioDebug = { stats: audio.stats };
+
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
 const sceneTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scene');
 const normalTextureLocation = gl.getUniformLocation(asciiProgram, 'u_normals');
@@ -845,6 +854,7 @@ const devMenu = createDevMenu(
     if (open) document.exitPointerLock();
     else if (!hasList(gameState)) canvas.requestPointerLock().catch(() => {});
   },
+  { tuning: audioTuning, onChange: audio.retune, stats: audio.stats },
 );
 
 trackKeyboard();
@@ -1066,6 +1076,7 @@ function storePlayerSettings(next: PlayerSettings) {
   const stored = urlParams.cellWidth === null ? next : { ...next, cellWidth: playerSettings.cellWidth };
   if (serialiseSettings(stored) === serialiseSettings(playerSettings)) return;
   playerSettings = stored;
+  audio.setLevels(stored.volume, stored.muted);
   if (!urlParams.shot) saveSettings(storage, playerSettings);
 }
 // Saved at once; the car mesh follows next frame.
@@ -1083,7 +1094,9 @@ function applySettingsChange({ screen, settings: next, toggleFullscreen: fullscr
     resize();
     devMenu.refresh('cellWidth');
   }
+  const previous = shownPlayerSettings();
   storePlayerSettings(next);
+  if (shouldBlip(previous, next, audioTuning)) audio.blip();
   changeState(leave ? pressEscape(gameState) : { ...gameState, ...screen });
 }
 // Ahead of every other key handler: on the settings screen its keys act only here, and while the nickname is typed
