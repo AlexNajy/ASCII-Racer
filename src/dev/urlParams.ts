@@ -32,6 +32,7 @@ export interface UrlParams {
   edit: string | null; // with state=settings: the nickname being typed, as if typed so far
   shape: CarShape | null; // the car's body shape instead of the stored one
   color: string | null; // the car's colour (a CAR_COLORS id) instead of the stored one
+  audioDebug: boolean; // audio=debug: window.audioDebug.stats() reads the audio graph (state, master gain, nodes, level)
   dailyStorage: boolean; // whether this load may read and write the daily's try in storage (dailyStorageAllowed)
 }
 
@@ -93,6 +94,7 @@ export function parseUrlParams(search: string): UrlParams {
   const next = query.get('next');
   const giveUp = query.get('giveup');
   const board = query.get('board');
+  const audio = query.get('audio');
 
   let renderMode: RenderMode | null = null;
   if (mode !== null) {
@@ -172,6 +174,8 @@ export function parseUrlParams(search: string): UrlParams {
     throw new Error(`URL parameter board: needs state=dailyresults and a whole number of runs, 0 to ${MAX_URL_BOARD}`);
   }
 
+  if (audio !== null && audio !== 'debug') throw new Error(`URL parameter audio: "${audio}" is not debug`);
+
   // The daily states are for pictures: on a normal load they would race a day's route or show a result without its
   // stored try, so they are ignored there and the game opens on the menu.
   const shot = query.has('shot') || tick !== null;
@@ -206,6 +210,7 @@ export function parseUrlParams(search: string): UrlParams {
     edit,
     shape: carShape,
     color,
+    audioDebug: audio === 'debug',
     dailyStorage: dailyStorageAllowed(search),
   };
 }

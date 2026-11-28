@@ -1,6 +1,9 @@
 import type { CarSettings } from '../game/car.ts';
 import type { ChaseCameraSettings } from '../game/chaseCamera.ts';
 import type { CitySettings } from '../game/city.ts';
+import type { AudioStats } from '../audio/audio.ts';
+import { RACE_SOUND_KINDS, type RaceSoundKind } from '../audio/raceSounds.ts';
+import type { AudioTuning } from '../audio/tuning.ts';
 import type { ScatterSettings } from '../render/materials.ts';
 import type { SkySettings } from '../render/sky.ts';
 
@@ -8,6 +11,7 @@ import type { SkySettings } from '../render/sky.ts';
 export const CELL_WIDTH_MIN = 4;
 export const CELL_WIDTH_MAX = 16;
 export const DEFAULT_CELL_WIDTH = 6;
+const SOUND_REFRESH_MS = 100;
 
 export const RenderMode = {
   Glyphs: 0,
@@ -72,6 +76,13 @@ export type NumberSetting =
   | 'supersample'
   | 'coverageDimming';
 
+export interface SoundDev {
+  tuning: AudioTuning;
+  onChange(): void;
+  stats(): AudioStats;
+  play(kind: RaceSoundKind): unknown;
+}
+
 export interface DevMenu {
   setInfo(text: string): void;
   isOpen(): boolean;
@@ -90,6 +101,7 @@ export function createDevMenu(
   onCityChange: () => void,
   onSkyChange: () => void,
   onToggle: (open: boolean) => void,
+  sound: SoundDev,
 ): DevMenu {
   const panel = document.createElement('div');
   panel.id = 'dev-menu';
@@ -239,6 +251,7 @@ export function createDevMenu(
   const skyPage = page('Sky');
   const animationPage = page('Animation');
   const scatterPage = page('Scatter');
+  const soundPage = page('Sound');
 
   settingSlider(viewPage, 'FOV', 'fovDegrees', 30, 120, 1);
   settingSlider(viewPage, 'Cell width', 'cellWidth', CELL_WIDTH_MIN, CELL_WIDTH_MAX, 1);
@@ -289,6 +302,152 @@ export function createDevMenu(
   skySlider(skyPage, 'Lowest star (y)', 'starMinY', 0, 0.9, 0.01);
   skySlider(skyPage, 'Min brightness', 'starMinBrightness', 0, 1, 0.01);
   skySlider(skyPage, 'Brightness power', 'starBrightnessPower', 0.5, 10, 0.1);
+
+  const soundInfo = document.createElement('div');
+  soundInfo.style.whiteSpace = 'pre';
+  soundPage.append(soundInfo);
+  window.setInterval(() => {
+    if (panel.hidden || soundPage.hidden) return;
+    const { state, masterGain, nodes, rmsDb, peakDb } = sound.stats();
+    soundInfo.textContent =
+      `context ${state}\nmaster gain ${masterGain.toFixed(3)}\nnodes ${nodes}\n` +
+      `level rms ${rmsDb.toFixed(1)} dB  peak ${peakDb.toFixed(1)} dB`;
+  }, SOUND_REFRESH_MS);
+  const soundTuning = sound.tuning;
+  const retune = () => sound.onChange();
+  slider(soundPage, 'Volume curve (power)', soundTuning.volumeCurve, 0.5, 3, 0.05, (value) => ((soundTuning.volumeCurve = value), retune()));
+  slider(soundPage, 'Top gain', soundTuning.topGain, 0, 1, 0.01, (value) => ((soundTuning.topGain = value), retune()));
+  for (const name of Object.keys(soundTuning.busGains)) {
+    slider(soundPage, `${name} bus gain`, soundTuning.busGains[name], 0, 2, 0.01, (value) => ((soundTuning.busGains[name] = value), retune()));
+  }
+  slider(soundPage, 'Blip gain', soundTuning.blipGain, 0, 0.5, 0.01, (value) => (soundTuning.blipGain = value));
+  slider(soundPage, 'Blip pitch (Hz)', soundTuning.blipHertz, 200, 2000, 10, (value) => (soundTuning.blipHertz = value));
+  // Read by the engine every frame; the few the graph holds apply through the retune.
+  const engine = soundTuning.engine;
+  const engineSlider = (label: string, key: Exclude<keyof typeof engine, 'gearTops'>, min: number, max: number, step: number) =>
+    slider(soundPage, `Engine ${label}`, engine[key], min, max, step, (value) => ((engine[key] = value), retune()));
+  engineSlider('gain', 'gain', 0, 1.5, 0.01);
+  engineSlider('idle (Hz)', 'idleHertz', 15, 120, 1);
+  engineSlider('launch rise (Hz)', 'launchHertz', 0, 80, 1);
+  engineSlider('shift point (Hz)', 'shiftHertz', 40, 400, 1);
+  engineSlider('max (Hz)', 'maxHertz', 40, 500, 1);
+  engine.gearTops.forEach((top, gear) =>
+    slider(soundPage, `Engine gear ${gear + 1} top (share of top speed)`, top, 0.05, 1.5, 0.01, (value) => (engine.gearTops[gear] = value)),
+  );
+  engineSlider('shift hysteresis (share)', 'shiftHysteresis', 0, 0.2, 0.005);
+  engineSlider('reverse top (share)', 'reverseTop', 0.05, 1, 0.01);
+  engineSlider('idle level', 'idleLevel', 0, 1, 0.01);
+  engineSlider('rev level', 'revLevel', 0, 1, 0.01);
+  engineSlider('load level', 'loadLevel', 0, 1, 0.01);
+  engineSlider('coast share', 'coastShare', 0, 1, 0.01);
+  engineSlider('brake cut', 'brakeCut', 0, 1, 0.01);
+  engineSlider('coast brightness (× note)', 'coastBrightness', 1, 30, 0.5);
+  engineSlider('load brightness (× note)', 'loadBrightness', 1, 40, 0.5);
+  engineSlider('min cutoff (Hz)', 'minCutoff', 50, 3000, 10);
+  engineSlider('max cutoff (Hz)', 'maxCutoff', 500, 15000, 50);
+  engineSlider('resonance (Q, dB)', 'resonance', 0.1, 20, 0.1);
+  engineSlider('high-pass (Hz)', 'highpassHertz', 10, 200, 1);
+  engineSlider('sawtooth mix', 'sawMix', 0, 1, 0.01);
+  engineSlider('square mix', 'squareMix', 0, 1, 0.01);
+  engineSlider('sub-octave mix', 'subMix', 0, 1, 0.01);
+  engineSlider('detune (cents)', 'detuneCents', 0, 50, 1);
+  engineSlider('noise at idle', 'noiseIdle', 0, 0.5, 0.005);
+  engineSlider('noise under load', 'noiseLoad', 0, 0.5, 0.005);
+  engineSlider('noise band (× note)', 'noiseBand', 1, 30, 0.5);
+  engineSlider('idle wobble (cents)', 'wobbleCents', 0, 100, 1);
+  engineSlider('wobble fade (share of revs)', 'wobbleFade', 0.01, 1, 0.01);
+  engineSlider('wobble rate (Hz)', 'wobbleHertz', 0.5, 20, 0.5);
+  const tyres = soundTuning.tyres;
+  const tyreSlider = (label: string, key: keyof typeof tyres, min: number, max: number, step: number) =>
+    slider(soundPage, `Screech ${label}`, tyres[key], min, max, step, (value) => ((tyres[key] = value), retune()));
+  tyreSlider('gain', 'gain', 0, 30, 0.1);
+  tyreSlider('starts at slide (m/s)', 'slideStart', 0, 10, 0.1);
+  tyreSlider('full at slide (m/s)', 'slideFull', 0.5, 25, 0.1);
+  tyreSlider('fade-in curve (power)', 'fadeCurve', 0.25, 4, 0.05);
+  tyreSlider('pitch (Hz)', 'hertz', 300, 5000, 10);
+  tyreSlider('pitch rise (share)', 'pitchRise', 0, 1, 0.01);
+  tyreSlider('second peak (× pitch)', 'spread', 1, 1.5, 0.005);
+  tyreSlider('second peak mix', 'spreadMix', 0, 2, 0.01);
+  tyreSlider('octave peak mix', 'harmonicMix', 0, 2, 0.01);
+  tyreSlider('peak Q', 'q', 1, 100, 0.5);
+  tyreSlider('wobble (cents)', 'wobbleCents', 0, 200, 1);
+  tyreSlider('wobble rate (Hz)', 'wobbleHertz', 0.5, 30, 0.5);
+  tyreSlider('attack (s)', 'attackSeconds', 0.005, 0.5, 0.005);
+  tyreSlider('release (s)', 'releaseSeconds', 0.005, 1, 0.005);
+  tyreSlider('high-pass (Hz)', 'highpassHertz', 10, 1000, 5);
+  const ambience = soundTuning.ambience;
+  const ambienceSlider = (label: string, key: keyof typeof ambience, min: number, max: number, step: number) =>
+    slider(soundPage, `Hum ${label}`, ambience[key], min, max, step, (value) => ((ambience[key] = value), retune()));
+  ambienceSlider('gain', 'gain', 0, 0.5, 0.005);
+  ambienceSlider('rumble (Hz)', 'rumbleHertz', 40, 400, 5);
+  ambienceSlider('rumble Q', 'rumbleQ', 0.2, 5, 0.1);
+  ambienceSlider('rumble mix', 'rumbleMix', 0, 6, 0.05);
+  ambienceSlider('air (Hz)', 'airHertz', 300, 6000, 50);
+  ambienceSlider('air Q', 'airQ', 0.2, 5, 0.1);
+  ambienceSlider('air mix', 'airMix', 0, 3, 0.05);
+  ambienceSlider('mains note (Hz)', 'humHertz', 40, 240, 1);
+  ambienceSlider('mains mix', 'humMix', 0, 1, 0.01);
+  ambienceSlider('mains harmonics mix', 'harmonicMix', 0, 1, 0.01);
+  ambienceSlider('slow swell (share)', 'swell', 0, 0.95, 0.01);
+  ambienceSlider('air sweep (cents)', 'sweepCents', 0, 1200, 10);
+  ambienceSlider('fade time (s)', 'fadeSeconds', 0.05, 3, 0.05);
+  ambienceSlider('speed ducking (share)', 'duck', 0, 1, 0.01);
+  ambienceSlider('level with the car (share)', 'carShare', 0, 1, 0.01);
+  ambienceSlider('high-pass (Hz)', 'highpassHertz', 10, 200, 1);
+  const impacts = soundTuning.impacts;
+  const impactSlider = (label: string, key: keyof typeof impacts, min: number, max: number, step: number) =>
+    slider(soundPage, `Thud ${label}`, impacts[key], min, max, step, (value) => ((impacts[key] = value), retune()));
+  impactSlider('gain', 'gain', 0, 1.5, 0.01);
+  impactSlider('min speed (m/s)', 'minSpeed', 0, 10, 0.1);
+  impactSlider('full speed (m/s)', 'fullSpeed', 1, 40, 0.5);
+  impactSlider('level at min speed', 'minLevel', 0, 1, 0.01);
+  impactSlider('level curve (power)', 'levelCurve', 0.25, 4, 0.05);
+  impactSlider('body start (Hz)', 'bodyStartHertz', 40, 1000, 5);
+  impactSlider('body start lost on soft hits (share)', 'bodyStartSoft', 0, 0.9, 0.01);
+  impactSlider('body end (Hz)', 'bodyEndHertz', 20, 300, 1);
+  impactSlider('pitch drop (s)', 'pitchSeconds', 0.01, 0.6, 0.01);
+  impactSlider('body length (s)', 'bodySeconds', 0.02, 1, 0.01);
+  impactSlider('crunch mix', 'crunchMix', 0, 3, 0.01);
+  impactSlider('crunch share on soft hits', 'crunchSoftMix', 0, 1, 0.01);
+  impactSlider('crunch low (Hz)', 'crunchLowHertz', 100, 5000, 10);
+  impactSlider('crunch high (Hz)', 'crunchHighHertz', 100, 10000, 10);
+  impactSlider('crunch length (s)', 'crunchSeconds', 0.01, 0.5, 0.01);
+  impactSlider('min gap (s)', 'minGapSeconds', 0, 0.5, 0.01);
+  impactSlider('max at once', 'maxPlaying', 1, 8, 1);
+  impactSlider('mask fade (s)', 'maskSeconds', 0, 2, 0.01);
+  impactSlider('mask ratio', 'maskRatio', 0, 3, 0.05);
+  impactSlider('same wall (dot)', 'sameWallDot', -1, 1, 0.05);
+  impactSlider('always plays above (× last)', 'harderRatio', 1, 4, 0.05);
+  impactSlider('high-pass (Hz)', 'highpassHertz', 10, 400, 1);
+
+  const race = soundTuning.race;
+  const raceSlider = (label: string, key: keyof typeof race, min: number, max: number, step: number) =>
+    slider(soundPage, `Race ${label}`, race[key], min, max, step, (value) => (race[key] = value));
+  const playRow = document.createElement('div');
+  for (const kind of RACE_SOUND_KINDS) {
+    const button = document.createElement('button');
+    button.textContent = `play ${kind}`;
+    button.addEventListener('click', () => sound.play(kind));
+    playRow.append(button);
+  }
+  soundPage.append(playRow);
+  raceSlider('gain', 'gain', 0, 2, 0.01);
+  raceSlider('base note (Hz)', 'baseHertz', 200, 1500, 5);
+  raceSlider('octave harmonic', 'harmonicMix', 0, 1, 0.01);
+  raceSlider('attack (s)', 'attackSeconds', 0.001, 0.05, 0.001);
+  raceSlider('beep length (s)', 'beepSeconds', 0.03, 0.6, 0.01);
+  raceSlider('beep level', 'beepLevel', 0, 1, 0.01);
+  raceSlider('go octaves above beep', 'goOctaves', 0, 2, 0.05);
+  raceSlider('go length (s)', 'goSeconds', 0.05, 1.5, 0.01);
+  raceSlider('go level', 'goLevel', 0, 1, 0.01);
+  raceSlider('checkpoint rise (ratio)', 'checkpointRise', 1, 2, 0.01);
+  raceSlider('checkpoint gap (s)', 'checkpointGap', 0, 0.3, 0.005);
+  raceSlider('checkpoint note length (s)', 'checkpointSeconds', 0.03, 0.6, 0.01);
+  raceSlider('checkpoint level', 'checkpointLevel', 0, 1, 0.01);
+  raceSlider('finish gap (s)', 'finishGap', 0.03, 0.4, 0.005);
+  raceSlider('finish note length (s)', 'finishSeconds', 0.05, 0.8, 0.01);
+  raceSlider('finish last note length (s)', 'finishLastSeconds', 0.1, 1.5, 0.01);
+  raceSlider('finish level', 'finishLevel', 0, 1, 0.01);
 
   function dropdown<K extends 'renderMode' | 'movement'>(
     parent: HTMLElement,

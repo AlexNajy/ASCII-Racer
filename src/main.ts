@@ -1,5 +1,12 @@
 import './style.css';
 import { parseUrlParams } from './dev/urlParams.ts';
+import { browserContextFactory, createAudio, installGestureStart, installVisibility, shouldBlip } from './audio/audio.ts';
+import { ambienceHeard, createAmbience } from './audio/ambience.ts';
+import { createEngine, engineHeard, engineSpeed } from './audio/engine.ts';
+import { createThuds } from './audio/impacts.ts';
+import { createRaceCues, createRaceSounds, observeRace, takeCue } from './audio/raceSounds.ts';
+import { createScreech } from './audio/tyres.ts';
+import { createAudioTuning } from './audio/tuning.ts';
 import { createDevMenu, Movement, RenderMode, type DevSettings } from './dev/menu.ts';
 import { advanceClock, capFrameSeconds, createClock, TICK_SECONDS, TICKS_PER_SECOND } from './game/clock.ts';
 import { blendCars, CAR_WIDTH, createCar, DEFAULT_CAR_SETTINGS, type Car, type CarSettings, type Impact } from './game/car.ts';
@@ -476,6 +483,37 @@ const resultsBoard =
 if (urlParams.shape) playerSettings = { ...playerSettings, carShape: urlParams.shape };
 if (urlParams.color) playerSettings = { ...playerSettings, carColor: urlParams.color };
 
+// No context under shot or tick, so those runs never differ.
+const audioTuning = createAudioTuning();
+const audio = createAudio(urlParams.shot ? null : browserContextFactory(), audioTuning);
+audio.setLevels(playerSettings.volume, playerSettings.muted);
+if (!urlParams.shot) installGestureStart(window, audio);
+installVisibility(document, audio);
+const engine = createEngine(audio, audioTuning);
+const screech = createScreech(audio, audioTuning);
+const thuds = createThuds(audio, audioTuning);
+const ambience = createAmbience(audio, audioTuning);
+const raceSounds = createRaceSounds(audio, audioTuning);
+const raceCues = createRaceCues();
+const raceSoundLog: { kind: string; time: number; tick: number }[] = []; // audio=debug only
+// Filled in place every frame, so driving the sounds allocates nothing.
+const engineInput = { speed: 0, topSpeed: 0, throttle: 0, brake: 0 };
+const screechInput = { slide: 0, speed: 0 };
+const ambienceInput = { speed: 0, topSpeed: 0, car: false };
+const impactLog: number[] = []; // audio=debug only: every tick's impact speed
+if (urlParams.audioDebug) {
+  (window as unknown as { audioDebug: object }).audioDebug = {
+    stats: audio.stats,
+    waveform: audio.waveform,
+    engine: () => ({ ...engine.targets(), ...engineInput }),
+    screech: () => ({ ...screech.targets(), ...screechInput }),
+    ambience: () => ({ ...ambience.targets(), ...ambienceInput }),
+    raceSounds: () => ({ playing: raceSounds.playing(), played: raceSounds.played(), log: raceSoundLog.splice(0) }),
+    thuds: () => ({ playing: thuds.playing(), played: thuds.played(), impacts: impactLog.splice(0) }),
+    tuning: audioTuning,
+  };
+}
+
 const asciiProgram = createProgram(gl, fullscreenVertexSource, asciiFragmentSource);
 const sceneTextureLocation = gl.getUniformLocation(asciiProgram, 'u_scene');
 const normalTextureLocation = gl.getUniformLocation(asciiProgram, 'u_normals');
@@ -845,6 +883,18 @@ const devMenu = createDevMenu(
     if (open) document.exitPointerLock();
     else if (!hasList(gameState)) canvas.requestPointerLock().catch(() => {});
   },
+  {
+    tuning: audioTuning,
+    onChange: () => {
+      audio.retune();
+      engine.retune();
+      screech.retune();
+      thuds.retune();
+      ambience.retune();
+    },
+    stats: audio.stats,
+    play: (kind) => raceSounds.play(kind),
+  },
 );
 
 trackKeyboard();
@@ -1066,6 +1116,7 @@ function storePlayerSettings(next: PlayerSettings) {
   const stored = urlParams.cellWidth === null ? next : { ...next, cellWidth: playerSettings.cellWidth };
   if (serialiseSettings(stored) === serialiseSettings(playerSettings)) return;
   playerSettings = stored;
+  audio.setLevels(stored.volume, stored.muted);
   if (!urlParams.shot) saveSettings(storage, playerSettings);
 }
 // Saved at once; the car mesh follows next frame.
@@ -1083,7 +1134,9 @@ function applySettingsChange({ screen, settings: next, toggleFullscreen: fullscr
     resize();
     devMenu.refresh('cellWidth');
   }
+  const previous = shownPlayerSettings();
   storePlayerSettings(next);
+  if (shouldBlip(previous, next, audioTuning)) audio.blip();
   changeState(leave ? pressEscape(gameState) : { ...gameState, ...screen });
 }
 // Ahead of every other key handler: on the settings screen its keys act only here, and while the nickname is typed
@@ -1144,10 +1197,12 @@ function frame(timeMs: number) {
   framesDrawn++;
   const dt = heldTick === null ? capFrameSeconds(Math.max(0, timeMs - previousTimeMs) / 1000) : 0;
   previousTimeMs = Math.max(previousTimeMs, timeMs);
+  const frameImpact: { hardest: Impact | null } = { hardest: null };
   if (heldTick === null) advanceClock(clock, dt, () => {
     carInput = settings.movement === Movement.Car && gameState.kind === 'race' ? readCarInput() : NO_INPUT;
     const reading = world.race?.phase === 'running' ? world.race : null;
     const { impact, race: raceEvent } = stepWorld(world, carInput);
+    observeRace(raceCues, world.race, world.tick, raceEvent);
     if (reading) {
       if (reading !== recordedRace) recorder.reset();
       recordedRace = reading;
@@ -1167,11 +1222,24 @@ function frame(timeMs: number) {
       const car = { ...world.car };
       setTimeout(() => checkReplay(finished, car));
     }
-    if (impact) crashDebris(impact);
+    if (impact) {
+      crashDebris(impact);
+      if (!frameImpact.hardest || impact.speed > frameImpact.hardest.speed) frameImpact.hardest = impact;
+      if (urlParams.audioDebug && impactLog.length < 1000) impactLog.push(impact.speed);
+    }
     driftParticles();
     const next = afterTick(gameState, world.race, world.tick);
     if (next !== gameState) setGameState(next);
   });
+  // Nothing is kept for later: a cue while the context is not running or the tab is hidden is dropped.
+  observeRace(raceCues, world.race, world.tick, null);
+  const cue = takeCue(raceCues);
+  if (cue && !document.hidden) {
+    const time = raceSounds.play(cue);
+    if (time !== null && urlParams.audioDebug && raceSoundLog.length < 1000) raceSoundLog.push({ kind: cue, time, tick: world.tick });
+  }
+  const { hardest } = frameImpact;
+  if (hardest) thuds.hit(hardest.speed, hardest.normalX, hardest.normalZ, engineHeard(gameState, world.race !== null));
   updateParticles(particles, dt);
   // Drawn between the last two ticks by the time left over, so motion is smooth on any refresh rate.
   const { car } = world;
@@ -1194,6 +1262,22 @@ function frame(timeMs: number) {
   } else {
     fovBoost = updateChaseCamera(camera, chase, drawnCar, world.carSettings, chaseSettings, world.colliders, dt);
   }
+  // The countdown holds the car and reads no input, so the engine idles through it.
+  const pedalsRead = gameState.kind === 'race' && world.race?.phase !== 'countdown';
+  engineInput.speed = engineSpeed(drawnCar);
+  engineInput.topSpeed = world.carSettings.topSpeed;
+  engineInput.throttle = pedalsRead ? carInput.throttle : 0;
+  engineInput.brake = pedalsRead ? carInput.brake : 0;
+  const carHeard = engineHeard(gameState, world.race !== null);
+  engine.update(engineInput, carHeard);
+  screechInput.slide = slideSpeed(drawnCar);
+  screechInput.speed = Math.abs(engineInput.speed);
+  screech.update(screechInput, carHeard);
+  ambienceInput.speed = engineInput.speed;
+  ambienceInput.topSpeed = engineInput.topSpeed;
+  ambienceInput.car = carHeard;
+  ambience.update(ambienceInput, ambienceHeard(gameState));
+
   giveUpOnScreen = false;
   if (gameState.kind === 'dailyResults') resultsBoard?.show(gameState.day);
   else resultsBoard?.hide();
