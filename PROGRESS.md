@@ -388,3 +388,7 @@ The lead's journal: one entry per finished sub-step, newest last. What was built
 - Left: in a hard drift the checkpoint stands 10 to 17 dB over the screech at its own pitches but 3 dB under it across the whole band (raise `checkpointLevel` if it gets lost); on a slow output the very first countdown loses its first beeps.
 - The whole mix, by the reviewer's judgement and nobody's ears: the engine lives at 50 to 175 Hz, so on laptop speakers it may sound quiet next to its own tires and the beeps. Renders of every sound are in the scratchpad folders `engine-fix`, `tyres-fix`, `ambience-fix` and `race-sounds-fix` under `/private/tmp/claude-501/-Users-alexandernajy-Desktop-code-Racer-ASCII-Racer/4c0cd2df-855f-4c5d-9517-a15e2682f0c3/scratchpad/` (gone after a reboot); the game itself is the better test: every number is a slider on the dev menu's Sound page.
 - Step 18 is complete. Next: the pull request, CI, merge, then step 19 (lobbies).
+
+## 2026-11-28: step 18 merged; step 19 started
+
+- Step 18 merged as PR #21 (CI green), deployed: backend job 45 s (nothing to push, functions unchanged), site built and published. The live site now has sound. Branch `lobbies` for step 19.
